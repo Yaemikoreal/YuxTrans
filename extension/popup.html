@@ -94,6 +94,46 @@
       transform: translateY(-1px);
     }
 
+    .version {
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.8;
+    }
+
+    .update-toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 20px;
+      background: rgba(39, 174, 96, 0.9);
+      color: white;
+      border-radius: 10px;
+      font-size: 13px;
+      z-index: 100;
+      display: none;
+      animation: slideUp 0.3s ease;
+    }
+
+    .update-toast.error {
+      background: rgba(231, 76, 60, 0.9);
+    }
+
+    .update-toast.show {
+      display: block;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+
     .content {
       padding: 20px;
     }
@@ -244,8 +284,9 @@
 </head>
 <body>
   <div class="header">
-    <h1>YuxTrans</h1>
+    <h1>YuxTrans <span class="version" id="versionBadge">v0.1.0</span></h1>
     <div class="header-btns">
+      <button class="icon-btn" id="updateBtn" title="检查更新">🔄 更新</button>
       <button class="icon-btn" id="settingsBtn">⚙ 设置</button>
     </div>
   </div>
@@ -268,6 +309,8 @@
       <div class="status" id="statusText"></div>
     </div>
   </div>
+
+  <div class="update-toast" id="updateToast"></div>
 
   <script src="popup.js"></script>
 </body>
