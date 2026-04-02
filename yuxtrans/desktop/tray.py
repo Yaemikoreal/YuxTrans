@@ -93,7 +93,7 @@ class TrayIcon(QSystemTrayIcon):
         font = QFont("Arial", 28, QFont.Weight.Bold)
         painter.setFont(font)
         painter.setPen(QColor(255, 255, 255))
-        painter.drawText(pixmap.rect(), 0x0084, "Q")
+        painter.drawText(pixmap.rect(), 0x0084, "Y")
 
         painter.end()
 
@@ -102,6 +102,27 @@ class TrayIcon(QSystemTrayIcon):
     def _setup_menu(self):
         """设置右键菜单"""
         menu = QMenu()
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: white;
+                border: 1px solid #dfe6e9;
+                border-radius: 8px;
+                padding: 8px 0;
+            }
+            QMenu::item {
+                padding: 8px 24px;
+                border-radius: 4px;
+                margin: 0 4px;
+            }
+            QMenu::item:selected {
+                background-color: #e8f4fd;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #ecf0f1;
+                margin: 4px 12px;
+            }
+        """)
 
         self.translate_action = QAction("翻译剪贴板 (Ctrl+Shift+T)", self)
         self.translate_action.triggered.connect(self._on_translate_clipboard)
@@ -116,6 +137,11 @@ class TrayIcon(QSystemTrayIcon):
         self.status_action = QAction("状态: 就绪", self)
         self.status_action.setEnabled(False)
         menu.addAction(self.status_action)
+
+        # API Key 快捷配置
+        self.api_action = QAction("配置 API Key...", self)
+        self.api_action.triggered.connect(self._on_config_api)
+        menu.addAction(self.api_action)
 
         menu.addSeparator()
 
@@ -149,6 +175,10 @@ class TrayIcon(QSystemTrayIcon):
         """划词翻译"""
         self.selection_requested.emit()
 
+    def _on_config_api(self):
+        """配置 API Key"""
+        self.api_config_requested.emit()
+
     def _on_settings(self):
         """打开设置"""
         self.settings_requested.emit()
@@ -178,6 +208,7 @@ class TrayIcon(QSystemTrayIcon):
     translate_requested = pyqtSignal(str)
     selection_requested = pyqtSignal()
     settings_requested = pyqtSignal()
+    api_config_requested = pyqtSignal()
 
 
 class TrayApplication:
@@ -207,6 +238,13 @@ class TrayApplication:
 
         self.config = ConfigManager()
         self.config.load()
+
+        # 检查是否首次运行
+        from yuxtrans.desktop.first_run import check_first_run, run_first_run_wizard
+
+        if check_first_run():
+            if not run_first_run_wizard(self.config):
+                return False
 
         self._init_router()
 
@@ -245,6 +283,7 @@ class TrayApplication:
         self.tray.translate_requested.connect(self._on_translate_requested)
         self.tray.selection_requested.connect(self._on_selection_requested)
         self.tray.settings_requested.connect(self._on_settings_requested)
+        self.tray.api_config_requested.connect(self._on_api_config_requested)
 
         self.tray.show()
 
@@ -277,6 +316,14 @@ class TrayApplication:
 
         dialog = SettingsDialog(self.config, self.main_window)
         dialog.exec()
+
+    def _on_api_config_requested(self):
+        """API Key 配置请求"""
+        from yuxtrans.desktop.api_key_dialog import ApiKeyDialog
+
+        dialog = ApiKeyDialog(self.config, self.main_window)
+        if dialog.exec():
+            self.tray.show_notification("YuxTrans", "API Key 已保存")
 
     def run(self):
         """运行应用"""

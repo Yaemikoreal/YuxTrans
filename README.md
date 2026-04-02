@@ -24,25 +24,49 @@
 
 ## 📦 安装
 
+### 方式一：pip 安装（推荐）
+
 ```bash
-# 基础安装
+# 基础安装（核心功能）
 pip install yuxtrans
 
-# 安装桌面客户端
+# 桌面客户端（含 GUI）
 pip install "yuxtrans[desktop]"
 
-# 安装本地模型支持
-pip install "yuxtrans[local]"
+# 完整安装（桌面 + 本地模型支持）
+pip install "yuxtrans[desktop,local]"
+```
 
-# 开发安装
-pip install "yuxtrans[dev]"
+### 方式二：从源码安装
+
+```bash
+git clone https://github.com/Yaemikoreal/qwenfy.git
+cd qwenfy
+pip install -e ".[dev]"
 ```
 
 ---
 
 ## 🚀 快速开始
 
-### Python API
+### 1️⃣ 桌面客户端（推荐新手）
+
+安装后直接运行，首次启动会显示配置向导：
+
+```bash
+# 安装桌面客户端
+pip install "yuxtrans[desktop]"
+
+# 启动应用
+yuxtrans
+```
+
+**首次运行会自动弹出配置向导**，引导您：
+1. 选择翻译服务（云端 API 或本地模型）
+2. 配置 API Key（云端 API 需要）
+3. 完成配置后即可使用
+
+### 2️⃣ Python API
 
 ```python
 from yuxtrans import SmartRouter, TranslationRequest
@@ -65,58 +89,37 @@ async def main():
 asyncio.run(main())
 ```
 
-### 云端 API 配置
+### 3️⃣ 配置 API Key
 
+**方式 A：桌面客户端配置**
+- 右键托盘图标 → 配置 API Key
+- 选择供应商 → 粘贴 API Key → 保存
+
+**方式 B：配置文件**
+编辑 `~/.yuxtrans/config.yaml`：
+
+```yaml
+engine:
+  cloud_provider: qwen      # 供应商: qwen/openai/deepseek/anthropic/groq/moonshot/siliconflow
+  cloud_api_key: sk-xxx     # 你的 API Key
+```
+
+**方式 C：环境变量**
+```bash
+export YUXTRANS_CLOUD_PROVIDER=qwen
+export YUXTRANS_CLOUD_API_KEY=sk-xxx
+```
+
+**方式 D：Python 代码**
 ```python
 from yuxtrans.engine.cloud import CloudTranslator
 
-# OpenAI
 translator = CloudTranslator(
     provider="openai",
     api_key="sk-xxx",
     model="gpt-4o-mini"
 )
-
-# Anthropic Claude
-translator = CloudTranslator(
-    provider="anthropic",
-    api_key="sk-ant-xxx",
-    model="claude-3-5-haiku-latest"
-)
-
-# DeepSeek
-translator = CloudTranslator(
-    provider="deepseek",
-    api_key="sk-xxx",
-    model="deepseek-chat"
-)
-
-# 自定义 OpenAI 兼容 API
-translator = CloudTranslator(
-    provider="custom",
-    api_key="not-needed",
-    model="qwen2.5-7b",
-    custom_endpoint="http://localhost:8000/v1/chat/completions"
-)
 ```
-
-### 桌面客户端
-
-```bash
-# 启动桌面应用
-yuxtrans
-
-# 或
-python -m yuxtrans.desktop
-```
-
-### 浏览器插件
-
-1. 打开 Chrome: `chrome://extensions/`
-2. 启用"开发者模式"
-3. 点击"加载已解压的扩展程序"
-4. 选择 `extension/` 目录
-5. 点击插件图标配置 API Key
 
 ---
 
