@@ -1,17 +1,18 @@
 /**
  * Content Script Styles
+ * 毛玻璃效果的翻译弹窗样式
  */
 
-.qwenfy-popup {
+.yuxtrans-popup {
   direction: ltr;
 }
 
-.qwenfy-popup * {
+.yuxtrans-popup * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-.qwenfy-popup button {
+.yuxtrans-popup button {
   font-family: inherit;
 }

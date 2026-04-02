@@ -3,198 +3,694 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Qwenfy 设置</title>
+  <title>YuxTrans 设置</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
-      background: #f5f5f5;
-      padding: 20px;
-      max-width: 600px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+      padding: 30px;
+      min-height: 100vh;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #f0f0f0;
+      }
+      .container { background: rgba(30, 30, 40, 0.95); }
+      h1 { color: #f0f0f0; }
+      .section {
+        background: rgba(40, 40, 55, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .section h2 { color: #f0f0f0; border-bottom-color: rgba(255, 255, 255, 0.1); }
+      label { color: #ddd; }
+      input, select, textarea {
+        background: rgba(50, 50, 65, 0.8);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #f0f0f0;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: #3498db;
+        box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+      }
+      .hint { color: #888; }
+      .btn-secondary { background: rgba(80, 80, 95, 0.8); color: #f0f0f0; }
+      .btn-secondary:hover { background: rgba(100, 100, 115, 0.9); }
+      .btn-test { background: rgba(39, 174, 96, 0.2); color: #27ae60; }
+      .history-item { background: rgba(50, 50, 65, 0.6); border-color: rgba(255, 255, 255, 0.05); }
+    }
+
+    .container {
+      max-width: 720px;
       margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
     }
-    
+
     h1 {
-      font-size: 24px;
-      margin-bottom: 20px;
-      color: #333;
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #2c3e50;
+      font-weight: 700;
     }
-    
+
+    .subtitle {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+
     .section {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
+      background: rgba(248, 249, 250, 0.6);
+      border-radius: 12px;
+      padding: 24px;
       margin-bottom: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.04);
     }
-    
+
     .section h2 {
       font-size: 16px;
-      margin-bottom: 16px;
-      color: #333;
-      padding-bottom: 10px;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group:last-child {
-      margin-bottom: 0;
-    }
-    
-    label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      color: #333;
-    }
-    
-    .hint {
-      font-size: 12px;
-      color: #999;
-      margin-top: 4px;
-    }
-    
-    input[type="text"],
-    input[type="password"],
-    select {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    
-    input:focus,
-    select:focus {
-      outline: none;
-      border-color: #3498db;
-    }
-    
-    .checkbox-group {
+      margin-bottom: 20px;
+      color: #34495e;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      font-weight: 600;
       display: flex;
       align-items: center;
       gap: 8px;
+      cursor: pointer;
     }
-    
+
+    .section h2::before {
+      content: '';
+      width: 4px;
+      height: 18px;
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+      border-radius: 2px;
+    }
+
+    .section h2 .toggle {
+      margin-left: auto;
+      font-size: 12px;
+      color: #95a5a6;
+      font-weight: 400;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #34495e;
+      font-size: 13px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #95a5a6;
+      margin-top: 6px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+      font-size: 14px;
+      transition: all 0.2s;
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #3498db;
+      box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .input-row .form-group {
+      flex: 1;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+    }
+
     .checkbox-group input {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
+      accent-color: #3498db;
     }
-    
+
+    .checkbox-group label {
+      margin-bottom: 0;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: rgba(248, 249, 250, 0.8);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 0;
+    }
+
+    .radio-group label:hover {
+      border-color: #3498db;
+    }
+
+    .radio-group input {
+      accent-color: #3498db;
+    }
+
     .buttons {
       display: flex;
       gap: 12px;
       justify-content: flex-end;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
     }
-    
+
     button {
-      padding: 10px 20px;
+      padding: 12px 24px;
       border: none;
-      border-radius: 6px;
+      border-radius: 10px;
       font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
     }
-    
+
     .btn-primary {
-      background: #3498db;
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
       color: white;
     }
-    
+
     .btn-primary:hover {
-      background: #2980b9;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(52, 152, 219, 0.35);
     }
-    
+
     .btn-secondary {
-      background: #ecf0f1;
-      color: #333;
+      background: rgba(236, 240, 241, 0.9);
+      color: #555;
     }
-    
+
     .btn-secondary:hover {
-      background: #bdc3c7;
+      background: rgba(189, 195, 199, 0.9);
+      transform: translateY(-1px);
     }
-    
+
+    .btn-test {
+      background: rgba(39, 174, 96, 0.1);
+      color: #27ae60;
+      border: 1px solid rgba(39, 174, 96, 0.3);
+    }
+
+    .btn-test:hover {
+      background: rgba(39, 174, 96, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-test:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .status {
-      margin-top: 16px;
-      padding: 10px;
-      border-radius: 6px;
+      margin-top: 20px;
+      padding: 14px;
+      border-radius: 10px;
       font-size: 13px;
+      display: none;
     }
-    
+
     .status.success {
-      background: #d4edda;
+      display: block;
+      background: rgba(212, 237, 218, 0.8);
       color: #155724;
+      border: 1px solid rgba(40, 167, 69, 0.2);
     }
-    
+
     .status.error {
-      background: #f8d7da;
+      display: block;
+      background: rgba(248, 215, 218, 0.8);
       color: #721c24;
+      border: 1px solid rgba(220, 53, 69, 0.2);
+    }
+
+    .test-result {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .test-result.success {
+      display: block;
+      background: rgba(212, 237, 218, 0.6);
+      color: #155724;
+      border: 1px solid rgba(40, 167, 69, 0.15);
+    }
+
+    .test-result.error {
+      display: block;
+      background: rgba(248, 215, 218, 0.6);
+      color: #721c24;
+      border: 1px solid rgba(220, 53, 69, 0.15);
+    }
+
+    #customProviderSection {
+      display: none;
+    }
+
+    #customProviderSection.show {
+      display: block;
+    }
+
+    /* 历史记录 */
+    .history-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 10px;
+    }
+
+    .history-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-text {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-source {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-target {
+      font-size: 14px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-time {
+      font-size: 11px;
+      color: #aaa;
+      white-space: nowrap;
+    }
+
+    .history-empty {
+      padding: 30px;
+      text-align: center;
+      color: #aaa;
+    }
+
+    .version {
+      text-align: center;
+      color: #95a5a6;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: rgba(248, 249, 250, 0.6);
+      padding: 4px;
+      border-radius: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #7f8c8d;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: #34495e;
+    }
+
+    .tab.active {
+      background: white;
+      color: #3498db;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>Qwenfy 设置</h1>
-  
-  <div class="section">
-    <h2>翻译引擎</h2>
-    
-    <div class="form-group">
-      <label for="provider">服务商</label>
-      <select id="provider">
-        <option value="qwen">通义千问 (Qwen)</option>
-        <option value="openai">OpenAI</option>
-        <option value="deepseek">DeepSeek</option>
-        <option value="local">本地模型 (Ollama)</option>
-      </select>
+  <div class="container">
+    <h1>YuxTrans</h1>
+    <p class="subtitle">AI 翻译助手设置</p>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="engine">翻译引擎</button>
+      <button class="tab" data-tab="language">语言设置</button>
+      <button class="tab" data-tab="behavior">操作行为</button>
+      <button class="tab" data-tab="history">历史记录</button>
     </div>
-    
-    <div class="form-group" id="apiKeyGroup">
-      <label for="apiKey">API Key</label>
-      <input type="password" id="apiKey" placeholder="输入您的 API Key">
-      <div class="hint">您的 API Key 将安全存储在浏览器中</div>
-    </div>
-    
-    <div class="form-group" id="localModelGroup" style="display: none;">
-      <label for="localModel">本地模型</label>
-      <input type="text" id="localModel" placeholder="qwen2:7b">
-      <div class="hint">确保 Ollama 已启动并下载了模型</div>
-    </div>
-  </div>
-  
-  <div class="section">
-    <h2>缓存设置</h2>
-    
-    <div class="form-group">
-      <div class="checkbox-group">
-        <input type="checkbox" id="cacheEnabled" checked>
-        <label for="cacheEnabled">启用翻译缓存</label>
+
+    <!-- 翻译引擎 -->
+    <div class="tab-content active" id="tab-engine">
+      <div class="section">
+        <h2>服务商配置</h2>
+
+        <div class="form-group">
+          <label for="provider">服务商</label>
+          <select id="provider">
+            <option value="qwen">通义千问 (Qwen)</option>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="groq">Groq</option>
+            <option value="moonshot">Moonshot (月之暗面)</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="local">本地模型 (Ollama)</option>
+            <option value="custom">自定义供应商</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="apiKeyGroup">
+          <label for="apiKey">API Key</label>
+          <input type="password" id="apiKey" placeholder="输入您的 API Key">
+          <div class="hint">您的 API Key 将安全存储在浏览器中</div>
+        </div>
+
+        <div class="form-group" id="localModelGroup" style="display: none;">
+          <label for="localModel">本地模型</label>
+          <input type="text" id="localModel" placeholder="qwen2:7b">
+          <div class="hint">确保 Ollama 已启动并下载了模型</div>
+        </div>
+
+        <div id="customProviderSection">
+          <div class="form-group">
+            <label for="customName">供应商名称</label>
+            <input type="text" id="customName" placeholder="例如: My API">
+          </div>
+
+          <div class="form-group">
+            <label for="customEndpoint">API 地址</label>
+            <input type="text" id="customEndpoint" placeholder="https://api.example.com/v1/chat/completions">
+          </div>
+
+          <div class="form-group">
+            <label for="customApiKey">API Key</label>
+            <input type="password" id="customApiKey" placeholder="输入 API Key">
+          </div>
+
+          <div class="input-row">
+            <div class="form-group">
+              <label for="customFormat">请求格式</label>
+              <select id="customFormat">
+                <option value="openai">OpenAI 格式</option>
+                <option value="anthropic">Anthropic 格式</option>
+                <option value="qwen">Qwen 格式</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="customModel">模型名称</label>
+              <input type="text" id="customModel" placeholder="例如: gpt-4o-mini">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <button class="btn-test" id="testConnectionBtn">🔗 测试连接</button>
+            <div class="test-result" id="testResult"></div>
+          </div>
+        </div>
       </div>
-      <div class="hint">缓存可以提高重复翻译的速度</div>
+
+      <div class="section">
+        <h2>缓存设置</h2>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="cacheEnabled" checked>
+            <label for="cacheEnabled">启用翻译缓存</label>
+          </div>
+          <div class="hint">缓存可以提高重复翻译的速度</div>
+        </div>
+
+        <div class="form-group">
+          <label for="cacheSize">缓存大小</label>
+          <input type="number" id="cacheSize" value="1000" min="100" max="10000">
+          <div class="hint">最多缓存的翻译条目数量</div>
+        </div>
+      </div>
     </div>
-    
-    <div class="form-group">
-      <label for="cacheSize">缓存大小</label>
-      <input type="number" id="cacheSize" value="1000" min="100" max="10000">
-      <div class="hint">最多缓存的翻译条目数量</div>
+
+    <!-- 语言设置 -->
+    <div class="tab-content" id="tab-language">
+      <div class="section">
+        <h2>语言偏好</h2>
+
+        <div class="input-row">
+          <div class="form-group">
+            <label for="sourceLang">默认源语言</label>
+            <select id="sourceLang">
+              <option value="auto">自动检测</option>
+              <option value="en">英语</option>
+              <option value="ja">日语</option>
+              <option value="ko">韩语</option>
+              <option value="fr">法语</option>
+              <option value="de">德语</option>
+              <option value="es">西班牙语</option>
+              <option value="ru">俄语</option>
+              <option value="pt">葡萄牙语</option>
+              <option value="it">意大利语</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="targetLang">默认目标语言</label>
+            <select id="targetLang">
+              <option value="zh">中文简体</option>
+              <option value="zh-TW">中文繁体</option>
+              <option value="en">英语</option>
+              <option value="ja">日语</option>
+              <option value="ko">韩语</option>
+              <option value="fr">法语</option>
+              <option value="de">德语</option>
+              <option value="es">西班牙语</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>翻译风格</h2>
+
+        <div class="form-group">
+          <label>选择翻译模式</label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="translateStyle" value="normal" checked>
+              日常模式
+            </label>
+            <label>
+              <input type="radio" name="translateStyle" value="academic">
+              学术模式
+            </label>
+            <label>
+              <input type="radio" name="translateStyle" value="technical">
+              技术模式
+            </label>
+            <label>
+              <input type="radio" name="translateStyle" value="literary">
+              文学模式
+            </label>
+          </div>
+          <div class="hint">不同模式会优化翻译结果的风格</div>
+        </div>
+      </div>
     </div>
+
+    <!-- 操作行为 -->
+    <div class="tab-content" id="tab-behavior">
+      <div class="section">
+        <h2>划词翻译</h2>
+
+        <div class="form-group">
+          <label>触发方式</label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="triggerMode" value="auto" checked>
+              选中后自动弹出
+            </label>
+            <label>
+              <input type="radio" name="triggerMode" value="icon">
+              选中后显示图标
+            </label>
+            <label>
+              <input type="radio" name="triggerMode" value="contextMenu">
+              仅右键菜单
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="autoCopy">
+            <label for="autoCopy">翻译完成自动复制结果</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="showFloatBtn" checked>
+            <label for="showFloatBtn">显示浮动翻译按钮</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>网站规则</h2>
+
+        <div class="form-group">
+          <label for="siteRule">网站过滤模式</label>
+          <select id="siteRule">
+            <option value="all">所有网站启用</option>
+            <option value="whitelist">仅白名单网站启用</option>
+            <option value="blacklist">黑名单网站禁用</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="siteList">网站列表 <span class="hint">(每行一个域名，如: google.com)</span></label>
+          <textarea id="siteList" placeholder="google.com&#10;github.com&#10;stackoverflow.com"></textarea>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="autoDetectLang" checked>
+            <label for="autoDetectLang">智能检测页面语言</label>
+          </div>
+          <div class="hint">检测到目标语言内容时不触发翻译</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 历史记录 -->
+    <div class="tab-content" id="tab-history">
+      <div class="section">
+        <h2>翻译历史</h2>
+
+        <div class="form-group">
+          <div class="checkbox-group">
+            <input type="checkbox" id="saveHistory" checked>
+            <label for="saveHistory">保存翻译历史</label>
+          </div>
+        </div>
+
+        <div class="history-list" id="historyList">
+          <div class="history-empty">暂无翻译历史</div>
+        </div>
+
+        <div class="buttons" style="margin-top: 16px; padding-top: 0; border-top: none;">
+          <button class="btn-secondary" id="exportHistoryBtn">导出历史</button>
+          <button class="btn-secondary" id="clearHistoryBtn">清除历史</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-secondary" id="clearCacheBtn">清除缓存</button>
+      <button class="btn-primary" id="saveBtn">保存设置</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="version">YuxTrans v0.1.0</div>
   </div>
-  
-  <div class="buttons">
-    <button class="btn-secondary" id="clearCacheBtn">清除缓存</button>
-    <button class="btn-primary" id="saveBtn">保存设置</button>
-  </div>
-  
-  <div class="status" id="status" style="display: none;"></div>
-  
+
   <script src="options.js"></script>
 </body>
 </html>

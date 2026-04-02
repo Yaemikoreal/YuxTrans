@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Qwenfy - AI翻译助手",
+  "name": "YuxTrans - AI翻译助手",
   "version": "0.1.0",
   "description": "响应速度极快、翻译质量精准的AI翻译工具",
   
@@ -40,7 +40,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Qwenfy 翻译"
+    "default_title": "YuxTrans 翻译"
   },
   
   "icons": {

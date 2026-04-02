@@ -3,177 +3,240 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Qwenfy 翻译</title>
+  <title>YuxTrans 翻译</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
-      width: 320px;
-      background: #fff;
+      width: 360px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }
-    
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: rgba(30, 30, 30, 0.95);
+        color: #f0f0f0;
+      }
+      .header {
+        background: linear-gradient(135deg, #2980b9 0%, #1a5276 100%);
+      }
+      textarea {
+        background: rgba(50, 50, 50, 0.8);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #f0f0f0;
+      }
+      textarea:focus {
+        border-color: #3498db;
+      }
+      textarea::placeholder {
+        color: #888;
+      }
+      .result-text {
+        background: rgba(50, 50, 50, 0.6);
+        color: #f0f0f0;
+      }
+      .action-btn {
+        background: rgba(80, 80, 80, 0.8);
+        color: #f0f0f0;
+      }
+      .action-btn:hover {
+        background: rgba(100, 100, 100, 0.9);
+      }
+      .input-group label {
+        color: #aaa;
+      }
+      .result-label {
+        color: #aaa;
+      }
+    }
+
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
+      padding: 16px 20px;
       background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
       color: white;
     }
-    
+
     .header h1 {
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 600;
+      letter-spacing: 0.5px;
     }
-    
+
     .header-btns {
       display: flex;
       gap: 8px;
     }
-    
+
     .icon-btn {
       background: rgba(255, 255, 255, 0.2);
       border: none;
-      border-radius: 4px;
-      padding: 4px 8px;
+      border-radius: 8px;
+      padding: 6px 12px;
       color: white;
       cursor: pointer;
-      font-size: 12px;
+      font-size: 13px;
+      transition: all 0.2s;
     }
-    
+
     .icon-btn:hover {
       background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
     }
-    
+
     .content {
-      padding: 16px;
+      padding: 20px;
     }
-    
+
     .input-group {
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
-    
+
     .input-group label {
       display: block;
-      margin-bottom: 4px;
-      font-size: 12px;
-      color: #666;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
     }
-    
+
     textarea {
       width: 100%;
-      height: 80px;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
+      height: 100px;
+      padding: 12px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
       font-size: 14px;
       resize: none;
       font-family: inherit;
+      transition: all 0.2s;
+      background: rgba(248, 249, 250, 0.8);
     }
-    
+
     textarea:focus {
       outline: none;
       border-color: #3498db;
+      box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
     }
-    
+
+    textarea::placeholder {
+      color: #aaa;
+    }
+
     .translate-btn {
       width: 100%;
-      padding: 10px;
-      background: #3498db;
+      padding: 12px;
+      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
       color: white;
       border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
     }
-    
+
     .translate-btn:hover {
-      background: #2980b9;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(52, 152, 219, 0.35);
     }
-    
+
+    .translate-btn:active {
+      transform: translateY(0);
+    }
+
     .translate-btn:disabled {
-      background: #bdc3c7;
+      background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
-    
+
     .result {
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #eee;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
     }
-    
+
     .result-label {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 10px;
     }
-    
+
     .result-text {
-      padding: 10px;
-      background: #f8f9fa;
-      border-radius: 6px;
-      line-height: 1.6;
-      min-height: 60px;
+      padding: 14px;
+      background: rgba(248, 249, 250, 0.8);
+      border-radius: 10px;
+      line-height: 1.7;
+      min-height: 80px;
       color: #333;
+      font-size: 14px;
     }
-    
+
     .result-actions {
       display: flex;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 10px;
+      margin-top: 14px;
     }
-    
+
     .action-btn {
       flex: 1;
-      padding: 8px;
-      background: #ecf0f1;
+      padding: 10px;
+      background: rgba(236, 240, 241, 0.9);
       border: none;
-      border-radius: 4px;
-      font-size: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s;
     }
-    
+
     .action-btn:hover {
-      background: #bdc3c7;
+      background: rgba(189, 195, 199, 0.9);
+      transform: translateY(-1px);
     }
-    
+
     .status {
-      font-size: 11px;
-      color: #999;
-      margin-top: 8px;
+      font-size: 12px;
+      color: #888;
+      margin-top: 12px;
       text-align: center;
     }
-    
+
     .loading {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      color: #999;
+      gap: 10px;
+      color: #888;
     }
-    
+
     .spinner {
-      width: 14px;
-      height: 14px;
-      border: 2px solid #e9ecef;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
       border-top-color: #3498db;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-    
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    
+
     .error {
       color: #e74c3c;
     }
@@ -181,31 +244,31 @@
 </head>
 <body>
   <div class="header">
-    <h1>Qwenfy</h1>
+    <h1>YuxTrans</h1>
     <div class="header-btns">
-      <button class="icon-btn" id="settingsBtn">设置</button>
+      <button class="icon-btn" id="settingsBtn">⚙ 设置</button>
     </div>
   </div>
-  
+
   <div class="content">
     <div class="input-group">
       <label>输入文本</label>
       <textarea id="inputText" placeholder="输入要翻译的文本..."></textarea>
     </div>
-    
+
     <button class="translate-btn" id="translateBtn">翻译</button>
-    
+
     <div class="result" id="resultArea" style="display: none;">
       <div class="result-label">翻译结果</div>
       <div class="result-text" id="resultText"></div>
       <div class="result-actions">
-        <button class="action-btn" id="copyBtn">复制结果</button>
-        <button class="action-btn" id="clearBtn">清空</button>
+        <button class="action-btn" id="copyBtn">📋 复制结果</button>
+        <button class="action-btn" id="clearBtn">🗑 清空</button>
       </div>
       <div class="status" id="statusText"></div>
     </div>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>
