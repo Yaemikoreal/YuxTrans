@@ -235,20 +235,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== 历史记录 =====
   async function loadHistory() {
-    const response = await chrome.runtime.sendMessage({ action: 'getHistory' });
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getHistory' });
 
-    if (response && response.history && response.history.length > 0) {
-      historyListEl.innerHTML = response.history.slice(0, 50).map(item => `
-        <div class="history-item">
-          <div class="history-text">
-            <div class="history-source">${escapeHtml(item.source)}</div>
-            <div class="history-target">${escapeHtml(item.target)}</div>
+      if (response && response.history && response.history.length > 0) {
+        historyListEl.innerHTML = response.history.slice(0, 50).map(item => `
+          <div class="history-item">
+            <div class="history-text">
+              <div class="history-source">${escapeHtml(item.source)}</div>
+              <div class="history-target">${escapeHtml(item.target)}</div>
+            </div>
+            <div class="history-time">${formatTime(item.timestamp)}</div>
           </div>
-          <div class="history-time">${formatTime(item.timestamp)}</div>
-        </div>
-      `).join('');
-    } else {
-      historyListEl.innerHTML = '<div class="history-empty">暂无翻译历史</div>';
+        `).join('');
+      } else {
+        historyListEl.innerHTML = '<div class="history-empty">暂无翻译历史</div>';
+      }
+    } catch (error) {
+      console.error('加载历史记录失败:', error);
+      historyListEl.innerHTML = '<div class="history-empty">加载失败，请刷新页面</div>';
     }
   }
 

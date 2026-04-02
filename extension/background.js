@@ -295,6 +295,16 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh') {
 
 // ===== 事件监听 =====
 
+// 确保 service worker 启动时加载配置和历史
+let initialized = false;
+
+async function ensureInitialized() {
+  if (!initialized) {
+    await loadConfig();
+    initialized = true;
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   loadConfig();
 
@@ -311,6 +321,11 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Service worker 启动时也加载配置
+chrome.runtime.onStartup.addListener(() => {
+  loadConfig();
+});
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'translate-selection') {
     chrome.tabs.sendMessage(tab.id, {
@@ -325,53 +340,56 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'translate') {
-    const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-    const targetLang = request.targetLang || config.targetLang || 'zh';
+  // 确保已初始化
+  ensureInitialized().then(() => {
+    if (request.action === 'translate') {
+      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+      const targetLang = request.targetLang || config.targetLang || 'zh';
 
-    translate(request.text, sourceLang, targetLang)
-      .then(result => sendResponse({ success: true, ...result }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
+      translate(request.text, sourceLang, targetLang)
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+    }
 
-  if (request.action === 'getConfig') {
-    sendResponse(config);
-    return true;
-  }
+    if (request.action === 'getConfig') {
+      sendResponse(config);
+    }
 
-  if (request.action === 'setConfig') {
-    saveConfig(request.config)
-      .then(() => sendResponse({ success: true }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
+    if (request.action === 'setConfig') {
+      saveConfig(request.config)
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+    }
 
-  if (request.action === 'testConnection') {
-    testConnection(request.config)
-      .then(result => sendResponse(result))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
+    if (request.action === 'testConnection') {
+      testConnection(request.config)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+    }
 
-  if (request.action === 'clearCache') {
-    cache.clear();
-    cacheOrder = [];
-    sendResponse({ success: true });
-    return true;
-  }
+    if (request.action === 'clearCache') {
+      cache.clear();
+      cacheOrder = [];
+      sendResponse({ success: true });
+    }
 
-  if (request.action === 'getHistory') {
-    sendResponse({ history: translationHistory });
-    return true;
-  }
+    if (request.action === 'getHistory') {
+      // 从存储重新加载以确保数据最新
+      chrome.storage.local.get('history').then(result => {
+        sendResponse({ history: result.history || [] });
+      }).catch(error => {
+        sendResponse({ history: [], error: error.message });
+      });
+    }
 
-  if (request.action === 'clearHistory') {
-    translationHistory = [];
-    saveHistory();
-    sendResponse({ success: true });
-    return true;
-  }
+    if (request.action === 'clearHistory') {
+      translationHistory = [];
+      saveHistory()
+        .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+    }
+  });
+  return true; // 保持消息通道打开
 });
 
 chrome.commands.onCommand.addListener((command) => {
