@@ -63,6 +63,10 @@ let cacheOrder = [];
 let translationHistory = [];
 let cacheStats = { wordCount: 0, sizeBytes: 0 }; // 缓存统计
 
+// ===== 缓存批处理优化 =====
+let pendingCacheSave = false;
+let cacheSaveTimer = null;
+
 // 从 chrome.storage.local 加载持久化缓存
 async function loadCacheFromStorage() {
   const stored = await chrome.storage.local.get(['cacheData', 'cacheOrder']);
@@ -76,11 +80,29 @@ async function loadCacheFromStorage() {
   }
 }
 
-// 保存缓存到 chrome.storage.local
+// 保存缓存到 chrome.storage.local（批处理优化）
 async function saveCacheToStorage() {
-  // 将 Map 转换为普通对象存储
-  const cacheData = Object.fromEntries(cache);
-  await chrome.storage.local.set({ cacheData, cacheOrder });
+  // 延迟保存，避免频繁写入
+  if (pendingCacheSave) return;
+
+  pendingCacheSave = true;
+
+  // 清除之前的定时器
+  if (cacheSaveTimer) {
+    clearTimeout(cacheSaveTimer);
+  }
+
+  // 延迟 500ms 后保存，合并多次修改
+  cacheSaveTimer = setTimeout(async () => {
+    try {
+      const cacheData = Object.fromEntries(cache);
+      await chrome.storage.local.set({ cacheData, cacheOrder });
+    } catch (error) {
+      console.error('保存缓存失败:', error);
+    }
+    pendingCacheSave = false;
+    cacheSaveTimer = null;
+  }, 500);
 }
 
 // 更新缓存统计
@@ -417,6 +439,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       cacheStats = { wordCount: 0, sizeBytes: 0 };
       // 清除持久化存储
       await chrome.storage.local.remove(['cacheData', 'cacheOrder']);
+      // 重置批处理状态
+      pendingCacheSave = false;
+      if (cacheSaveTimer) {
+        clearTimeout(cacheSaveTimer);
+        cacheSaveTimer = null;
+      }
       sendResponse({ success: true });
     }
 
