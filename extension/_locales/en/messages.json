@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "YuxTrans - AI Translation",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Ultra-fast, high-accuracy AI translation tool",
+    "description": "Extension description"
+  }
+}

@@ -5,312 +5,332 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YuxTrans 翻译</title>
   <style>
+    :root {
+      /* 护眼书页主题变量 (极致紧凑版) */
+      --bg-primary: #fdfbf7;
+      --bg-gradient: radial-gradient(circle at 50% 50%, #fefcf9 0%, #f2ede4 100%);
+      --bg-element: rgba(255, 255, 255, 0.9);
+      --bg-secondary: rgba(140, 130, 121, 0.05);
+      
+      --text-main: #3d3733; 
+      --text-secondary: #8c8279;
+      
+      --accent: #d8a051;
+      --accent-hover: #c98e41;
+      --accent-gradient: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
+      --accent-text: #ffffff;
+      
+      --border-color: rgba(61, 55, 51, 0.08);
+      --shadow-sm: 0 4px 12px rgba(61, 55, 51, 0.04);
+      --shadow-md: 0 8px 24px rgba(61, 55, 51, 0.06);
+      
+      --glass-blur: 24px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1a1817;
+        --bg-gradient: radial-gradient(circle at 50% 0%, #2a2725 0%, #151312 100%);
+        --bg-element: rgba(43, 39, 37, 0.85);
+        --bg-secondary: rgba(0, 0, 0, 0.15);
+        
+        --text-main: #e6e0d8;
+        --text-secondary: #9e958a;
+        
+        --accent: #d8a051;
+        --accent-gradient: linear-gradient(135deg, #e5b67a 0%, #d8a051 100%);
+        --accent-text: #2c2825;
+        
+        --border-color: rgba(244, 240, 230, 0.08);
+        --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+      }
+    }
+
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      width: 360px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      width: 320px; /* 极致紧凑宽度 */
+      background: var(--bg-primary);
+      background-image: var(--bg-gradient);
+      color: var(--text-main);
+      padding: 18px; /* 缩小内边距 */
+      display: flex;
+      flex-direction: column;
+      gap: 14px; /* 缩小间距 */
+      overflow: hidden;
     }
 
-    @media (prefers-color-scheme: dark) {
-      body {
-        background: rgba(30, 30, 30, 0.95);
-        color: #f0f0f0;
-      }
-      .header {
-        background: linear-gradient(135deg, #2980b9 0%, #1a5276 100%);
-      }
-      textarea {
-        background: rgba(50, 50, 50, 0.8);
-        border-color: rgba(255, 255, 255, 0.1);
-        color: #f0f0f0;
-      }
-      textarea:focus {
-        border-color: #3498db;
-      }
-      textarea::placeholder {
-        color: #888;
-      }
-      .result-text {
-        background: rgba(50, 50, 50, 0.6);
-        color: #f0f0f0;
-      }
-      .action-btn {
-        background: rgba(80, 80, 80, 0.8);
-        color: #f0f0f0;
-      }
-      .action-btn:hover {
-        background: rgba(100, 100, 100, 0.9);
-      }
-      .input-group label {
-        color: #aaa;
-      }
-      .result-label {
-        color: #aaa;
-      }
-    }
-
+    /* 顶部航栏 - 紧凑化 */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-      color: white;
+      padding-bottom: 2px;
     }
 
     .header h1 {
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      font-size: 16px; /* 缩小标题 */
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text-main);
     }
 
     .header-btns {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
 
     .icon-btn {
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      border-radius: 8px;
-      padding: 6px 12px;
-      color: white;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 6px 10px;
+      color: var(--text-main);
       cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
+      font-size: 11px;
+      font-weight: 700;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
     .icon-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--bg-element);
       transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
     }
 
-    .version {
-      font-size: 12px;
-      font-weight: 400;
-      opacity: 0.8;
+    /* 输入/输出卡片 - 紧凑化 */
+    .card {
+      background: var(--bg-element);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow-md);
+      transition: all 0.3s;
     }
 
-    .update-toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 12px 20px;
-      background: rgba(39, 174, 96, 0.9);
-      color: white;
-      border-radius: 10px;
-      font-size: 13px;
-      z-index: 100;
-      display: none;
-      animation: slideUp 0.3s ease;
-    }
-
-    .update-toast.error {
-      background: rgba(231, 76, 60, 0.9);
-    }
-
-    .update-toast.show {
-      display: block;
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-      }
-    }
-
-    .content {
-      padding: 20px;
-    }
-
-    .input-group {
-      margin-bottom: 16px;
-    }
-
-    .input-group label {
-      display: block;
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: #555;
+    }
+
+    label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .lang-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-secondary);
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--accent);
     }
 
     textarea {
       width: 100%;
-      height: 100px;
-      padding: 12px;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      border-radius: 10px;
-      font-size: 14px;
+      height: 80px; /* 缩小高度 */
+      background: transparent;
+      border: none;
       resize: none;
+      font-size: 14px;
+      line-height: 1.5;
       font-family: inherit;
-      transition: all 0.2s;
-      background: rgba(248, 249, 250, 0.8);
-    }
-
-    textarea:focus {
+      color: var(--text-main);
       outline: none;
-      border-color: #3498db;
-      box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
     }
 
     textarea::placeholder {
-      color: #aaa;
+      color: var(--text-secondary);
+      opacity: 0.3;
     }
 
+    /* 核心按钮 */
     .translate-btn {
       width: 100%;
       padding: 12px;
-      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-      color: white;
+      background: var(--accent-gradient);
+      color: var(--accent-text);
       border: none;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 600;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 800;
       cursor: pointer;
-      transition: all 0.2s;
-      letter-spacing: 0.5px;
+      box-shadow: 0 6px 20px rgba(216, 160, 81, 0.25);
+      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
     .translate-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(52, 152, 219, 0.35);
+      box-shadow: 0 10px 28px rgba(216, 160, 81, 0.4);
     }
 
-    .translate-btn:active {
-      transform: translateY(0);
+    /* 结果显示 - 紧凑化 */
+    .result-section {
+      display: none;
+      margin-top: -4px;
     }
 
-    .translate-btn:disabled {
-      background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
+    .result-section.active {
+      display: block;
+      animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .result {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .result-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #555;
-      margin-bottom: 10px;
+    .result-card {
+      min-height: 80px;
+      max-height: 180px;
+      overflow-y: auto;
     }
 
     .result-text {
-      padding: 14px;
-      background: rgba(248, 249, 250, 0.8);
-      border-radius: 10px;
-      line-height: 1.7;
-      min-height: 80px;
-      color: #333;
       font-size: 14px;
+      line-height: 1.5;
     }
 
-    .result-actions {
+    .action-row {
       display: flex;
-      gap: 10px;
-      margin-top: 14px;
+      gap: 8px;
+      margin-top: 10px;
     }
 
-    .action-btn {
+    .btn-action {
       flex: 1;
-      padding: 10px;
-      background: rgba(236, 240, 241, 0.9);
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .action-btn:hover {
-      background: rgba(189, 195, 199, 0.9);
-      transform: translateY(-1px);
-    }
-
-    .status {
+      padding: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 10px;
       font-size: 12px;
-      color: #888;
-      margin-top: 12px;
-      text-align: center;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
     }
 
-    .loading {
+    .btn-action:hover {
+      background: var(--bg-element);
+      border-color: var(--accent);
+    }
+
+    .loading-indicator {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 10px;
-      color: #888;
+      gap: 6px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(0, 0, 0, 0.1);
-      border-top-color: #3498db;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(216, 160, 81, 0.1);
+      border-top-color: var(--accent);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 1s linear infinite;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      bottom: 20px; /* 移到底部以节省视线 */
+      left: 50%;
+      transform: translateX(-50%) translateY(100%);
+      background: var(--accent-gradient);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      opacity: 0;
+      white-space: nowrap;
     }
 
-    .error {
-      color: #e74c3c;
+    .toast.show {
+      transform: translateX(-50%) translateY(-20px);
+      opacity: 1;
+    }
+
+    #switchLangBtn {
+      border: none;
+      background: var(--bg-secondary);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>YuxTrans <span class="version" id="versionBadge">v0.1.0</span></h1>
+    <h1>YuxTrans <span id="versionBadge" style="font-size: 10px; opacity: 0.5; font-weight: 400; margin-left: 4px;"></span></h1>
     <div class="header-btns">
-      <button class="icon-btn" id="updateBtn" title="检查更新">🔄 更新</button>
       <button class="icon-btn" id="settingsBtn">⚙ 设置</button>
     </div>
   </div>
 
-  <div class="content">
-    <div class="input-group">
-      <label>输入文本</label>
-      <textarea id="inputText" placeholder="输入要翻译的文本..."></textarea>
+  <div class="card">
+    <div class="label-row">
+      <label>输入</label>
+      <div class="lang-indicator">
+        <span id="currentSourceLang">自动</span>
+        <button id="switchLangBtn">⇄</button>
+        <span id="currentTargetLang">中文</span>
+      </div>
+    </div>
+    <textarea id="inputText" placeholder="输入内容... (⌘+Enter)"></textarea>
+  </div>
+
+  <button class="translate-btn" id="translateBtn">立即翻译</button>
+
+  <div class="result-section" id="resultArea">
+    <div class="card result-card">
+      <div class="label-row">
+        <label>结果</label>
+        <div id="statusText" class="loading-indicator" style="display: none;">
+          <div class="spinner"></div>
+          <span>TRANSLATING</span>
+        </div>
+      </div>
+      <div class="result-text" id="resultText"></div>
     </div>
 
-    <button class="translate-btn" id="translateBtn">翻译</button>
-
-    <div class="result" id="resultArea" style="display: none;">
-      <div class="result-label">翻译结果</div>
-      <div class="result-text" id="resultText"></div>
-      <div class="result-actions">
-        <button class="action-btn" id="copyBtn">📋 复制结果</button>
-        <button class="action-btn" id="clearBtn">🗑 清空</button>
-      </div>
-      <div class="status" id="statusText"></div>
+    <div class="action-row">
+      <button class="btn-action" id="copyBtn">复制内容</button>
+      <button class="btn-action" id="clearBtn">移除所有</button>
     </div>
   </div>
 
-  <div class="update-toast" id="updateToast"></div>
+  <div id="updateToast" class="toast">核心配置更新成功</div>
 
   <script src="popup.js"></script>
 </body>

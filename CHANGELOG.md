@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-04
+
+### Added
+
+#### Cache System
+- **IndexedDB persistent cache** - Replaces chrome.storage.local, breaks 5MB limit
+- **Built-in hot vocabulary** - 200+ common words preloaded for instant cache hit
+- **Cache statistics dashboard** - Real-time display of translation count, cache hits, hit rate
+- **Batch write optimization** - Debounce mechanism reduces IndexedDB writes
+
+#### Translation Features
+- **Streaming translation** - `translateStream` API for incremental output
+- **Language switch button** - One-click swap source/target language in popup
+- **Text deduplication** - Same content only translated once
+
+#### Settings UI
+- **Dynamic model list** - Fetch available models from API
+- **Connection test button** - Validate API Key and endpoint
+- **Auto-fill API endpoint** - Auto-populate default endpoint when selecting provider
+- **Version display** - Show current version in settings header
+
+### Changed
+
+#### API Updates
+- Qwen endpoint updated to OpenAI-compatible mode (`/compatible-mode/v1/chat/completions`)
+- Added Groq API support (`api.groq.com`)
+- Added Anthropic API support (`api.anthropic.com`)
+
+#### Code Quality
+- Defensive programming with null checks
+- Modular constants (`DEFAULT_ENDPOINTS`, `DEFAULT_MODELS`)
+- Error boundaries for async operations
+
+### Fixed
+
+- Settings panel syntax errors
+- Request endpoint auto-fill
+- Service Worker reconnection after idle
+- HTTP error code mapping to friendly Chinese messages
+- Request timeout handling (15 seconds)
+
+### Removed
+
+- History module - Simplified UI, focus on core translation
+
+### Technical Details
+
+- **Service Worker reconnection** - Handle MV3 idle disconnection with auto-reconnect
+- **Request timeout** - 15 second timeout protection
+- **Friendly error messages** - 401/403/429 etc. mapped to Chinese hints
+- **i18n framework** - `default_locale: "zh_CN"` for internationalization support
+
+---
+
 ## [0.1.0] - 2026-04-01
 
 ### Added
@@ -89,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Roadmap
 
-### [0.2.0] - Planned
+### [0.3.0] - Planned
 - OCR image translation
 - Voice translation
 - PDF document translation
@@ -103,4 +157,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[0.1.0]: https://github.com/Yaemikoreal/qwenfy/releases/tag/v0.1.0
+[0.2.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.2.0
+[0.1.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.1.0

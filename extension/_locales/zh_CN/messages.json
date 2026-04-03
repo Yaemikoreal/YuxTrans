@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "YuxTrans - AI翻译助手",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "响应速度极快、翻译质量精准的AI翻译工具",
+    "description": "Extension description"
+  }
+}

@@ -47,152 +47,143 @@ class YuxTransContent {
     const style = document.createElement('style');
     style.id = 'yuxtrans-styles';
     style.textContent = `
-      /* 毛玻璃翻译弹窗 */
+      /* =========================================
+         YuxTrans 划词翻译全局样式 - 黄铜纸本风格
+         ========================================= */
+      
       .yuxtrans-popup {
         position: fixed;
         z-index: 2147483647;
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #fdfbf7;
+        background-image: radial-gradient(circle at 50% 50%, #fefcf9 0%, #f2ede4 100%);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(61, 55, 51, 0.1);
+        border-radius: 20px;
+        box-shadow: 0 16px 40px rgba(61, 55, 51, 0.15);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
         font-size: 14px;
-        max-width: 400px;
-        min-width: 200px;
+        max-width: 420px;
+        min-width: 280px;
+        color: #3d3733;
         overflow: hidden;
-        animation: yuxtrans-fadeIn 0.2s ease-out;
+        animation: yuxtrans-slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
-      @keyframes yuxtrans-fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
+      @keyframes yuxtrans-slideIn {
+        from { opacity: 0; transform: translateY(12px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
 
-      /* 深色模式 */
+      /* 深色模式：深夜书房 */
       @media (prefers-color-scheme: dark) {
         .yuxtrans-popup {
-          background: rgba(30, 30, 30, 0.85);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #fff;
+          background: #1a1817;
+          background-image: radial-gradient(circle at 50% 0%, #2a2725 0%, #151312 100%);
+          border-color: rgba(244, 240, 230, 0.1);
+          color: #e6e0d8;
+          box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
         }
-        .yuxtrans-popup-header {
-          background: rgba(50, 50, 50, 0.6);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .yuxtrans-popup-title { color: #fff; }
-        .yuxtrans-popup-close { color: #aaa; }
-        .yuxtrans-popup-close:hover { color: #fff; }
-        .yuxtrans-source { color: #aaa; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-        .yuxtrans-target { color: #f0f0f0; }
-        .yuxtrans-popup-footer {
-          background: rgba(50, 50, 50, 0.6);
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .yuxtrans-btn-secondary {
-          background: rgba(80, 80, 80, 0.8);
-          color: #fff;
-        }
-        .yuxtrans-btn-secondary:hover { background: rgba(100, 100, 100, 0.9); }
+        .yuxtrans-popup-header { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
+        .yuxtrans-popup-title { color: #d8a051 !important; }
+        .yuxtrans-source { color: #9e958a; border-color: rgba(255,255,255,0.05); }
+        .yuxtrans-target { color: #f4f0e6; }
+        .yuxtrans-popup-footer { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
+        .yuxtrans-btn-secondary { background: rgba(255,255,255,0.05); color: #e6e0d8; }
       }
 
       .yuxtrans-popup-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 12px 16px;
-        background: rgba(248, 249, 250, 0.6);
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 14px 18px;
+        background: rgba(140, 130, 121, 0.03);
+        border-bottom: 1px solid rgba(61, 55, 51, 0.05);
       }
 
       .yuxtrans-popup-title {
-        font-weight: 600;
-        font-size: 15px;
-        color: #333;
+        font-weight: 800;
+        font-size: 14px;
+        color: #d8a051;
+        letter-spacing: -0.2px;
+        text-transform: uppercase;
       }
 
       .yuxtrans-popup-close {
         background: none;
         border: none;
-        font-size: 20px;
-        color: #999;
+        font-size: 18px;
+        color: #8c8279;
         cursor: pointer;
         padding: 0;
-        line-height: 1;
         width: 24px;
         height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 50%;
+        border-radius: 8px;
         transition: all 0.2s;
       }
 
       .yuxtrans-popup-close:hover {
-        color: #333;
-        background: rgba(0, 0, 0, 0.05);
+        background: rgba(61, 55, 51, 0.08);
+        color: #3d3733;
       }
 
       .yuxtrans-popup-content {
-        padding: 16px;
+        padding: 20px;
       }
 
       .yuxtrans-source {
-        color: #666;
+        color: #8c8279;
         font-size: 13px;
-        margin-bottom: 12px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        line-height: 1.5;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(61, 55, 51, 0.06);
+        line-height: 1.6;
+        font-style: italic;
       }
 
       .yuxtrans-target {
-        color: #333;
-        line-height: 1.7;
+        color: #3d3733;
+        line-height: 1.8;
         font-size: 15px;
+        font-weight: 500;
       }
 
       .yuxtrans-popup-footer {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 16px;
-        background: rgba(248, 249, 250, 0.5);
-        border-top: 1px solid rgba(0, 0, 0, 0.05);
-        font-size: 12px;
-        color: #888;
-      }
-
-      .yuxtrans-popup-actions {
-        display: flex;
-        gap: 8px;
+        padding: 12px 18px;
+        background: rgba(140, 130, 121, 0.03);
+        border-top: 1px solid rgba(61, 55, 51, 0.05);
+        font-size: 11px;
+        font-weight: 600;
+        color: #8c8279;
       }
 
       .yuxtrans-btn {
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        background: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
         color: white;
         border: none;
-        border-radius: 6px;
-        padding: 6px 14px;
+        border-radius: 10px;
+        padding: 8px 16px;
         font-size: 12px;
         cursor: pointer;
-        transition: all 0.2s;
-        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(216, 160, 81, 0.2);
       }
 
       .yuxtrans-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(216, 160, 81, 0.3);
       }
 
       .yuxtrans-btn-secondary {
-        background: rgba(236, 240, 241, 0.8);
-        color: #333;
-      }
-
-      .yuxtrans-btn-secondary:hover {
-        background: rgba(189, 195, 199, 0.9);
+        background: rgba(140, 130, 121, 0.08);
+        color: #3d3733;
         box-shadow: none;
       }
 
@@ -200,14 +191,15 @@ class YuxTransContent {
         display: flex;
         align-items: center;
         gap: 10px;
-        color: #888;
+        color: #d8a051;
+        font-weight: 600;
       }
 
       .yuxtrans-spinner {
         width: 16px;
         height: 16px;
-        border: 2px solid rgba(0, 0, 0, 0.1);
-        border-top-color: #3498db;
+        border: 2px solid rgba(216, 160, 81, 0.15);
+        border-top-color: #d8a051;
         border-radius: 50%;
         animation: yuxtrans-spin 0.8s linear infinite;
       }
@@ -216,136 +208,60 @@ class YuxTransContent {
         to { transform: rotate(360deg); }
       }
 
+      /* =========================================
+         划词翻译浮动按钮 - 黄铜宝石质感
+         ========================================= */
+      
       .yuxtrans-float-btn {
         position: absolute;
         z-index: 2147483646;
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        background: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
         color: white;
         border: none;
-        border-radius: 6px;
-        padding: 8px 16px;
+        border-radius: 12px;
+        padding: 9px 18px;
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 800;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(52, 152, 219, 0.3);
-        transition: all 0.2s;
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 8px 24px rgba(216, 160, 81, 0.3);
+        transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
       }
 
       .yuxtrans-float-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        transform: translateY(-4px) scale(1.05);
+        box-shadow: 0 12px 32px rgba(216, 160, 81, 0.45);
       }
 
-      /* 已翻译文本标记 - 保持原有样式 */
-      .yuxtrans-translated {
-        background-color: rgba(212, 237, 218, 0.3);
-        transition: background-color 0.3s;
+      .yuxtrans-float-btn:active {
+        transform: translateY(-1px) scale(0.96);
       }
 
-      .yuxtrans-translated:hover {
-        background-color: rgba(212, 237, 218, 0.5);
-      }
-
-      /* 翻译进度指示器 */
+      /* 进度条指示器同步 */
       .yuxtrans-progress {
         position: fixed;
         top: 20px;
         right: 20px;
         z-index: 2147483647;
-        background: rgba(255, 255, 255, 0.95);
+        background: #fdfbf7;
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        border-radius: 12px;
+        border: 1px solid rgba(61, 55, 51, 0.1);
+        border-radius: 16px;
         padding: 16px 20px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        min-width: 240px;
-        animation: yuxtrans-fadeIn 0.2s ease-out;
+        box-shadow: 0 12px 32px rgba(61, 55, 51, 0.15);
+        font-family: inherit;
+        min-width: 260px;
       }
-
-      @media (prefers-color-scheme: dark) {
-        .yuxtrans-progress {
-          background: rgba(30, 30, 30, 0.95);
-          border-color: rgba(255, 255, 255, 0.1);
-          color: #f0f0f0;
-        }
-        .yuxtrans-progress-title { color: #f0f0f0; }
-        .yuxtrans-progress-bar-bg { background: rgba(255, 255, 255, 0.1); }
-      }
-
-      .yuxtrans-progress-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
       .yuxtrans-progress-bar-bg {
-        width: 100%;
-        height: 6px;
-        background: rgba(0, 0, 0, 0.1);
-        border-radius: 3px;
-        overflow: hidden;
-        margin-bottom: 10px;
+        width: 100%; height: 6px; background: rgba(0,0,0,0.05); border-radius: 3px; margin-bottom: 10px; overflow: hidden;
       }
-
       .yuxtrans-progress-bar {
-        height: 100%;
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        border-radius: 3px;
-        transition: width 0.2s ease;
+        height: 100%; background: linear-gradient(135deg, #dfab66 0%, #d19747 100%); transition: width 0.3s ease;
       }
-
-      .yuxtrans-progress-text {
-        font-size: 12px;
-        color: #888;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .yuxtrans-progress-actions {
-        margin-top: 12px;
-        display: flex;
-        gap: 8px;
-      }
-
-      .yuxtrans-progress-btn {
-        flex: 1;
-        padding: 8px 12px;
-        border: none;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-      }
-
-      .yuxtrans-progress-btn.primary {
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        color: white;
-      }
-
-      .yuxtrans-progress-btn.secondary {
-        background: rgba(236, 240, 241, 0.8);
-        color: #555;
-      }
-
-      .yuxtrans-progress-btn:hover {
-        transform: translateY(-1px);
-      }
-
-      .yuxtrans-progress-speed {
-        font-size: 11px;
-        color: #aaa;
-        margin-top: 6px;
-      }
+      .yuxtrans-progress-text { font-size: 12px; color: #8c8279; display: flex; justify-content: space-between; }
     `;
     document.head.appendChild(style);
   }
@@ -362,9 +278,33 @@ class YuxTransContent {
         }
       } else if (request.action === 'translatePage') {
         this.translatePage();
+      } else if (request.action === 'streamChunk') {
+        // 流式输出：逐字更新弹窗
+        this.handleStreamChunk(request.chunk, request.fullText);
       }
       return true;
     });
+  }
+
+  /**
+   * 获取页面上下文信息（用于增强翻译精度）
+   */
+  getPageContext() {
+    return {
+      pageTitle: document.title || '',
+      pageUrl: location.href || ''
+    };
+  }
+
+  /**
+   * 处理流式输出增量文本
+   */
+  handleStreamChunk(chunk, fullText) {
+    if (!this.popup) return;
+    const targetEl = this.popup.querySelector('.yuxtrans-target');
+    if (targetEl) {
+      targetEl.textContent = fullText;
+    }
   }
 
   handleMouseUp(e) {
@@ -427,8 +367,19 @@ class YuxTransContent {
     this.showPopup(rect.left, rect.bottom + 10, text);
     this.isTranslating = true;
 
+    const sourceLang = this.config.sourceLang || 'auto';
+    const targetLang = this.config.targetLang || 'zh';
+    const context = this.getPageContext();
+
+    // 使用流式输出：逐字显示翻译结果
     chrome.runtime.sendMessage(
-      { action: 'translate', text, sourceLang: 'auto', targetLang: 'zh' },
+      {
+        action: 'translateStream',
+        text,
+        sourceLang,
+        targetLang,
+        context
+      },
       (response) => {
         this.isTranslating = false;
 
@@ -436,7 +387,6 @@ class YuxTransContent {
           this.updatePopup(response.text, response.cached, response.engine);
         } else {
           const errorMsg = response?.error || '未知错误';
-          // API Key 未配置时显示特殊提示
           if (errorMsg.includes('API Key') || errorMsg.includes('请先配置')) {
             this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n点击右上角设置图标进行配置', false, 'warning');
           } else {
@@ -497,8 +447,19 @@ class YuxTransContent {
     const statusText = cached ? '缓存' : engine;
     statusEl.textContent = statusText;
 
-    this.popup.querySelector('.yuxtrans-copy-btn').addEventListener('click', () => {
-      navigator.clipboard.writeText(translatedText);
+    this.popup.querySelector('.yuxtrans-copy-btn').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(translatedText);
+      } catch (e) {
+        // clipboard API 降级：textarea 方案
+        const ta = document.createElement('textarea');
+        ta.value = translatedText;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       statusEl.textContent = '已复制';
       setTimeout(() => {
         statusEl.textContent = statusText;
@@ -625,55 +586,71 @@ class YuxTransContent {
    * 并行翻译多个文本
    */
   async translateBatchParallel(items, onProgress) {
-    const { concurrency } = this.config;
+    const { concurrency } = this.config || { concurrency: 5 };
+    const BATCH_SIZE = 10;
     const results = new Array(items.length);
     let completed = 0;
 
-    // 创建任务队列
-    const queue = [...items.keys()];
+    // 分块打包
+    const batches = [];
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      batches.push({
+        indices: Array.from({ length: Math.min(BATCH_SIZE, items.length - i) }, (_, k) => i + k),
+        nodes: items.slice(i, i + BATCH_SIZE)
+      });
+    }
 
-    // 工作函数
+    const queue = [...batches.keys()];
+
     const worker = async () => {
       while (queue.length > 0 && this.pageTranslationState.isTranslating) {
-        const index = queue.shift();
-        const item = items[index];
+        const batchIndex = queue.shift();
+        const batch = batches[batchIndex];
+        const texts = batch.nodes.map(item => item.text);
 
         try {
           const response = await new Promise((resolve) => {
             chrome.runtime.sendMessage(
               {
-                action: 'translate',
-                text: item.text,
+                action: 'translateBatch',
+                texts: texts,
                 sourceLang: this.config.sourceLang || 'auto',
-                targetLang: this.config.targetLang || 'zh'
+                targetLang: this.config.targetLang || 'zh',
+                context: this.getPageContext()
               },
               resolve
             );
           });
 
-          if (response && response.success) {
-            results[index] = {
-              success: true,
-              translated: response.text,
-              cached: response.cached
-            };
+          if (response && response.success && response.results) {
+            response.results.forEach((res, localIdx) => {
+              const globalIdx = batch.indices[localIdx];
+              if (res && res.success) {
+                results[globalIdx] = { success: true, translated: res.text, cached: res.cached };
+              } else {
+                results[globalIdx] = { success: false, error: res?.error };
+              }
+            });
           } else {
-            results[index] = { success: false, error: response?.error };
+            batch.indices.forEach(globalIdx => {
+              results[globalIdx] = { success: false, error: response?.error || 'Batch failed' };
+            });
           }
         } catch (error) {
-          results[index] = { success: false, error: error.message };
+           batch.indices.forEach(globalIdx => {
+              results[globalIdx] = { success: false, error: error.message };
+           });
         }
 
-        completed++;
+        completed += batch.nodes.length;
         if (onProgress) {
           onProgress(completed, items.length);
         }
       }
     };
 
-    // 启动多个工作线程
     const workers = [];
-    for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+    for (let i = 0; i < Math.min(concurrency, batches.length); i++) {
       workers.push(worker());
     }
 
@@ -690,18 +667,36 @@ class YuxTransContent {
 
     if (!parent) return false;
 
-    // 保存原文和样式
+    // 保存原文、样式和双语节点引用
     const originalData = {
       text: node.textContent,
-      styles: this.getElementStyles(parent)
+      styles: this.getElementStyles(parent),
+      bilingualNode: null
     };
     this.pageTranslationState.originalTexts.set(node, originalData);
 
-    // 应用翻译
-    node.textContent = translatedText;
+    const useBilingual = this.config.bilingualMode !== false; // 默认开启
 
-    // 标记已翻译
-    parent.classList.add('yuxtrans-translated');
+    if (useBilingual) {
+      // 双语对照模式：新增一个隐藏了部分原样式的 span
+      const bilingualSpan = document.createElement('span');
+      bilingualSpan.className = 'yuxtrans-bilingual-text';
+      // 两端可以加一个细微的空白或破折号分隔
+      bilingualSpan.textContent = `  ${translatedText}`;
+      
+      if (node.nextSibling) {
+        parent.insertBefore(bilingualSpan, node.nextSibling);
+      } else {
+        parent.appendChild(bilingualSpan);
+      }
+      
+      originalData.bilingualNode = bilingualSpan;
+      parent.classList.add('yuxtrans-translated-bilingual');
+    } else {
+      // 仅译文模式：直接替换并加类名
+      node.textContent = translatedText;
+      parent.classList.add('yuxtrans-translated');
+    }
 
     // 保持样式（如果需要）
     if (originalData.styles) {
@@ -781,8 +776,9 @@ class YuxTransContent {
     const results = await this.translateBatchParallel(
       dedupedItems,
       (completed, total) => {
-        // 进度显示基于实际节点数
-        const actualCompleted = Math.min(completed * Math.ceil(nodesInfo.length / dedupedItems.length), nodesInfo.length);
+        // 进度修正：用去重后的实际完成数，按比例映射到总节点数
+        const ratio = dedupedItems.length > 0 ? nodesInfo.length / dedupedItems.length : 1;
+        const actualCompleted = Math.min(Math.round(completed * ratio), nodesInfo.length);
         this.updateProgressIndicator(actualCompleted, displayTotal, startTime);
       }
     );
@@ -916,8 +912,15 @@ class YuxTransContent {
     for (const [node, originalData] of this.pageTranslationState.originalTexts) {
       const parent = node.parentElement;
       if (parent) {
-        node.textContent = originalData.text;
-        parent.classList.remove('yuxtrans-translated');
+        if (originalData.bilingualNode && originalData.bilingualNode.parentNode === parent) {
+          // 清理双语接点
+          parent.removeChild(originalData.bilingualNode);
+          parent.classList.remove('yuxtrans-translated-bilingual');
+        } else {
+          // 恢复替换的文本
+          node.textContent = originalData.text;
+          parent.classList.remove('yuxtrans-translated');
+        }
 
         // 清除添加的内联样式
         if (originalData.styles) {

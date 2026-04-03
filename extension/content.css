@@ -16,3 +16,10 @@
 .yuxtrans-popup button {
   font-family: inherit;
 }
+.yuxtrans-bilingual-text {
+  color: #888 !important;
+  font-size: 0.95em !important;
+  font-weight: normal !important;
+  display: inline !important;
+  margin-left: 4px !important;
+}
