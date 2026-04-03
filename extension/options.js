@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiKeyGroup = document.getElementById('apiKeyGroup');
   const endpointGroup = document.getElementById('endpointGroup');
   const modelSelectGroup = document.getElementById('modelSelectGroup');
-  const testConnectionGroup = document.getElementById('testConnectionGroup');
   const localModelGroup = document.getElementById('localModelGroup');
   const customProviderSection = document.getElementById('customProviderSection');
 
@@ -156,42 +155,76 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== 加载模型选项 =====
   function loadModelOptions(provider, selectedModel = '') {
-    const models = DEFAULT_MODELS[provider] || [];
-    modelSelect.innerHTML = '';
+    try {
+      const models = DEFAULT_MODELS[provider] || [];
+      modelSelect.innerHTML = '';
 
-    if (models.length === 0) {
-      modelSelect.innerHTML = '<option value="">请先获取模型列表</option>';
-      return;
-    }
-
-    models.forEach(model => {
-      const option = document.createElement('option');
-      option.value = model;
-      option.textContent = model;
-      if (model === selectedModel) {
-        option.selected = true;
+      if (models.length === 0) {
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '请先获取模型列表';
+        modelSelect.appendChild(defaultOption);
+        return;
       }
-      modelSelect.appendChild(option);
-    });
+
+      models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        if (model === selectedModel) {
+          option.selected = true;
+        }
+        modelSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error('加载模型选项失败:', error);
+    }
   }
 
   // ===== 供应商 UI 更新 =====
   function updateProviderUI() {
-    const provider = providerSelect.value;
-    const isLocal = provider === 'local';
-    const isCustom = provider === 'custom';
+    try {
+      const provider = providerSelect.value;
+      const isLocal = provider === 'local';
+      const isCustom = provider === 'custom';
 
-    apiKeyGroup.style.display = isLocal || isCustom ? 'none' : 'block';
-    endpointGroup.style.display = isLocal || isCustom ? 'none' : 'block';
-    modelSelectGroup.style.display = isLocal || isCustom ? 'none' : 'block';
-    testConnectionGroup.style.display = isLocal || isCustom ? 'none' : 'block';
-    localModelGroup.style.display = isLocal ? 'block' : 'none';
-    customProviderSection.classList.toggle('show', isCustom);
+      // 控制 API Key 组显示
+      if (apiKeyGroup) {
+        apiKeyGroup.style.display = isLocal || isCustom ? 'none' : 'block';
+      }
 
-    // 更新请求地址默认值提示
-    if (!isLocal && !isCustom) {
-      apiEndpointInput.placeholder = `默认: ${DEFAULT_ENDPOINTS[provider] || ''}`;
-      loadModelOptions(provider, config?.model || DEFAULT_MODELS[provider]?.[0] || '');
+      // 控制请求地址组显示
+      if (endpointGroup) {
+        endpointGroup.style.display = isLocal || isCustom ? 'none' : 'block';
+      }
+
+      // 控制模型选择组显示
+      if (modelSelectGroup) {
+        modelSelectGroup.style.display = isLocal || isCustom ? 'none' : 'block';
+      }
+
+      // 控制本地模型组显示
+      if (localModelGroup) {
+        localModelGroup.style.display = isLocal ? 'block' : 'none';
+      }
+
+      // 控制自定义供应商区域显示
+      if (customProviderSection) {
+        customProviderSection.classList.toggle('show', isCustom);
+      }
+
+      // 更新请求地址默认值提示
+      if (!isLocal && !isCustom) {
+        const defaultEndpoint = DEFAULT_ENDPOINTS[provider] || '';
+        if (apiEndpointInput) {
+          apiEndpointInput.placeholder = defaultEndpoint ? `默认: ${defaultEndpoint}` : '请输入请求地址';
+        }
+        // 加载默认模型列表
+        const savedModel = (typeof config !== 'undefined' && config.model) ? config.model : '';
+        loadModelOptions(provider, savedModel || (DEFAULT_MODELS[provider] && DEFAULT_MODELS[provider][0]) || '');
+      }
+    } catch (error) {
+      console.error('更新供应商 UI 失败:', error);
     }
   }
 
