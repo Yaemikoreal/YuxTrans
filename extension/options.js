@@ -88,20 +88,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('加载配置失败:', error);
   }
 
+  // 默认供应商和请求地址
+  const defaultProvider = 'qwen';
+  const defaultEndpoint = DEFAULT_ENDPOINTS[defaultProvider];
+
   if (config) {
     // 翻译引擎
-    providerSelect.value = config.provider || 'qwen';
+    providerSelect.value = config.provider || defaultProvider;
     apiKeyInput.value = config.apiKey || '';
-    // 自动填充默认请求地址（非自定义/本地供应商）
-    const provider = config.provider || 'qwen';
-    if (provider !== 'custom' && provider !== 'local') {
-      apiEndpointInput.value = config.apiEndpoint || DEFAULT_ENDPOINTS[provider] || '';
-    } else {
-      apiEndpointInput.value = config.apiEndpoint || '';
-    }
     localModelInput.value = config.localModel || 'qwen2:7b';
     cacheEnabledInput.checked = config.cacheEnabled !== false;
     cacheSizeInput.value = config.cacheSize || 1000;
+
+    // 自动填充默认请求地址
+    const provider = config.provider || defaultProvider;
+    if (provider === 'custom' || provider === 'local') {
+      apiEndpointInput.value = config.apiEndpoint || '';
+    } else {
+      // 非自定义/本地供应商：优先用户配置，否则用默认值
+      apiEndpointInput.value = config.apiEndpoint || DEFAULT_ENDPOINTS[provider] || defaultEndpoint;
+    }
 
     // 自定义供应商
     if (config.customProvider) {
@@ -132,8 +138,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     siteRuleSelect.value = config.siteRule || 'all';
     siteListTextarea.value = (config.siteList || []).join('\n');
     autoDetectLangInput.checked = config.autoDetectLang !== false;
+  } else {
+    // 首次使用：设置默认值
+    providerSelect.value = defaultProvider;
+    apiEndpointInput.value = defaultEndpoint;
+  }
 
-    
   // 加载缓存统计
   await loadCacheStats();
 
@@ -214,11 +224,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 更新请求地址默认值并加载模型
       if (!isLocal && !isCustom) {
         const defaultEndpoint = DEFAULT_ENDPOINTS[provider] || '';
-        if (apiEndpointInput) {
-          // 切换供应商时自动更新请求地址
+        if (apiEndpointInput && defaultEndpoint) {
+          // 切换供应商时：如果当前地址是旧供应商的默认地址，则更新为新供应商的默认地址
           const currentValue = apiEndpointInput.value.trim();
-          const oldDefaultEndpoint = DEFAULT_ENDPOINTS[providerSelect._lastProvider] || '';
-          if (!currentValue || currentValue === oldDefaultEndpoint) {
+          const allDefaultEndpoints = Object.values(DEFAULT_ENDPOINTS);
+          // 如果当前值为空，或者是某个供应商的默认地址，则更新
+          if (!currentValue || allDefaultEndpoints.includes(currentValue)) {
             apiEndpointInput.value = defaultEndpoint;
           }
           apiEndpointInput.placeholder = '可自定义修改';
@@ -227,8 +238,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const savedModel = config && config.model ? config.model : '';
         loadModelOptions(provider, savedModel);
       }
-      // 记录当前供应商，用于下次切换判断
-      providerSelect._lastProvider = provider;
     } catch (error) {
       console.error('更新供应商 UI 失败:', error);
     }
