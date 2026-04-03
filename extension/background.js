@@ -421,6 +421,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'getCacheStats') {
+      // 确保缓存已加载
+      updateCacheStats();
       sendResponse({
         success: true,
         stats: {

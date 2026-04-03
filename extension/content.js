@@ -435,7 +435,13 @@ class YuxTransContent {
         if (response && response.success) {
           this.updatePopup(response.text, response.cached, response.engine);
         } else {
-          this.updatePopup('翻译失败: ' + (response?.error || '未知错误'), false, 'error');
+          const errorMsg = response?.error || '未知错误';
+          // API Key 未配置时显示特殊提示
+          if (errorMsg.includes('API Key') || errorMsg.includes('请先配置')) {
+            this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n点击右上角设置图标进行配置', false, 'warning');
+          } else {
+            this.updatePopup('翻译失败: ' + errorMsg, false, 'error');
+          }
         }
       }
     );

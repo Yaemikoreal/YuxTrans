@@ -257,13 +257,36 @@ document.addEventListener('DOMContentLoaded', async () => {
           cacheSizeDisplayEl.textContent = `${stats.sizeMB} MB`;
         } else {
           const sizeKB = Math.round(stats.sizeBytes / 1024 * 100) / 100;
-          cacheSizeDisplayEl.textContent = `${sizeKB} KB`;
+          cacheSizeDisplayEl.textContent = sizeKB > 0 ? `${sizeKB} KB` : '0 KB';
         }
+      } else {
+        console.error('获取缓存统计失败:', response);
+        cacheWordCountEl.textContent = '0';
+        cacheSizeDisplayEl.textContent = '0 KB';
       }
     } catch (error) {
       console.error('加载缓存统计失败:', error);
-      cacheWordCountEl.textContent = '0';
-      cacheSizeDisplayEl.textContent = '0 KB';
+      // 延迟重试一次
+      setTimeout(async () => {
+        try {
+          const response = await chrome.runtime.sendMessage({ action: 'getCacheStats' });
+          if (response && response.success) {
+            const stats = response.stats;
+            cacheWordCountEl.textContent = stats.wordCount;
+            if (stats.sizeGB >= 0.01) {
+              cacheSizeDisplayEl.textContent = `${stats.sizeGB} GB`;
+            } else if (stats.sizeMB >= 0.01) {
+              cacheSizeDisplayEl.textContent = `${stats.sizeMB} MB`;
+            } else {
+              const sizeKB = Math.round(stats.sizeBytes / 1024 * 100) / 100;
+              cacheSizeDisplayEl.textContent = sizeKB > 0 ? `${sizeKB} KB` : '0 KB';
+            }
+          }
+        } catch (e) {
+          cacheWordCountEl.textContent = '0';
+          cacheSizeDisplayEl.textContent = '0 KB';
+        }
+      }, 500);
     }
   }
 
