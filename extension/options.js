@@ -68,10 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteListTextarea = document.getElementById('siteList');
   const autoDetectLangInput = document.getElementById('autoDetectLang');
 
-  // 历史记录
-  const saveHistoryInput = document.getElementById('saveHistory');
-  const historyListEl = document.getElementById('historyList');
-
+  
   // 缓存统计
   const cacheWordCountEl = document.getElementById('cacheWordCount');
   const cacheSizeDisplayEl = document.getElementById('cacheSizeDisplay');
@@ -80,8 +77,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveBtn = document.getElementById('saveBtn');
   const clearCacheBtn = document.getElementById('clearCacheBtn');
   const testConnectionBtn = document.getElementById('testConnectionBtn');
-  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-  const exportHistoryBtn = document.getElementById('exportHistoryBtn');
   const statusEl = document.getElementById('status');
   const testResultEl = document.getElementById('testResult');
 
@@ -132,13 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     siteListTextarea.value = (config.siteList || []).join('\n');
     autoDetectLangInput.checked = config.autoDetectLang !== false;
 
-    // 历史记录
-    saveHistoryInput.checked = config.saveHistory !== false;
-  }
-
-  // 加载历史记录
-  await loadHistory();
-
+    
   // 加载缓存统计
   await loadCacheStats();
 
@@ -254,14 +243,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (response && response.success && response.models) {
+        const defaultModels = DEFAULT_MODELS[provider] || [];
+
+        // 预设模型排在前面，其他模型按字母排序排在后面
+        const sortedModels = [
+          ...defaultModels,
+          ...response.models
+            .filter(m => !defaultModels.includes(m))
+            .sort()
+        ];
+
         modelSelect.innerHTML = '';
-        response.models.forEach(model => {
+        sortedModels.forEach(model => {
           const option = document.createElement('option');
           option.value = model;
           option.textContent = model;
+          // 预设模型添加标记
+          if (defaultModels.includes(model)) {
+            option.textContent = model + ' (推荐)';
+          }
           modelSelect.appendChild(option);
         });
-        showProviderTestResult(true, `获取成功，共 ${response.models.length} 个模型`);
+        showProviderTestResult(true, `获取成功，共 ${sortedModels.length} 个模型`);
       } else {
         showProviderTestResult(false, response?.error || '获取模型列表失败');
       }
@@ -400,10 +403,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showFloatBtn: showFloatBtnInput.checked,
       siteRule: siteRuleSelect.value,
       siteList: siteListTextarea.value.split('\n').map(s => s.trim()).filter(Boolean),
-      autoDetectLang: autoDetectLangInput.checked,
-
-      // 历史记录
-      saveHistory: saveHistoryInput.checked
+      autoDetectLang: autoDetectLangInput.checked
     };
 
     const response = await chrome.runtime.sendMessage({
@@ -479,60 +479,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // ===== 历史记录 =====
-  async function loadHistory() {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'getHistory' });
-
-      if (response && response.history && response.history.length > 0) {
-        historyListEl.innerHTML = response.history.slice(0, 50).map(item => `
-          <div class="history-item">
-            <div class="history-text">
-              <div class="history-source">${escapeHtml(item.source)}</div>
-              <div class="history-target">${escapeHtml(item.target)}</div>
-            </div>
-            <div class="history-time">${formatTime(item.timestamp)}</div>
-          </div>
-        `).join('');
-      } else {
-        historyListEl.innerHTML = '<div class="history-empty">暂无翻译历史</div>';
-      }
-    } catch (error) {
-      console.error('加载历史记录失败:', error);
-      historyListEl.innerHTML = '<div class="history-empty">加载失败，请刷新页面</div>';
-    }
-  }
-
-  clearHistoryBtn.addEventListener('click', async () => {
-    if (confirm('确定要清除所有翻译历史吗？')) {
-      const response = await chrome.runtime.sendMessage({ action: 'clearHistory' });
-      if (response && response.success) {
-        showStatus('历史记录已清除', 'success');
-        await loadHistory();
-      }
-    }
-  });
-
-  exportHistoryBtn.addEventListener('click', async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getHistory' });
-
-    if (response && response.history && response.history.length > 0) {
-      const data = JSON.stringify(response.history, null, 2);
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `yuxtrans-history-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-
-      URL.revokeObjectURL(url);
-      showStatus('历史记录已导出', 'success');
-    } else {
-      showStatus('暂无历史记录可导出', 'error');
-    }
-  });
-
   // ===== 工具函数 =====
   function showStatus(message, type) {
     statusEl.textContent = message;
@@ -542,22 +488,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
       statusEl.style.display = 'none';
     }, 3000);
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
-    return date.toLocaleDateString('zh-CN');
   }
 });

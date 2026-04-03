@@ -445,7 +445,6 @@
       <button class="tab active" data-tab="engine">翻译引擎</button>
       <button class="tab" data-tab="language">语言设置</button>
       <button class="tab" data-tab="behavior">操作行为</button>
-      <button class="tab" data-tab="history">历史记录</button>
     </div>
 
     <!-- 翻译引擎 -->
@@ -549,9 +548,9 @@
         </div>
 
         <div class="form-group">
-          <label for="cacheSize">缓存大小</label>
+          <label for="cacheSize">最大缓存词汇量</label>
           <input type="number" id="cacheSize" value="1000" min="100" max="10000">
-          <div class="hint">最多缓存的翻译条目数量</div>
+          <div class="hint">设置缓存的词汇对数量上限，推荐 1000-5000</div>
         </div>
 
         <div class="form-group">
@@ -697,29 +696,6 @@
             <label for="autoDetectLang">智能检测页面语言</label>
           </div>
           <div class="hint">检测到目标语言内容时不触发翻译</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 历史记录 -->
-    <div class="tab-content" id="tab-history">
-      <div class="section">
-        <h2>翻译历史</h2>
-
-        <div class="form-group">
-          <div class="checkbox-group">
-            <input type="checkbox" id="saveHistory" checked>
-            <label for="saveHistory">保存翻译历史</label>
-          </div>
-        </div>
-
-        <div class="history-list" id="historyList">
-          <div class="history-empty">暂无翻译历史</div>
-        </div>
-
-        <div class="buttons" style="margin-top: 16px; padding-top: 0; border-top: none;">
-          <button class="btn-secondary" id="exportHistoryBtn">导出历史</button>
-          <button class="btn-secondary" id="clearHistoryBtn">清除历史</button>
         </div>
       </div>
     </div>

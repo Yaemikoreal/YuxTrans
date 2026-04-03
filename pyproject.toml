@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-yuxtrans = "yuxtrans.desktop.app:main"
+# yuxtrans = "yuxtrans.desktop.app:main"  # 暂停桌面客户端开发
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -36,6 +36,8 @@ python_functions = ["test_*"]
 markers = [
     "asyncio: mark test as async",
 ]
+# 排除桌面客户端测试（开发暂停）
+addopts = "--ignore=tests/desktop"
 
 [tool.ruff]
 line-length = 100

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  一款极速响应、精准翻译的 AI 翻译工具，支持本地模型和多云端 API
+  一款极速响应、精准翻译的 AI 翻译浏览器插件，支持本地模型和多云端 API
 </p>
 
 <p align="center">
@@ -39,20 +39,17 @@
 
 ## 安装
 
-```bash
-# 基础安装
-pip install yuxtrans
+### 浏览器插件（推荐）
 
-# 桌面客户端
-pip install "yuxtrans[desktop]"
-
-# 完整安装（桌面 + 本地模型）
-pip install "yuxtrans[desktop,local]"
-```
-
-## 快速开始
+1. Chrome 打开 `chrome://extensions/`
+2. 启用「开发者模式」
+3. 加载 `extension/` 目录
 
 ### Python API
+
+```bash
+pip install yuxtrans
+```
 
 ```python
 from yuxtrans import SmartRouter, TranslationRequest
@@ -68,18 +65,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### 桌面客户端
-
-```bash
-pip install "yuxtrans[desktop]"
-yuxtrans  # 启动应用，首次运行会显示配置向导
-```
-
-### 浏览器插件
-
-1. Chrome 打开 `chrome://extensions/`
-2. 启用「开发者模式」
-3. 加载 `extension/` 目录
+> **注意**: 桌面客户端开发暂停，当前版本专注于浏览器插件的性能优化。
 
 ---
 
@@ -91,9 +77,8 @@ yuxtrans  # 启动应用，首次运行会显示配置向导
 | **🔄 智能路由** | 自动选择最快路径：缓存 → 本地 → 云端 |
 | **☁️ 多云端支持** | Qwen、OpenAI、DeepSeek、Anthropic、Groq、Moonshot、Siliconflow |
 | **🏠 本地优先** | Ollama 本地模型，离线可用 |
-| **📊 质量评估** | BLEU/WER/CER 翻译质量指标 |
-| **🖥️ 桌面客户端** | PyQt6 系统托盘，全局快捷键 Ctrl+Shift+T |
-| **🌐 浏览器插件** | Chrome/Edge 扩展，划词翻译 |
+| **📊 缓存优化** | 持久化缓存、文本去重、批量存储写入 |
+| **🌐 浏览器插件** | Chrome/Edge 扩展，划词翻译、整页翻译 |
 
 ---
 
@@ -112,9 +97,9 @@ yuxtrans  # 启动应用，首次运行会显示配置向导
 **核心模块**：
 - `engine/` — 翻译引擎（BaseTranslator、LocalTranslator、CloudTranslator、SmartRouter）
 - `cache/` — SQLite + LRU 双层缓存
-- `metrics/` — BLEU/WER/CER 质量评估
-- `desktop/` — PyQt6 桌面客户端
-- `extension/` — Chrome 扩展（Manifest V3）
+- `extension/` — Chrome 扩展（Manifest V3），划词翻译、整页翻译
+
+> 桌面客户端（`desktop/`）开发暂停，后续版本将重新启用。
 
 ---
 
@@ -172,6 +157,7 @@ ruff format yuxtrans/
 - [ ] 语音翻译
 - [ ] PDF 文档翻译
 - [ ] 更多语言对
+- [ ] 桌面客户端恢复开发
 
 详见 [CHANGELOG.md](CHANGELOG.md)
 
