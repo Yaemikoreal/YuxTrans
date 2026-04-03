@@ -328,7 +328,7 @@ async function testConnection(testConfig) {
   }
 }
 
-// 获取模型列表（验证每个模型是否可用）
+// 获取模型列表
 async function fetchModels(testConfig) {
   const { provider, apiKey, endpoint } = testConfig;
 
@@ -354,80 +354,19 @@ async function fetchModels(testConfig) {
 
     const data = await response.json();
 
-    let allModels = [];
     if (data.data && Array.isArray(data.data)) {
-      allModels = data.data
+      const models = data.data
         .map(m => m.id)
-        .filter(id => id && !id.includes(':') && !id.includes(':')) // 过滤特殊模型
+        .filter(id => id && !id.includes(':')) // 过滤掉一些特殊模型
         .sort();
+      return { success: true, models };
     } else if (data.models && Array.isArray(data.models)) {
       // Ollama 格式
-      allModels = data.models.map(m => m.name || m.model);
-    } else {
-      return { success: false, error: '无法解析模型列表' };
+      const models = data.models.map(m => m.name || m.model);
+      return { success: true, models };
     }
 
-    // 限制模型数量，避免测试过多
-    const maxTestModels = 20;
-    const modelsToTest = allModels.slice(0, maxTestModels);
-
-    // 并行测试每个模型（并发限制为5）
-    const availableModels = [];
-    const concurrency = 5;
-    const queue = [...modelsToTest];
-
-    const testModel = async (model) => {
-      try {
-        const testEndpoint = endpoint;
-        const testResponse = await fetch(testEndpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [{ role: 'user', content: 'Hi' }],
-            max_tokens: 1
-          })
-        });
-
-        // 200 或 400（模型可用但参数问题）都算可用
-        // 401/403/404 表示模型不可用
-        if (testResponse.ok || testResponse.status === 400) {
-          return model;
-        }
-        return null;
-      } catch (e) {
-        return null;
-      }
-    };
-
-    // 使用工作队列并行测试
-    const workers = [];
-    for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
-      workers.push((async () => {
-        while (queue.length > 0) {
-          const model = queue.shift();
-          if (!model) break;
-          const result = await testModel(model);
-          if (result) {
-            availableModels.push(result);
-          }
-        }
-      })());
-    }
-
-    await Promise.all(workers);
-
-    // 排序结果
-    availableModels.sort();
-
-    if (availableModels.length === 0) {
-      return { success: false, error: '没有找到可用的模型，请检查 API Key 权限' };
-    }
-
-    return { success: true, models: availableModels, total: allModels.length };
+    return { success: false, error: '无法解析模型列表' };
   } catch (error) {
     return { success: false, error: `获取失败: ${error.message}` };
   }

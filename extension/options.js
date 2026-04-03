@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     fetchModelsBtn.disabled = true;
-    fetchModelsBtn.textContent = '验证模型中...';
+    fetchModelsBtn.textContent = '获取中...';
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -261,13 +261,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           option.textContent = model;
           modelSelect.appendChild(option);
         });
-
-        const infoText = response.total && response.total > response.models.length
-          ? `（已过滤 ${response.total - response.models.length} 个不可用模型）`
-          : '';
-        showProviderTestResult(true, `✓ 找到 ${response.models.length} 个可用模型 ${infoText}`);
+        showProviderTestResult(true, `获取成功，共 ${response.models.length} 个模型`);
       } else {
-        showProviderTestResult(false, response?.error || '没有找到可用模型');
+        showProviderTestResult(false, response?.error || '获取模型列表失败');
       }
     } catch (error) {
       showProviderTestResult(false, `获取失败: ${error.message}`);
