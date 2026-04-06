@@ -1,44 +1,101 @@
-# YuxTrans - AI 翻译浏览器插件
+# 🌟 YuxTrans
 
-一款高效、实用的浏览器翻译扩展，支持本地大模型 (Ollama) 与主流云端 API。
+<p align="center">
+  <strong>精准 · 稳定 · 具有温度的 AI 翻译空间</strong>
+</p>
 
-## 🚀 核心功能
+<p align="center">
+  一款专为深阅读设计的浏览器扩展。支持本地模型原生加速、海量物理缓存与“Warm Paper”护眼美学。
+</p>
 
-*   **🏠 本地模型支持**: 深度适配 Ollama (如 qwen2.5:7b)，支持离线翻译，确保隐私安全。
-*   **💾 物理空间缓存**: 200MB 磁盘级缓存，相同内容秒回译文，大幅节省 API 消耗与等待时间。
-*   **🔄 混合路由逻辑**: 自动判定最优路径：缓存 -> 本地模型 -> 云端 API。
-*   **🎯 场景人格化**: 提供日常、学术、技术、文学四种翻译风格。
-    *   *技术模式*：保留核心术语（如函数名、变量名）不翻译。
-*   **⚡ 自动更新检测**: 自动检测 GitHub 新版本并提醒。
+<p align="center">
+  <img src="https://img.shields.io/github/v/release/Yaemikoreal/YuxTrans?color=d8a051&label=Version" alt="Version">
+  <img src="https://img.shields.io/badge/License-MIT-fdf6ec.svg?labelColor=d8a051" alt="License">
+  <img src="https://img.shields.io/github/stars/Yaemikoreal/YuxTrans?color=orange&label=Stars" alt="Stars">
+  <img src="https://img.shields.io/github/contributors/Yaemikoreal/YuxTrans?color=blue&label=Contributors" alt="Contributors">
+</p>
 
-## 📦 安装指引
+---
 
-由于本项目尚未上架商店，请按照以下步骤手动安装：
+## 💡 为什么选择 YuxTrans?
 
-1.  **下载源码**: 点击 GitHub 页面右上角的 `Code` -> `Download ZIP` 并解压。
-2.  **加载插件**:
-    *   打开 Chrome 浏览器，访问 `chrome://extensions/`。
-    *   开启右上角的 **“开发者模式”**。
-    *   点击 **“加载已解解压的扩展程序”**，选择项目中的 `extension` 文件夹。
-3.  **完成**: 插件图标将出现在浏览器右上角。
+在信息爆炸的时代，**YuxTrans** 致力于解决翻译过程中的三大痛点：**隐私泄露**、**连接不稳定**与**交互冰冷**。我们通过硬核的技术架构与克制的设计，为您还原纯粹的阅读体验。
 
-## ⚙️ 配置说明
+---
 
-### 1. 使用本地模型 (推荐)
-*   安装 [Ollama](https://ollama.com/)。
-*   运行模型：`ollama run qwen2.5:7b` (或其它模型)。
-*   在插件设置页中，服务商选择 `Ollama`，请求地址填入 `http://localhost:11434`。
+## 🚀 核心特性矩阵 (Key Features)
 
-### 2. 使用云端 API
-*   支持 通义千问 (Qwen)、DeepSeek、OpenAI、Moonshot 等。
-*   在设置页填入对应的 API Key 即可。
+| 🏠 本地优先 (Privacy) | 💾 物理定额记忆 (Memory) | 🛡️ 断点免疫 (Robustness) |
+| :--- | :--- | :--- |
+| 原生支持 **Ollama (Qwen)**，开启离线翻译，让敏感数据永不出户。 | 弃用虚浮计数，建立 **200MB 字节级缓存**。 IndexedDB 秒级唤回已读真意。 | 针对小模型实现的“自愈逻辑”，即便处理 **237/670** 段长文也永不卡死。 |
 
-## 🛠 技术架构
+| 🎨 Warm Paper 审美 | 🤖 深度翻译人格 | ✨ 傻瓜式自动化 |
+| :--- | :--- | :--- |
+| Isometric 圆角与**柔和米色调**。让工具退后，内容向前，护眼且优雅。 | 预设**日常、学术、技术、文学**人格。精准锁定技术术语，捕捉文学意境。 | GitHub API 实时感应。发现新版自动挂载 **[NEW]** 角标，支持一键更新。 |
 
-*   **Manifest V3**: 采用最新的浏览器插件规范。
-*   **IndexedDB**: 用于海量翻译结果的本地持久化存储。
-*   **Vanilla JS/CSS**: 无重型框架，保证极速启动与低内存占用。
+---
+
+## 🧠 混合路由架构 (Hybrid Router)
+
+YuxTrans 通过三级缓存与推理引擎，确保翻译请求的绝对稳健与极速响应：
+
+```mermaid
+graph LR
+    Req((用户请求)) --> Cache{200MB 缓存层}
+    Cache -- 命中 (0.1ms) --> Done((直接返回))
+    Cache -- 未命中 --> Local{本地推理层}
+    Local -- 可用 (0.5s) --> Ollama[Ollama / Qwen]
+    Local -- 故障/缺失 --> Cloud{云端兜底层}
+    Cloud -- 异步 (2.0s) --> Provider[OpenAI / DeepSeek / Kimi]
+    Ollama --> Done
+    Provider --> Done
+```
+
+---
+
+## 📸 视觉大赏 (Showcase)
+
+> [!NOTE]
+> **Warm Paper 质感**：每一处投影、每一条分割线都经过了克制的推敲。
+> **[预览图 A：极简设置中心]** | **[预览图 B：沉浸式划词弹窗]**
+
+---
+
+## 📦 简易安装指引 (Quick Start)
+
+仅需三步，即可在您的 Chrome/Edge 浏览器中部署此翻译空间：
+
+1.  **获取源码**: 在 [Releases](https://github.com/Yaemikoreal/YuxTrans/releases) 获取最新的 `v0.3.0` 压缩包并解压。
+2.  **加载插件**: 
+    * 访问 `chrome://extensions/` 并开启 **“开发者模式”**。
+    * 点击 **“加载已解压的扩展程序”**，选择项目中的 `extension/` 文件夹。
+3.  **点亮翻译**: 点击图标进入设置，在 **“AI 模型服务”** 中连接 Ollama 或填入 API Key 即可。
+
+---
+
+## ⚙️ 深度配置中心 (Providers)
+
+YuxTrans 完美兼容多种 AI 底层，支持自定义 Prompt 以对齐不同场景：
+
+- **本地端**: Ollama (Qwen2.5 / Llama3 / Phi3)
+- **云端**: 通义千问 (Qwen)、DeepSeek (深度求索)、OpenAI、Moonshot (Kimi)、Siliconflow、Groq、Anthropic。
+- **模式**: 同步/异步翻译、双语对照、沉浸式划词。
+
+---
+
+## 🤝 开发与贡献 (Contributing)
+
+我们欢迎每一位追求“质感”的极客加入：
+- 协助我们优化 4B/7B 模型在不同翻译人格下的 **Prompt** 指引。
+- 参与 **Warm Paper UI** 的多色彩主题扩展。
+- 提交更多语言的 **常用热词缓存库**。
+
+---
 
 ## 许可证
 
-[MIT License](LICENSE)
+基于 [MIT License](LICENSE) 协议发布。
+
+<p align="center">
+  <strong>YuxTrans —— 让翻译更精准，让阅读更优雅。</strong>
+</p>
