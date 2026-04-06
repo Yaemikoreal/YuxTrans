@@ -166,10 +166,11 @@
 
     /* 主内容区 */
     .main-content {
-      padding: 48px 56px;
+      padding: 32px 64px 48px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      flex: 1; /* 确保占满剩余空间 */
       scroll-behavior: smooth;
     }
 
@@ -346,9 +347,10 @@
       display: flex;
       gap: 16px;
       margin-top: auto;
-      padding-top: 32px;
+      padding-top: 24px;
       justify-content: flex-end;
       border-top: 1px solid var(--border-color);
+      flex-shrink: 0;
     }
 
     button {
@@ -383,13 +385,20 @@
       transform: translateY(-1px);
     }
 
-    /* 修正导入配置标签按钮样式 (图一) */
+    /* 修正导入配置标签按钮样式 - 确保与原生 button 像素级对齐 */
     label.btn-secondary {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
       margin: 0;
-      height: 48px;
+      line-height: 1;
+      height: auto; /* 移除固定高度，采用 padding 撑开以保持同步 */
     }
 
     .btn-test {
@@ -439,7 +448,7 @@
       top: 32px;
       left: 50%;
       transform: translateX(-50%) translateY(-20px);
-      z-index: 10000;
+      z-index: 20000;
       padding: 12px 36px;
       border-radius: 40px;
       font-size: 14px;
@@ -447,11 +456,11 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      backdrop-filter: blur(28px) saturate(200%);
+      -webkit-backdrop-filter: blur(28px) saturate(200%);
       background: rgba(44, 40, 37, 0.08);
       border: 1px solid rgba(216, 160, 81, 0.15);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
       transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
       opacity: 0;
       pointer-events: none;
@@ -480,6 +489,77 @@
       opacity: 0.5;
       text-align: center;
     }
+
+    /* 傻瓜式更新横幅样式 */
+    .update-banner {
+      background: #fdf6ec; border: 1px solid #faecd8; border-radius: 12px;
+      padding: 16px 20px; box-shadow: 0 4px 12px rgba(216, 160, 81, 0.1);
+      animation: slideDown 0.4s ease-out;
+    }
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .update-banner-content { display: flex; align-items: center; gap: 16px; }
+    .update-icon { font-size: 24px; }
+    .update-info { flex: 1; }
+    .update-title { display: block; font-weight: 600; color: #d8a051; font-size: 15px; }
+    .update-desc { display: block; font-size: 13px; color: #666; margin-top: 4px; }
+    .update-actions { display: flex; gap: 10px; }
+    
+    /* 弹窗指引样式 */
+    .guide-step { display: flex; gap: 12px; margin-bottom: 20px; }
+    .step-num {
+      width: 28px; height: 28px; background: #d8a051; color: white;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 14px; font-weight: bold;
+    }
+    .step-content { font-size: 14px; line-height: 1.6; color: #3d3733; }
+    .step-content strong { color: #d8a051; }
+
+    /* 翻译风格卡片式布局 */
+    .style-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .style-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 16px;
+      background: var(--bg-section);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .style-option:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+    .style-option input[type="radio"] {
+      width: 18px; height: 18px; margin-top: 2px;
+      accent-color: var(--accent);
+    }
+    .style-option:has(input:checked) {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .style-name {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-title);
+      margin-bottom: 4px;
+    }
+    .style-hint {
+      font-size: 11px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -503,13 +583,25 @@
         </button>
       </nav>
 
-      <div class="version-info" style="margin-top: auto; padding-top: 24px; border-top: 1px solid var(--border-color); text-align: center;">
-        <div class="version" id="versionBadge" style="margin-bottom: 8px;">YuxTrans Version 0.2.0</div>
-        <button class="btn-test" id="updateBtn" style="width: 100%; font-size: 11px;">检查更新</button>
+      <div style="margin-top: auto; padding-top: 40px; border-top: 1px solid var(--border-color); opacity: 0.5;">
+        <div style="font-size: 11px; color: var(--text-sub); text-align: center;">YuxTrans v0.3.0</div>
       </div>
     </aside>
 
     <main class="main-content">
+      <div id="updateBanner" class="update-banner" style="display: none; margin-bottom: 28px;">
+        <div class="update-banner-content">
+          <span class="update-icon">✨</span>
+          <div class="update-info">
+            <span class="update-title" id="updateTitle">发现新版本</span>
+            <span class="update-desc" id="updateDesc">新版本已在 GitHub 发布，快去下载体验吧！</span>
+          </div>
+          <div class="update-actions">
+             <a href="#" id="downloadZipBtn" class="btn-primary" style="padding: 8px 16px; font-size: 13px; text-decoration: none;">立即下载 ZIP</a>
+             <button id="showGuideBtn" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">查看三步更新指引</button>
+          </div>
+        </div>
+      </div>
       <!-- 1. AI 模型服务 -->
       <div class="tab-content active" id="tab-engine">
         <div class="section">
@@ -553,9 +645,16 @@
           </div>
 
           <div class="form-group" id="localModelGroup" style="display: none;">
-            <label for="localModel">本地模型名称</label>
-            <input type="text" id="localModel" placeholder="qwen2:7b">
-            <p class="hint">请确保 Ollama 服务已启动 (http://localhost:11434)</p>
+            <label for="localModel">本地模型名称 (Ollama)</label>
+            <select id="localModelSelect" style="margin-bottom: 12px; display: none;">
+              <option value="">点击下方刷新获取模型...</option>
+            </select>
+            <input type="text" id="localModel" placeholder="qwen2:7b" style="margin-top: 0;">
+            <p class="hint">请确保 Ollama 服务已启动 (http://localhost:11434)。选择列表或手动输入 Tag。</p>
+            <div style="margin-top: 14px; display: flex; gap: 10px;">
+              <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
+              <button class="btn-test" id="testLocalBtn">连接测试</button>
+            </div>
           </div>
 
           <div id="customProviderSection" style="display: none;">
@@ -608,11 +707,35 @@
         </div>
         <div class="section">
           <h2>翻译风格</h2>
-          <div class="radio-group">
-            <label><input type="radio" name="translateStyle" value="normal" checked> 日常模式</label>
-            <label><input type="radio" name="translateStyle" value="academic"> 学术模式</label>
-            <label><input type="radio" name="translateStyle" value="technical"> 技术模式</label>
-            <label><input type="radio" name="translateStyle" value="literary"> 文学模式</label>
+          <div class="style-grid">
+            <label class="style-option">
+              <input type="radio" name="translateStyle" value="normal" checked>
+              <div class="style-info">
+                <span class="style-name">日常模式</span>
+                <p class="style-hint">通俗易懂，适合新闻、网页浏览与日常交流。</p>
+              </div>
+            </label>
+            <label class="style-option">
+              <input type="radio" name="translateStyle" value="academic">
+              <div class="style-info">
+                <span class="style-name">学术模式</span>
+                <p class="style-hint">严谨专业，适合论文阅读、研究报告与严谨文献。</p>
+              </div>
+            </label>
+            <label class="style-option">
+              <input type="radio" name="translateStyle" value="technical">
+              <div class="style-info">
+                <span class="style-name">技术模式</span>
+                <p class="style-hint">极客优化，保留核心术语不翻，适合代码与 API 文档。</p>
+              </div>
+            </label>
+            <label class="style-option">
+              <input type="radio" name="translateStyle" value="literary">
+              <div class="style-info">
+                <span class="style-name">文学模式</span>
+                <p class="style-hint">文采斐然，追求意境与表达，适合博文与小说。</p>
+              </div>
+            </label>
           </div>
         </div>
       </div>
@@ -665,7 +788,7 @@
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-value" id="totalTranslatesCount">0</div>
-              <div class="stat-label">累计翻译人次</div>
+              <div class="stat-label">累计翻译成果</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="cacheHitsCount">0</div>
@@ -686,8 +809,19 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="cacheSize">最大缓存池 (建议 1000-5000)</label>
-            <input type="number" id="cacheSize" value="1000">
+            <label for="maxCacheMB">存储空间限额 (MB)</label>
+            <input type="number" id="maxCacheMB" value="200" min="10" max="1000">
+            <p class="hint">建议：200MB - 500MB。缓存将自动回收以保持在此限制内。</p>
+          </div>
+
+          <div class="storage-usage-container" style="margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span class="stat-label">物理空间占用</span>
+              <span class="stat-label" id="storageText">0 MB / 200 MB</span>
+            </div>
+            <div class="progress-bar-bg" style="height: 12px; background: rgba(61, 55, 51, 0.05); border-radius: 6px; overflow: hidden;">
+              <div id="storageProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #d8a051, #e6b87d); transition: width 0.5s ease;"></div>
+            </div>
           </div>
           <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button class="btn-secondary" id="exportConfigBtn">导出配置</button>

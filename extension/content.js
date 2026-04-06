@@ -14,6 +14,8 @@ class YuxTransContent {
       translatedNodes: []
     };
     this.progressIndicator = null;
+    this.sideTab = null;
+    this.autoCloseTimer = null;
     this.config = {
       concurrency: 5, // 并发请求数
       batchSize: 10,  // 批量大小
@@ -60,12 +62,12 @@ class YuxTransContent {
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         border: 1px solid rgba(61, 55, 51, 0.1);
         border-radius: 20px;
-        box-shadow: 0 16px 40px rgba(61, 55, 51, 0.15);
+        box-shadow: 0 16px 40px rgba(61, 55, 51, 0.08); /* 柔和纸质投影 */
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
         font-size: 14px;
         max-width: 420px;
         min-width: 280px;
-        color: #3d3733;
+        color: #3d3733; /* 墨茶色文字 */
         overflow: hidden;
         animation: yuxtrans-slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
@@ -75,23 +77,7 @@ class YuxTransContent {
         to { opacity: 1; transform: translateY(0) scale(1); }
       }
 
-      /* 深色模式：深夜书房 */
-      @media (prefers-color-scheme: dark) {
-        .yuxtrans-popup {
-          background: #1a1817;
-          background-image: radial-gradient(circle at 50% 0%, #2a2725 0%, #151312 100%);
-          border-color: rgba(244, 240, 230, 0.1);
-          color: #e6e0d8;
-          box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-        }
-        .yuxtrans-popup-header { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
-        .yuxtrans-popup-title { color: #d8a051 !important; }
-        .yuxtrans-source { color: #9e958a; border-color: rgba(255,255,255,0.05); }
-        .yuxtrans-target { color: #f4f0e6; }
-        .yuxtrans-popup-footer { background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.05); }
-        .yuxtrans-btn-secondary { background: rgba(255,255,255,0.05); color: #e6e0d8; }
-      }
-
+      /* 统一浅色模式：书房纸本 */
       .yuxtrans-popup-header {
         display: flex;
         align-items: center;
@@ -104,7 +90,7 @@ class YuxTransContent {
       .yuxtrans-popup-title {
         font-weight: 800;
         font-size: 14px;
-        color: #d8a051;
+        color: #d8a051; /* 品牌黄铜色 */
         letter-spacing: -0.2px;
         text-transform: uppercase;
       }
@@ -239,29 +225,175 @@ class YuxTransContent {
         transform: translateY(-1px) scale(0.96);
       }
 
-      /* 进度条指示器同步 */
+      /* 进度条指示器同步 - Warm Paper 版 */
       .yuxtrans-progress {
         position: fixed;
-        top: 20px;
-        right: 20px;
+        top: 24px;
+        right: 24px;
         z-index: 2147483647;
         background: #fdfbf7;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background-image: radial-gradient(circle at 50% 50%, #fefcf9 0%, #f2ede4 100%);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
         border: 1px solid rgba(61, 55, 51, 0.1);
-        border-radius: 16px;
-        padding: 16px 20px;
-        box-shadow: 0 12px 32px rgba(61, 55, 51, 0.15);
-        font-family: inherit;
-        min-width: 260px;
+        border-radius: 24px;
+        padding: 20px 24px;
+        box-shadow: 0 16px 40px rgba(61, 55, 51, 0.1);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+        min-width: 280px;
+        color: #3d3733;
+        transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+        animation: yuxtrans-slideIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .yuxtrans-progress.yuxtrans-minimized {
+        transform: translateX(calc(100% + 40px));
+        opacity: 0;
+        pointer-events: none;
+      }
+      .yuxtrans-progress-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 15px;
+        margin-bottom: 12px;
+        color: #d8a051;
+        letter-spacing: -0.3px;
+      }
+      
+      /* 侧边挂耳悬浮窗 */
+      .yuxtrans-side-tab {
+        position: fixed;
+        right: 0;
+        top: 40%;
+        z-index: 2147483646;
+        width: 32px;
+        height: 48px;
+        background: var(--accent-gradient);
+        background: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
+        border-radius: 12px 0 0 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: -4px 0 16px rgba(216, 160, 81, 0.3);
+        transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      .yuxtrans-side-tab.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      .yuxtrans-side-tab:hover {
+        width: 42px;
+        box-shadow: -6px 0 24px rgba(216, 160, 81, 0.4);
+      }
+      .yuxtrans-side-tab-icon {
+        color: white;
+        font-size: 14px;
+        font-weight: 900;
+        user-select: none;
       }
       .yuxtrans-progress-bar-bg {
-        width: 100%; height: 6px; background: rgba(0,0,0,0.05); border-radius: 3px; margin-bottom: 10px; overflow: hidden;
+        width: 100%; height: 6px; background: rgba(61, 55, 51, 0.05); border-radius: 3px; margin-bottom: 14px; overflow: hidden;
       }
       .yuxtrans-progress-bar {
         height: 100%; background: linear-gradient(135deg, #dfab66 0%, #d19747 100%); transition: width 0.3s ease;
       }
-      .yuxtrans-progress-text { font-size: 12px; color: #8c8279; display: flex; justify-content: space-between; }
+      .yuxtrans-progress-text { 
+        font-size: 13px; 
+        color: #8c8279; 
+        line-height: 1.6;
+        margin-bottom: 16px;
+      }
+      .yuxtrans-progress-metrics {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 18px;
+        padding: 12px;
+        background: rgba(140, 130, 121, 0.03);
+        border-radius: 14px;
+        border: 1px solid rgba(61, 55, 51, 0.05);
+      }
+      .yuxtrans-metric-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #8c8279;
+      }
+      .yuxtrans-metric-val { color: #d8a051; font-weight: 700; }
+      
+      /* Toggle Switch 样式 - Warm Paper 版 */
+      .yuxtrans-toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(61, 55, 51, 0.05);
+      }
+      .yuxtrans-toggle-label { font-size: 12px; font-weight: 700; color: #3d3733; }
+      .yuxtrans-switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+      }
+      .yuxtrans-switch input { opacity: 0; width: 0; height: 0; }
+      .yuxtrans-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: rgba(61, 55, 51, 0.1);
+        transition: .4s;
+        border-radius: 34px;
+      }
+      .yuxtrans-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px; width: 16px;
+        left: 3px; bottom: 3px;
+        background-color: #d19747;
+        transition: .4s;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      input:checked + .yuxtrans-slider { background-color: rgba(216, 160, 81, 0.15); }
+      input:checked + .yuxtrans-slider:before { transform: translateX(18px); background-color: #d8a051; }
+
+      .yuxtrans-progress-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .yuxtrans-progress-btn {
+        flex: 1;
+        padding: 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        border: none;
+      }
+      .yuxtrans-progress-btn.primary {
+        background: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(216, 160, 81, 0.2);
+      }
+      .yuxtrans-progress-btn.secondary {
+        background: rgba(140, 130, 121, 0.08);
+        color: #3d3733;
+        border: 1px solid rgba(61, 55, 51, 0.05);
+      }
+      .yuxtrans-progress-btn:hover { transform: translateY(-2px); }
+      .yuxtrans-progress-btn:active { transform: translateY(0) scale(0.96); }
+lor: #f4f0e6;
+        border: 1px solid rgba(255,255,255,0.05);
+      }
+      .yuxtrans-progress-btn:hover { transform: translateY(-2px); }
+      .yuxtrans-progress-btn:active { transform: translateY(0) scale(0.96); }
     `;
     document.head.appendChild(style);
   }
@@ -383,14 +515,17 @@ class YuxTransContent {
       (response) => {
         this.isTranslating = false;
 
+        const isLocal = (this.config.provider === 'local');
+
         if (response && response.success) {
           this.updatePopup(response.text, response.cached, response.engine);
         } else {
           const errorMsg = response?.error || '未知错误';
-          if (errorMsg.includes('API Key') || errorMsg.includes('请先配置')) {
+          // 只有非本地模型才提示配置 API Key。本地模型通常是服务未开启或模型名填错。
+          if (!isLocal && (errorMsg.includes('API Key') || errorMsg.includes('请先配置'))) {
             this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n点击右上角设置图标进行配置', false, 'warning');
           } else {
-            this.updatePopup('翻译失败: ' + errorMsg, false, 'error');
+            this.updatePopup(`翻译失败: ${errorMsg}${isLocal ? '\n\n请检查 Ollama 服务是否启动。' : ''}`, false, 'error');
           }
         }
       }
@@ -586,8 +721,13 @@ class YuxTransContent {
    * 并行翻译多个文本
    */
   async translateBatchParallel(items, onProgress) {
-    const { concurrency } = this.config || { concurrency: 5 };
-    const BATCH_SIZE = 10;
+    const isLocal = this.config.provider === 'local';
+    const { concurrency: configConcurrency } = this.config || { concurrency: 5 };
+    
+    // 动态调整：本地模型强制串行且减小分片，云端模型维持高并发
+    const concurrency = isLocal ? 1 : configConcurrency;
+    const BATCH_SIZE = isLocal ? 5 : 10;
+    
     const results = new Array(items.length);
     let completed = 0;
 
@@ -602,14 +742,31 @@ class YuxTransContent {
 
     const queue = [...batches.keys()];
 
+    let failsInARow = 0;
+    let fallbackMode = false; // 是否已进入单句翻译降级模式
+
     const worker = async () => {
       while (queue.length > 0 && this.pageTranslationState.isTranslating) {
         const batchIndex = queue.shift();
         const batch = batches[batchIndex];
+        
+        // 如果进入了降级模式，且当前 batch 包含多项，则将其重新拆分为单个任务送回队列
+        if (fallbackMode && batch.indices.length > 1) {
+          batch.indices.forEach((idx, i) => {
+            batches.push({
+              indices: [idx],
+              nodes: [batch.nodes[i]]
+            });
+            queue.push(batches.length - 1);
+          });
+          continue;
+        }
+
         const texts = batch.nodes.map(item => item.text);
 
         try {
           const response = await new Promise((resolve) => {
+            const timer = setTimeout(() => resolve({ success: false, error: 'Request nested timeout' }), 130000);
             chrome.runtime.sendMessage(
               {
                 action: 'translateBatch',
@@ -618,11 +775,15 @@ class YuxTransContent {
                 targetLang: this.config.targetLang || 'zh',
                 context: this.getPageContext()
               },
-              resolve
+              (res) => {
+                clearTimeout(timer);
+                resolve(res);
+              }
             );
           });
 
           if (response && response.success && response.results) {
+            failsInARow = 0;
             response.results.forEach((res, localIdx) => {
               const globalIdx = batch.indices[localIdx];
               if (res && res.success) {
@@ -632,19 +793,23 @@ class YuxTransContent {
               }
             });
           } else {
-            batch.indices.forEach(globalIdx => {
-              results[globalIdx] = { success: false, error: response?.error || 'Batch failed' };
-            });
+            throw new Error(response?.error || 'Batch response failed');
           }
         } catch (error) {
-           batch.indices.forEach(globalIdx => {
-              results[globalIdx] = { success: false, error: error.message };
-           });
-        }
+          failsInARow++;
+          // 如果连续 2 次 Batch 失败，开启降级模式
+          if (isLocal && failsInARow >= 2) {
+            fallbackMode = true;
+          }
 
-        completed += batch.nodes.length;
-        if (onProgress) {
-          onProgress(completed, items.length);
+          batch.indices.forEach(globalIdx => {
+             results[globalIdx] = { success: false, error: error.message };
+          });
+        } finally {
+          completed += batch.nodes.length;
+          if (onProgress) {
+            onProgress(completed, items.length);
+          }
         }
       }
     };
@@ -670,6 +835,7 @@ class YuxTransContent {
     // 保存原文、样式和双语节点引用
     const originalData = {
       text: node.textContent,
+      translated: translatedText, // 核心：缓存译文，支持动态切换
       styles: this.getElementStyles(parent),
       bilingualNode: null
     };
@@ -845,7 +1011,7 @@ class YuxTransContent {
     progress.querySelector('#yuxtrans-cancel-btn').addEventListener('click', () => {
       this.pageTranslationState.isTranslating = false;
       this.restoreOriginalTexts();
-      this.hideProgressIndicator();
+      this.hideProgressIndicator(true);
     });
   }
 
@@ -871,40 +1037,136 @@ class YuxTransContent {
   showProgressComplete(successCount, totalCount, elapsed, duplicateCount = 0) {
     if (!this.progressIndicator) return;
 
-    const savedInfo = duplicateCount > 0
-      ? `<br><span style="color: #27ae60;">去重节省 ${duplicateCount} 次 API 调用</span>`
-      : '';
-
     this.progressIndicator.innerHTML = `
       <div class="yuxtrans-progress-title">
-        <span style="color: #27ae60;">✓</span>
-        <span>翻译完成</span>
+        <span>✓ 翻译完成</span>
       </div>
-      <div class="yuxtrans-progress-text">
-        <span>成功翻译 ${successCount} / ${totalCount} 段${savedInfo}</span>
+      
+      <div class="yuxtrans-progress-metrics">
+        <div class="yuxtrans-metric-item">
+          <span>累计翻译成果</span>
+          <span class="yuxtrans-metric-val">${successCount} / ${totalCount} 段</span>
+        </div>
+        <div class="yuxtrans-metric-item">
+          <span>去重节省调用</span>
+          <span class="yuxtrans-metric-val">${duplicateCount} 次</span>
+        </div>
+        <div class="yuxtrans-metric-item">
+          <span>页面处理耗时</span>
+          <span class="yuxtrans-metric-val">${elapsed} 秒</span>
+        </div>
       </div>
-      <div class="yuxtrans-progress-speed">耗时: ${elapsed} 秒</div>
+
+      <div class="yuxtrans-toggle-row">
+        <span class="yuxtrans-toggle-label">双语对照模式</span>
+        <label class="yuxtrans-switch">
+          <input type="checkbox" id="yuxtrans-bilingual-toggle" ${this.config.bilingualMode !== false ? 'checked' : ''}>
+          <span class="yuxtrans-slider"></span>
+        </label>
+      </div>
+
       <div class="yuxtrans-progress-actions">
         <button class="yuxtrans-progress-btn primary" id="yuxtrans-restore-btn">恢复原文</button>
-        <button class="yuxtrans-progress-btn secondary" id="yuxtrans-close-btn">关闭</button>
+        <button class="yuxtrans-progress-btn secondary" id="yuxtrans-close-btn">最小化</button>
       </div>
     `;
 
-    // 恢复原文按钮
+    // 模式切换开关逻辑
+    const toggle = this.progressIndicator.querySelector('#yuxtrans-bilingual-toggle');
+    toggle?.addEventListener('change', (e) => {
+      this.toggleBilingualMode(e.target.checked);
+    });
+
+    // 恢复原文按钮 - 彻底清理
     this.progressIndicator.querySelector('#yuxtrans-restore-btn').addEventListener('click', () => {
       this.restoreOriginalTexts();
-      this.hideProgressIndicator();
+      this.hideProgressIndicator(true); // 强制完全移除
     });
 
-    // 关闭按钮
+    // 关闭按钮 - 变为最小化
     this.progressIndicator.querySelector('#yuxtrans-close-btn').addEventListener('click', () => {
-      this.hideProgressIndicator();
+      this.toggleProgressIndicator(false);
     });
 
-    // 5秒后自动关闭
-    setTimeout(() => {
-      this.hideProgressIndicator();
-    }, 5000);
+    // 自动最小化定时器
+    if (this.autoCloseTimer) clearTimeout(this.autoCloseTimer);
+    this.autoCloseTimer = setTimeout(() => {
+      if (this.progressIndicator && !this.progressIndicator.classList.contains('yuxtrans-minimized')) {
+        this.toggleProgressIndicator(false);
+      }
+    }, 8000);
+  }
+
+  /**
+   * 管理弹窗展示与挂耳状态的切换
+   */
+  toggleProgressIndicator(visible) {
+    if (!this.progressIndicator) return;
+    
+    if (visible) {
+      this.progressIndicator.classList.remove('yuxtrans-minimized');
+      if (this.sideTab) this.sideTab.classList.remove('show');
+    } else {
+      this.progressIndicator.classList.add('yuxtrans-minimized');
+      this.ensureSideTab();
+      if (this.sideTab) this.sideTab.classList.add('show');
+    }
+  }
+
+  /**
+   * 创建或显示侧边召回挂耳
+   */
+  ensureSideTab() {
+    if (this.sideTab) return;
+
+    const tab = document.createElement('div');
+    tab.className = 'yuxtrans-side-tab';
+    tab.innerHTML = '<span class="yuxtrans-side-tab-icon">文</span>';
+    tab.title = '打开翻译控制中心';
+    
+    tab.addEventListener('click', () => {
+      this.toggleProgressIndicator(true);
+    });
+
+    document.body.appendChild(tab);
+    this.sideTab = tab;
+    
+    // 给一点延迟让动画生效
+    setTimeout(() => tab.classList.add('show'), 10);
+  }
+
+  /**
+   * 核心逻辑：动态切换双语对照与纯译文模式
+   */
+  toggleBilingualMode(isBilingual) {
+    this.config.bilingualMode = isBilingual;
+    
+    for (const [node, data] of this.pageTranslationState.originalTexts) {
+      const parent = node.parentElement;
+      if (!parent) continue;
+
+      if (isBilingual) {
+        if (!data.bilingualNode) {
+          node.textContent = data.text;
+          const span = document.createElement('span');
+          span.className = 'yuxtrans-bilingual-text';
+          span.textContent = `  ${data.translated}`;
+          if (node.nextSibling) parent.insertBefore(span, node.nextSibling);
+          else parent.appendChild(span);
+          data.bilingualNode = span;
+        }
+        parent.classList.remove('yuxtrans-translated');
+        parent.classList.add('yuxtrans-translated-bilingual');
+      } else {
+        if (data.bilingualNode) {
+          if (data.bilingualNode.parentNode === parent) parent.removeChild(data.bilingualNode);
+          data.bilingualNode = null;
+        }
+        node.textContent = data.translated;
+        parent.classList.remove('yuxtrans-translated-bilingual');
+        parent.classList.add('yuxtrans-translated');
+      }
+    }
   }
 
   restoreOriginalTexts() {

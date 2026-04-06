@@ -42,8 +42,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fetchModelsBtn = getById('fetchModelsBtn');
   const testProviderBtn = getById('testProviderBtn');
   const localModelInput = getById('localModel');
+  const localModelSelect = getById('localModelSelect'); // 新增
+  const fetchLocalModelsBtn = getById('fetchLocalModelsBtn'); // 新增
+  const testLocalBtn = getById('testLocalBtn'); // 新增
   const cacheEnabledInput = getById('cacheEnabled');
-  const cacheSizeInput = getById('cacheSize');
+  const maxCacheMBInput = getById('maxCacheMB');
+  const storageProgressBar = getById('storageProgressBar');
+  const storageText = getById('storageText');
+  const updateBanner = getById('updateBanner');
+  const updateTitle = getById('updateTitle');
+  const downloadZipBtn = getById('downloadZipBtn');
+  const showGuideBtn = getById('showGuideBtn');
   const apiKeyGroup = getById('apiKeyGroup');
   const endpointGroup = getById('endpointGroup');
   const modelSelectGroup = getById('modelSelectGroup');
@@ -89,15 +98,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clearCacheBtn = getById('clearCacheBtn');
   const updateBtn = getById('updateBtn');
   const statusEl = getById('status');
+  let statusTimeout = null;
 
-  // 工具：状态提示 (高级滑入效果)
+  // 工具：状态提示 (高级滑入效果 - 解决竞态冲突)
   function showStatus(message, type) {
     if (!statusEl) return;
+    
+    // 1. 清理之前的定时器与状态类
+    if (statusTimeout) clearTimeout(statusTimeout);
+    statusEl.classList.remove('success', 'error');
+    
+    // 2. 注入新内容并强制重绘以触发动画 (可选)
     statusEl.textContent = message;
-    statusEl.classList.add(type);
-    setTimeout(() => {
-      statusEl.classList.remove(type);
-    }, 3000);
+    
+    // 3. 延迟一小段确保类名移除生效后再添加 (对于 transition 更有利)
+    requestAnimationFrame(() => {
+      statusEl.classList.add(type);
+      statusTimeout = setTimeout(() => {
+        statusEl.classList.remove('success', 'error');
+        statusTimeout = null;
+      }, 3000);
+    });
   }
 
   // ===== 检查更新逻辑 =====
@@ -135,6 +156,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // ===== 启动时检查更新状态 (傻瓜式) =====
+  chrome.storage.local.get(['updateAvailable'], (data) => {
+    if (data.updateAvailable && updateBanner) {
+      const info = data.updateAvailable;
+      updateBanner.style.display = 'block';
+      if (updateTitle) updateTitle.textContent = `发现新版本 v${info.version}`;
+      if (downloadZipBtn) downloadZipBtn.href = info.zipUrl || info.url;
+      
+      // 指引弹窗逻辑
+      showGuideBtn?.addEventListener('click', () => {
+        const guideHtml = `
+          <div style="padding: 20px;">
+            <h3 style="margin-top: 0; color: #d8a051; margin-bottom: 20px;">傻瓜式更新指引</h3>
+            <div class="guide-step">
+              <div class="step-num">1</div>
+              <div class="step-content">点击<strong>“立即下载 ZIP”</strong>获取最新代码包，并解压到您的电脑。</div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">2</div>
+              <div class="step-content">在浏览器地址栏输入 <strong>chrome://extensions</strong> 进入扩展管理页。</div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">3</div>
+              <div class="step-content">找到 YuxTrans 插件卡片，点击右下角的<strong>“刷新”图标</strong>（或删除旧版重新拖入）。</div>
+            </div>
+            <p style="font-size: 12px; color: #999; margin-top: 20px; text-align: center;">更新后，您的 200MB 翻译缓存将自动同步（只要不清除浏览器数据）。</p>
+          </div>
+        `;
+        showModal(guideHtml);
+      });
+    }
+  });
+
+  function showModal(html) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;';
+    modal.innerHTML = `
+      <div style="background:#fdfbf7; width:450px; border-radius:24px; box-shadow:0 12px 40px rgba(0,0,0,0.2); position:relative; overflow:hidden;">
+        ${html}
+        <button id="closeModalBtn" class="btn-secondary" style="width:100%; border-radius:0; padding:16px; border:none; background:#f2ede4; color:#3d3733; cursor:pointer; font-weight:600;">我知道了</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    getById('closeModalBtn')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  }
+
   // ===== 加载配置 =====
   let config = null;
   try {
@@ -149,7 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (apiEndpointInput) apiEndpointInput.value = config.apiEndpoint || '';
     if (localModelInput) localModelInput.value = config.localModel || 'qwen2:7b';
     if (cacheEnabledInput) cacheEnabledInput.checked = config.cacheEnabled !== false;
-    if (cacheSizeInput) cacheSizeInput.value = config.cacheSize || 1000;
+    if (maxCacheMBInput) maxCacheMBInput.value = config.maxCacheMB || 200;
 
     // 自定义
     if (config.customProvider) {
@@ -225,9 +294,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   providerSelect?.addEventListener('change', updateProviderUI);
 
-  // ===== 连接测试 =====
-  testProviderBtn?.addEventListener('click', async () => {
-    const provider = providerSelect.value;
+  // ===== 连接测试 (通用) =====
+  async function handleTestConnection(provider, btnEl) {
     const apiKey = apiKeyInput.value.trim();
     const endpoint = apiEndpointInput.value.trim() || DEFAULT_ENDPOINTS[provider];
 
@@ -235,27 +303,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
-    testProviderBtn.disabled = true;
-    testProviderBtn.textContent = '测试中...';
+    btnEl.disabled = true;
+    const originalText = btnEl.textContent;
+    btnEl.textContent = '测试中...';
 
     try {
       const res = await chrome.runtime.sendMessage({
         action: 'fetchModels',
         config: { provider, apiKey, endpoint }
       });
-      if (res?.success) showStatus('连接测试成功：服务响应正常', 'success');
+      if (res?.success) showStatus(provider === 'local' ? 'Ollama 服务连接正常' : '连接测试成功：服务响应正常', 'success');
       else showStatus(`连接失败: ${res?.error || '未知错误'}`, 'error');
     } catch (err) {
       showStatus('网络连接异常', 'error');
     } finally {
-      testProviderBtn.disabled = false;
-      testProviderBtn.textContent = '连接测试';
+      btnEl.disabled = false;
+      btnEl.textContent = originalText;
     }
-  });
+  }
 
-  // ===== 刷新列表 =====
-  fetchModelsBtn?.addEventListener('click', async () => {
-    const provider = providerSelect.value;
+  testProviderBtn?.addEventListener('click', () => handleTestConnection(providerSelect.value, testProviderBtn));
+  testLocalBtn?.addEventListener('click', () => handleTestConnection('local', testLocalBtn));
+
+  // ===== 刷新列表 (通用) =====
+  async function handleFetchModels(provider, btnEl, targetSelect) {
     const apiKey = apiKeyInput.value.trim();
     const endpoint = apiEndpointInput.value.trim() || DEFAULT_ENDPOINTS[provider];
 
@@ -263,8 +334,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
-    fetchModelsBtn.disabled = true;
-    fetchModelsBtn.textContent = '获取中...';
+    btnEl.disabled = true;
+    const originalText = btnEl.textContent;
+    btnEl.textContent = '获取中...';
 
     try {
       const res = await chrome.runtime.sendMessage({
@@ -273,56 +345,83 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       if (res?.success && res.models) {
         const finalModels = [...new Set([...(DEFAULT_MODELS[provider] || []), ...res.models])];
-        modelSelect.innerHTML = '';
+        targetSelect.innerHTML = '';
         finalModels.forEach(m => {
           const opt = document.createElement('option');
           opt.value = m; opt.textContent = m;
-          modelSelect.appendChild(opt);
+          targetSelect.appendChild(opt);
         });
-        showStatus(`成功获取 ${finalModels.length} 个模型`, 'success');
+        targetSelect.style.display = 'block';
+        showStatus(`成功同步 ${finalModels.length} 个模型`, 'success');
+        return true;
       } else {
         showStatus(res?.error || '获取失败', 'error');
+        return false;
       }
     } catch (err) {
       showStatus('网路请求失败', 'error');
+      return false;
     } finally {
-      fetchModelsBtn.disabled = false;
-      fetchModelsBtn.textContent = '刷新列表';
+      btnEl.disabled = false;
+      btnEl.textContent = originalText;
     }
+  }
+
+  fetchModelsBtn?.addEventListener('click', () => handleFetchModels(providerSelect.value, fetchModelsBtn, modelSelect));
+  
+  fetchLocalModelsBtn?.addEventListener('click', async () => {
+    const success = await handleFetchModels('local', fetchLocalModelsBtn, localModelSelect);
+    if (success && localModelSelect.options.length > 0) {
+      localModelInput.value = localModelSelect.value;
+    }
+  });
+
+  localModelSelect?.addEventListener('change', () => {
+    localModelInput.value = localModelSelect.value;
   });
 
   // ===== 保存设置 =====
   saveBtn?.addEventListener('click', async () => {
-    const newConfig = {
-      provider: providerSelect.value,
-      apiKey: apiKeyInput.value,
-      apiEndpoint: apiEndpointInput.value,
-      model: modelSelect.value,
-      localModel: localModelInput.value,
-      cacheEnabled: cacheEnabledInput.checked,
-      cacheSize: parseInt(cacheSizeInput.value || '1000', 10),
-      customProvider: {
-        name: customNameInput.value.trim(),
-        endpoint: customEndpointInput.value.trim(),
-        apiKey: customApiKeyInput.value.trim(),
-        format: customFormatSelect.value,
-        model: customModelInput.value.trim()
-      },
-      sourceLang: sourceLangSelect.value,
-      targetLang: targetLangSelect.value,
-      translateStyle: document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal',
-      triggerMode: document.querySelector('input[name="triggerMode"]:checked')?.value || 'auto',
-      autoCopy: autoCopyCheckbox.checked,
-      siteRule: siteRuleSelect.value,
-      siteList: siteListTextarea.value.split('\n').map(s => s.trim()).filter(Boolean),
-      autoDetectLang: autoDetectLangInput.checked
-    };
-
     try {
+      const getVal = (el) => el?.value || '';
+      const getChecked = (el) => el?.checked || false;
+
+      const newConfig = {
+        provider: getVal(providerSelect) || 'qwen',
+        apiKey: getVal(apiKeyInput),
+        apiEndpoint: getVal(apiEndpointInput),
+        model: getVal(modelSelect),
+        localModel: getVal(localModelInput),
+        cacheEnabled: cacheEnabledInput ? getChecked(cacheEnabledInput) : true,
+        maxCacheMB: parseInt(getVal(maxCacheMBInput) || '200', 10),
+        customProvider: {
+          name: getVal(customNameInput).trim(),
+          endpoint: getVal(customEndpointInput).trim(),
+          apiKey: getVal(customApiKeyInput).trim(),
+          format: getVal(customFormatSelect),
+          model: getVal(customModelInput).trim()
+        },
+        sourceLang: getVal(sourceLangSelect) || 'auto',
+        targetLang: getVal(targetLangSelect) || 'zh',
+        translateStyle: document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal',
+        triggerMode: document.querySelector('input[name="triggerMode"]:checked')?.value || 'auto',
+        autoCopy: getChecked(autoCopyCheckbox),
+        siteRule: getVal(siteRuleSelect) || 'all',
+        siteList: getVal(siteListTextarea).split('\n').map(s => s.trim()).filter(Boolean),
+        autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true
+      };
+
       const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: newConfig });
-      if (res?.success) { showStatus('设置已安全保存', 'success'); config = newConfig; }
-      else showStatus('保存失败', 'error');
-    } catch (e) { showStatus('运行异常', 'error'); }
+      if (res?.success) { 
+        showStatus('设置已安全保存', 'success'); 
+        config = newConfig; 
+      } else {
+        showStatus(`保存失败: ${res?.error || '未知响应'}`, 'error');
+      }
+    } catch (err) {
+      console.error('[YuxTrans] Save Error:', err);
+      showStatus(`运行异常: ${err.message}`, 'error');
+    }
   });
 
   // ===== 导入/导出 =====
@@ -366,13 +465,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateStatsInternal() {
     chrome.runtime.sendMessage({ action: 'getCacheStats' }, (res) => {
-      if (!res?.success || !res.usage) return;
-      const { usage } = res;
+      if (!res?.success) return;
+      
+      const { usage, stats } = res;
       if (totalTranslatesCountEl) totalTranslatesCountEl.textContent = usage.totalCount || 0;
       if (cacheHitsCountEl) cacheHitsCountEl.textContent = usage.cacheHits || 0;
       if (cacheHitRateEl) {
         const rate = usage.totalCount > 0 ? Math.round((usage.cacheHits / usage.totalCount) * 100) : 0;
         cacheHitRateEl.textContent = `${rate}%`;
+      }
+
+      // 更新物理存储进度条
+      if (storageProgressBar && storageText && stats) {
+        const maxMB = config?.maxCacheMB || 200;
+        const usedMB = stats.sizeMB || 0;
+        const percent = Math.min(Math.round((usedMB / maxMB) * 100), 100);
+        
+        storageProgressBar.style.width = `${percent}%`;
+        storageText.textContent = `${usedMB} MB / ${maxMB} MB`;
+        
+        // 根据占用率改变颜色 (可选气泡感)
+        if (percent > 90) {
+          storageProgressBar.style.background = 'linear-gradient(90deg, #d85151, #e67d7d)';
+        } else {
+          storageProgressBar.style.background = 'linear-gradient(90deg, #d8a051, #e6b87d)';
+        }
       }
     });
   }

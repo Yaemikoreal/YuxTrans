@@ -97,13 +97,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (response && response.success) {
           if (resultText) resultText.textContent = response.text;
 
-          const engineText = response.cached ? '缓存' : response.engine;
-          if (statusText) statusText.textContent = `翻译完成 · ${elapsed}ms · ${engineText}`;
+          if (statusText) statusText.textContent = `✓ 翻译完成`;
 
           // 自动复制
           if (config.autoCopy) {
             await copyToClipboard(response.text);
-            if (statusText) statusText.textContent += ' · 已复制';
+            if (statusText) statusText.textContent = `✓ 已翻译并复制`;
           }
         } else {
           if (resultArea) resultArea.style.display = 'none';

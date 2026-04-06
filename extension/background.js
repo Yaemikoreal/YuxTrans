@@ -58,10 +58,13 @@ const ERROR_MESSAGES = {
 };
 
 // 请求超时时间（毫秒）
-const REQUEST_TIMEOUT_MS = 15000;
+const CLOUD_TIMEOUT_MS = 30000;
+const LOCAL_TIMEOUT_MS = 120000;
+const REQUEST_TIMEOUT_MS = 30000;
 
 // ===== 热点词库（安装时预加载） =====
 const BUILTIN_CACHE = {
+  // --- 基础对话与指令 ---
   'auto:zh:Hello': '你好', 'auto:zh:hello': '你好',
   'auto:zh:World': '世界', 'auto:zh:world': '世界',
   'auto:zh:Thank you': '谢谢', 'auto:zh:thank you': '谢谢',
@@ -90,24 +93,12 @@ const BUILTIN_CACHE = {
   'auto:zh:Content': '内容', 'auto:zh:Comment': '评论',
   'auto:zh:Reply': '回复', 'auto:zh:Share': '分享',
   'auto:zh:Like': '喜欢', 'auto:zh:Download': '下载',
-  'auto:zh:Upload': '上传', 'auto:zh:File': '文件',
-  'auto:zh:Folder': '文件夹', 'auto:zh:Image': '图片',
-  'auto:zh:Video': '视频', 'auto:zh:Audio': '音频',
-  'auto:zh:Document': '文档', 'auto:zh:Page': '页面',
-  'auto:zh:Link': '链接', 'auto:zh:Button': '按钮',
-  'auto:zh:Menu': '菜单', 'auto:zh:List': '列表',
-  'auto:zh:Table': '表格', 'auto:zh:Form': '表单',
-  'auto:zh:Input': '输入', 'auto:zh:Output': '输出',
+  'auto:zh:Upload': '上传',
   'auto:zh:Result': '结果', 'auto:zh:Status': '状态',
   'auto:zh:Date': '日期', 'auto:zh:Time': '时间',
   'auto:zh:Today': '今天', 'auto:zh:Tomorrow': '明天',
   'auto:zh:Yesterday': '昨天', 'auto:zh:Week': '周',
   'auto:zh:Month': '月', 'auto:zh:Year': '年',
-  'auto:zh:Start': '开始', 'auto:zh:End': '结束',
-  'auto:zh:Create': '创建', 'auto:zh:Update': '更新',
-  'auto:zh:Read': '阅读', 'auto:zh:Write': '写入',
-  'auto:zh:Copy': '复制', 'auto:zh:Paste': '粘贴',
-  'auto:zh:Cut': '剪切', 'auto:zh:Select': '选择',
   'auto:zh:All': '全部', 'auto:zh:None': '无',
   'auto:zh:More': '更多', 'auto:zh:Less': '更少',
   'auto:zh:Show': '显示', 'auto:zh:Hide': '隐藏',
@@ -201,6 +192,45 @@ const BUILTIN_CACHE = {
   'auto:en:删除': 'Delete', 'auto:en:编辑': 'Edit',
   'auto:en:保存': 'Save', 'auto:en:提交': 'Submit',
   'auto:en:翻译': 'Translate', 'auto:en:复制': 'Copy',
+  
+  // --- 深度开发与技术词汇 (面向开发者加速) ---
+  'auto:zh:Repository': '仓库', 'auto:zh:Commit': '提交',
+  'auto:zh:Branch': '分支', 'auto:zh:Merge': '合并',
+  'auto:zh:Pull request': '拉取请求', 'auto:zh:Issue': '工单/问题',
+  'auto:zh:Context': '上下文', 'auto:zh:Environment': '环境',
+  'auto:zh:Configuration': '配置', 'auto:zh:Deployment': '部署',
+  'auto:zh:Build': '构建', 'auto:zh:Production': '生产环境',
+  'auto:zh:Development': '开发环境', 'auto:zh:Interface': '接口/界面',
+  'auto:zh:Algorithm': '算法', 'auto:zh:Protocol': '协议',
+  'auto:zh:Function': '函数', 'auto:zh:Method': '方法',
+  'auto:zh:Property': '属性', 'auto:zh:Variable': '变量',
+  'auto:zh:Constant': '常量', 'auto:zh:Object': '对象',
+  'auto:zh:Array': '数组', 'auto:zh:String': '字符串',
+  'auto:zh:Boolean': '布尔值', 'auto:zh:Integer': '整数',
+  'auto:zh:Float': '浮点数', 'auto:zh:Double': '双精度',
+  'auto:zh:Character': '字符', 'auto:zh:Class': '类',
+  'auto:zh:Structure': '结构', 'auto:zh:Template': '模板',
+  'auto:zh:Abstract': '抽象', 'auto:zh:Static': '静态',
+  'auto:zh:Dynamic': '动态', 'auto:zh:Synchronous': '同步',
+  'auto:zh:Asynchronous': '异步', 'auto:zh:Callback': '回调',
+  'auto:zh:Promise': '期约', 'auto:zh:Stream': '流',
+  'auto:zh:Buffer': '缓冲区', 'auto:zh:Socket': '套接字',
+  'auto:zh:Session': '会话', 'auto:zh:Cookie': '缓存',
+  'auto:zh:Token': '令牌', 'auto:zh:Header': '头部',
+  'auto:zh:Payload': '负载', 'auto:zh:Status Code': '状态码',
+  'auto:zh:Endpoint': '端点', 'auto:zh:Authentication': '认证',
+  'auto:zh:Authorization': '授权', 'auto:zh:Encryption': '加密',
+  'auto:zh:Decryption': '解密', 'auto:zh:Signature': '签名',
+  'auto:zh:Certificate': '证书', 'auto:zh:Primary Key': '主键',
+  'auto:zh:Foreign Key': '外键', 'auto:zh:Index': '索引',
+  'auto:zh:Query': '查询', 'auto:zh:Transaction': '事务',
+  'auto:zh:Log': '日志', 'auto:zh:Dependency': '依赖',
+  'auto:zh:Plugin': '插件', 'auto:zh:Extension': '扩展',
+  'auto:zh:Component': '组件', 'auto:zh:Framework': '框架',
+  'auto:zh:Library': '库', 'auto:zh:Module': '模块',
+  'auto:zh:Package': '包', 'auto:zh:Namespace': '命名空间',
+  'auto:zh:Runtime': '运行时', 'auto:zh:Service': '服务',
+  'auto:zh:Middleware': '中间件', 'auto:zh:Pipeline': '流水线'
 };
 
 // ===== 运行时状态 =====
@@ -212,7 +242,7 @@ let config = {
   model: '',
   localModel: 'qwen2:7b',
   cacheEnabled: true,
-  cacheSize: 1000,
+  maxCacheMB: 200, // 物理空间限额提升至 200MB
   customProvider: {
     name: '', endpoint: '', apiKey: '', format: 'openai', model: ''
   },
@@ -315,10 +345,21 @@ async function loadCacheFromDB() {
           cacheOrder.push(item.key);
         }
 
-        // 应用缓存大小限制
-        while (cache.size > config.cacheSize && cacheOrder.length > 0) {
-          const oldest = cacheOrder.pop();
-          cache.delete(oldest);
+        // 应用缓存字节限额限制 (LRU: 物理空间驱动)
+        const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
+        let currentBytes = 0;
+        
+        // 重新核算字节占用并裁剪
+        for (const key of cacheOrder) {
+          const value = cache.get(key);
+          currentBytes += key.length * 2 + value.length * 2;
+        }
+
+        while (currentBytes > maxBytes && cacheOrder.length > 0) {
+          const oldestKey = cacheOrder.shift();
+          const oldestVal = cache.get(oldestKey);
+          currentBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+          cache.delete(oldestKey);
         }
 
         updateCacheStats();
@@ -398,12 +439,28 @@ function getFromCache(key) {
 
 async function setToCache(key, value) {
   if (!config.cacheEnabled) return;
-  if (cache.size >= config.cacheSize) {
-    const oldest = cacheOrder.shift();
-    cache.delete(oldest);
-  }
+  
+  const entryBytes = key.length * 2 + value.length * 2;
+  const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
+
+  // 1. 存入新项
   cache.set(key, value);
   cacheOrder.push(key);
+  
+  // 2. 动态统计与裁剪
+  let currentBytes = 0;
+  for (const k of cacheOrder) {
+    const v = cache.get(k);
+    currentBytes += k.length * 2 + v.length * 2;
+  }
+
+  while (currentBytes > maxBytes && cacheOrder.length > 0) {
+    const oldestKey = cacheOrder.shift();
+    const oldestVal = cache.get(oldestKey);
+    currentBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+    cache.delete(oldestKey);
+  }
+
   updateCacheStats();
   await saveCacheToDB();
 }
@@ -818,8 +875,9 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
   try {
     const { headers, body } = buildRequest(prompt, false);
     const endpoint = getEndpoint();
+    const timeout = config.provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     const response = await fetch(endpoint, {
       method: 'POST', headers, body, signal: controller.signal
@@ -845,18 +903,17 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
   }
 
   // 5. 将翻译结果写回 finalResults / 错误处理和自动按句降级降维兜底
-  if (jsonParsed) {
-    for (let j = 0; j < batchOutput.length; j++) {
-      const translatedText = batchOutput[j];
-      const i = missIndices[j];
-      const cacheKey = generateCacheKey(missTexts[j], sourceLang, targetLang);
-      await setToCache(cacheKey, translatedText);
-      finalResults[i] = { text: translatedText, cached: false, engine: config.provider, success: true };
-    }
+  if (jsonParsed && batchOutput.length === missTexts.length) {
+    batchOutput.forEach((text, i) => {
+      const originalIndex = missIndices[i];
+      finalResults[originalIndex] = { text, success: true, engine: config.provider, cached: false };
+      setToCache(generateCacheKey(missTexts[i], sourceLang, targetLang), text);
+    });
     recordUsage(false, batchOutput.length);
+    return finalResults;
   } else {
     // 降级：如果 JSON 解析失败，则异步分片并发重试这些漏掉的
-    console.warn('[YuxTrans] Fallback to individual requests for batch.');
+    console.warn(`[YuxTrans] 批处理响应不匹配 (预期 ${missTexts.length}, 实得 ${batchOutput.length})，正在降阶处理...`);
     const fallbackPromises = missIndices.map(async (i, j) => {
       try {
         const text = missTexts[j];
@@ -893,8 +950,9 @@ async function testConnection(testConfig) {
       requestBody = { model, messages: [{ role: 'user', content: prompt }], temperature: 0.3 };
     }
 
+    const timeout = config.provider === 'local' ? LOCAL_TIMEOUT_MS : CLOUD_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     const response = await fetch(endpoint, {
       method: 'POST', headers,
@@ -921,7 +979,7 @@ async function testConnection(testConfig) {
 async function testProviderConnection(testConfig) {
   const { provider, apiKey, endpoint, model } = testConfig;
 
-  if (!apiKey) return { success: false, error: '请先填写 API Key' };
+  if (!apiKey && provider !== 'local') return { success: false, error: '请先填写 API Key' };
 
   const prompt = 'Translate to Chinese. Provide only the translation.\n\nHello';
 
@@ -938,8 +996,9 @@ async function testProviderConnection(testConfig) {
       requestBody = { model: model || DEFAULT_MODELS[provider], messages: [{ role: 'user', content: prompt }], temperature: 0.3 };
     }
 
+    const timeout = provider === 'local' ? LOCAL_TIMEOUT_MS : CLOUD_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     const response = await fetch(endpoint, {
       method: 'POST', headers,
@@ -965,17 +1024,30 @@ async function testProviderConnection(testConfig) {
 async function fetchModels(testConfig) {
   const { provider, apiKey, endpoint } = testConfig;
 
-  if (!apiKey) return { success: false, error: '请先填写 API Key' };
+  // 本地模型无需 API Key 校验
+  if (!apiKey && provider !== 'local') return { success: false, error: '请先填写 API Key' };
 
   try {
-    const modelsEndpoint = endpoint.replace('/chat/completions', '/models');
+    let modelsEndpoint;
+    if (provider === 'local') {
+      // Ollama 列表 API
+      modelsEndpoint = 'http://localhost:11434/api/tags';
+    } else {
+      modelsEndpoint = endpoint.replace('/chat/completions', '/models');
+    }
 
+    const timeout = provider === 'local' ? LOCAL_TIMEOUT_MS : CLOUD_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
     const response = await fetch(modelsEndpoint, {
       method: 'GET',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: headers,
       signal: controller.signal
     });
 
@@ -987,6 +1059,13 @@ async function fetchModels(testConfig) {
 
     const data = await response.json();
 
+    // Ollama 结构解析
+    if (provider === 'local' && data.models && Array.isArray(data.models)) {
+      const models = data.models.map(m => m.name).sort();
+      return { success: true, models };
+    }
+
+    // 标准 OpenAI 兼容结构解析
     if (data.data && Array.isArray(data.data)) {
       const models = data.data.map(m => m.id).filter(id => id && !id.includes(':')).sort();
       return { success: true, models };
@@ -1228,5 +1307,51 @@ chrome.commands.onCommand.addListener((command) => {
   });
 });
 
+// ===== 自动更新检测 =====
+const GITHUB_REPO = 'Yaemikoreal/YuxTrans';
+const CHECK_UPDATE_INTERVAL = 12 * 60 * 60 * 1000; // 12 小时
+
+async function checkNewVersion() {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const latestVersion = data.tag_name.replace(/^v/, '');
+    const currentVersion = chrome.runtime.getManifest().version;
+
+    if (isNewerVersion(latestVersion, currentVersion)) {
+      chrome.action.setBadgeText({ text: 'NEW' });
+      chrome.action.setBadgeBackgroundColor({ color: '#d85151' });
+      chrome.storage.local.set({ 
+        updateAvailable: {
+          version: latestVersion,
+          url: data.html_url,
+          zipUrl: data.zipball_url,
+          body: data.body
+        }
+      });
+    } else {
+      chrome.action.setBadgeText({ text: '' });
+      chrome.storage.local.remove('updateAvailable');
+    }
+  } catch (error) {
+    console.error('[YuxTrans] 检查更新失败:', error);
+  }
+}
+
+function isNewerVersion(latest, current) {
+  const l = latest.split('.').map(Number);
+  const c = current.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (l[i] > (c[i] || 0)) return true;
+    if (l[i] < (c[i] || 0)) return false;
+  }
+  return false;
+}
+
 // 启动时加载配置
-loadConfig().then(() => { initialized = true; });
+ensureInitialized().then(() => {
+  checkNewVersion(); // 启动后立即检查一次
+  setInterval(checkNewVersion, CHECK_UPDATE_INTERVAL);
+});
