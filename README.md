@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="extension/icons/icon128.png" width="100" alt="YuxTrans Logo">
+</p>
+
 # 🌟 YuxTrans
 
 <p align="center">
@@ -50,14 +54,6 @@ graph LR
     Ollama --> Done
     Provider --> Done
 ```
-
----
-
-## 📸 视觉大赏 (Showcase)
-
-> [!NOTE]
-> **Warm Paper 质感**：每一处投影、每一条分割线都经过了克制的推敲。
-> **[预览图 A：极简设置中心]** | **[预览图 B：沉浸式划词弹窗]**
 
 ---
 
