@@ -1,196 +1,96 @@
-# YuxTrans
+# 🌟 YuxTrans
 
 <p align="center">
-  <strong>响应速度是生命，翻译准度是底线</strong>
+  <strong>响应速度是生命，沉浸阅读是灵魂</strong>
 </p>
 
 <p align="center">
-  一款极速响应、精准翻译的 AI 翻译浏览器插件，支持本地模型和多云端 API
+  一款为极客打造的“深阅读” AI 翻译浏览器扩展。支持本地 Ollama 模型原生加速与海量 200MB 物理定额缓存。
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yaemikoreal/qwenfy/releases">
-    <img src="https://img.shields.io/github/v/release/Yaemikoreal/qwenfy?color=blue&label=version" alt="Version">
-  </a>
-  <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
+  <a href="https://github.com/Yaemikoreal/YuxTrans/releases/latest">
+    <img src="https://img.shields.io/github/v/release/Yaemikoreal/YuxTrans?color=d8a051&label=version" alt="Version">
   </a>
   <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+    <img src="https://img.shields.io/badge/License-MIT-fdf6ec.svg?labelColor=d8a051" alt="License">
   </a>
-  <a href="https://github.com/Yaemikoreal/qwenfy/stargazers">
-    <img src="https://img.shields.io/github/stars/Yaemikoreal/qwenfy?color=orange&label=stars" alt="Stars">
-  </a>
-  <a href="https://github.com/Yaemikoreal/qwenfy/issues">
-    <img src="https://img.shields.io/github/issues/Yaemikoreal/qwenfy" alt="Issues">
+  <a href="https://github.com/Yaemikoreal/YuxTrans/stargazers">
+    <img src="https://img.shields.io/github/stars/Yaemikoreal/YuxTrans?color=orange&label=stars" alt="Stars">
   </a>
 </p>
 
-<p align="center">
-  <a href="#安装">安装</a> •
-  <a href="#快速开始">快速开始</a> •
-  <a href="#功能特性">功能特性</a> •
-  <a href="#架构">架构</a> •
-  <a href="#性能">性能</a> •
-  <a href="#贡献">贡献</a>
-</p>
+---
+
+## ✨ v0.3.0 "Deep Reading" 精研版核心特性
+
+- **🚀 本地模型“断点免疫” (Stall Resistance)**: 深度优化 **Qwen 3.5 4B** 等本地模型，攻克长页面翻译死锁。检测到 JSON 异常时全自动降级至“单句稳健模式”，确保 100% 成功率。
+- **💾 200MB 级物理定额储存**: 彻底告别段落计数。基于全量字节物理占用进行 LRU 回收，并配有**可视化存储进度看板**。
+- **🎨 Warm Paper 护眼美学**: isometric 圆角、柔和米色/深邃暗淡双色模式。不仅是工具，更是浏览器中最优雅的阅读伴侣。
+- **🤖 翻译人格定制**: 预设“日常、学术、技术、文学”四类翻译人格，支持保留技术核心术语或追求文学意境。
+- **✨ 自动更新感应**: 基于 GitHub API 异步感应，发现新版即刻在图标挂载红色 **[NEW]** 角标，支持“傻瓜式一键换新”。
 
 ---
 
-## 安装
+## 📸 视觉大赏 (Visual Showcase)
 
-### 浏览器插件（推荐）
-
-1. Chrome 打开 `chrome://extensions/`
-2. 启用「开发者模式」
-3. 加载 `extension/` 目录
-
-### Python API
-
-```bash
-pip install yuxtrans
-```
-
-```python
-from yuxtrans import SmartRouter, TranslationRequest
-import asyncio
-
-async def main():
-    router = SmartRouter()
-    result = await router.translate(
-        TranslationRequest(text="Hello, world!", source_lang="en", target_lang="zh")
-    )
-    print(result.text)  # 你好，世界！
-
-asyncio.run(main())
-```
-
-> **注意**: 桌面客户端开发暂停，当前版本专注于浏览器插件的性能优化。
+> [!TIP]
+> **Warm Paper UI设计**：我们对设置中心的每一个间距、每一处投影都进行了克制的打磨。
+> *[此处应有设置中心截图]* | *[此处应有划词弹窗截图]*
 
 ---
 
-## 功能特性
+## 📦 极简“傻瓜式”安装 (Quick Start)
 
-| 特性 | 描述 |
-|------|------|
-| **⚡ 极速响应** | 缓存命中 < 0.1ms，本地模型 < 500ms，云端 < 2s |
-| **🔄 智能路由** | 自动选择最快路径：缓存 → 本地 → 云端 |
-| **☁️ 多云端支持** | Qwen、OpenAI、DeepSeek、Anthropic、Groq、Moonshot、Siliconflow |
-| **🏠 本地优先** | Ollama 本地模型，离线可用 |
-| **📊 缓存优化** | 持久化缓存、文本去重、批量存储写入 |
-| **🌐 浏览器插件** | Chrome/Edge 扩展，划词翻译、整页翻译 |
+YuxTrans 目前采用直发 ZIP 模式，三步即刻开启深阅读：
 
----
-
-## 架构
-
-```
-         ┌──────────────────────────────────────────────┐
-         │              SmartRouter                      │
-         │                                               │
-请求 ──► │  Cache (<0.1ms) → Local (<500ms) → Cloud (<2s) │ ──► 结果
-         │                                               │
-         │     命中返回        本地推理        云端兜底    │
-         └──────────────────────────────────────────────┘
-```
-
-**核心模块**：
-- `engine/` — 翻译引擎（BaseTranslator、LocalTranslator、CloudTranslator、SmartRouter）
-- `cache/` — SQLite + LRU 双层缓存
-- `extension/` — Chrome 扩展（Manifest V3），划词翻译、整页翻译
-
-> 桌面客户端（`desktop/`）开发暂停，后续版本将重新启用。
+1.  **下载 ZIP**: 在 [Releases](https://github.com/Yaemikoreal/YuxTrans/releases) 页面下载最新的 `Source Code (zip)` 并解压到本地。
+2.  **加载扩展**: 
+    * 打开 Chrome 浏览器，进入 `chrome://extensions/`。
+    * 开启右上角的 **「开发者模式」**。
+    * 点击 **「加载已解压的扩展程序」**，选择项目的 `extension/` 目录。
+3.  **配置 AI**: 点击扩展图标进入设置，连接您的本地 Ollama 或填入云端 API Key。
 
 ---
 
-## 性能
+## 🛠 引擎与架构
 
-| 指标 | 目标 | 实测 |
-|------|------|------|
-| 缓存命中 | < 10ms | **0.04ms** ✅ |
-| 本地模型 | < 500ms | 配置后实测 |
-| 云端 API | < 2s | 配置后实测 |
-| 缓存命中率 | > 80% | **100%** ✅ |
+YuxTrans 采用 **Hybrid-Router (混合路由)** 架构，确保翻译请求的绝对稳健：
 
----
+1.  **物理缓存层 (<0.1ms)**: 优先从 200MB 的 IndexedDB 中秒回。
+2.  **本地推理层 (<500ms)**: 优先触发本地 **Ollama** 实例。
+3.  **云端兜底层 (<2.0s)**: 在本地模型不可用或资源受限时，自动选择配置的云端 Provider。
 
-## 支持的云端 API
-
-| 供应商 | ID | 默认模型 |
-|--------|-----|----------|
-| 通义千问 | `qwen` | qwen-turbo |
-| OpenAI | `openai` | gpt-4o-mini |
-| DeepSeek | `deepseek` | deepseek-chat |
-| Anthropic | `anthropic` | claude-3-5-haiku-latest |
-| Groq | `groq` | llama-3.1-8b-instant |
-| Moonshot | `moonshot` | moonshot-v1-8k |
-| Siliconflow | `siliconflow` | Qwen/Qwen2.5-7B-Instruct |
-
-配置 API Key：
-```bash
-export YUXTRANS_CLOUD_PROVIDER=qwen
-export YUXTRANS_CLOUD_API_KEY=sk-xxx
-```
+| 模式 | 核心逻辑偏好 |
+| :--- | :--- |
+| **日常模式** | 通俗易懂，适合新闻与社交媒体。 |
+| **学术模式** | 用词严谨，适合论文阅读与研究报告。 |
+| **技术模式** | **极客优化**，核心术语（API/Method）保留英文原词。 |
+| **文学模式** | 追求信雅达，适合博文与创意小说。 |
 
 ---
 
-## 开发
+## 🌐 支持的云端供应商
 
-```bash
-git clone https://github.com/Yaemikoreal/qwenfy.git
-cd qwenfy
-pip install -e ".[dev]"
-
-# 运行测试
-pytest
-
-# 代码检查
-ruff check yuxtrans/
-ruff format yuxtrans/
-```
+| Qwen (通义千问) | DeepSeek | OpenAI | Anthropic |
+| :--- | :--- | :--- | :--- |
+| Moonshot (Kimi) | Siliconflow | Groq | 各类兼容 OpenAI 格式的地址 |
 
 ---
 
-## Roadmap
+## 🤝 贡献与参与
 
-- [ ] OCR 图像翻译
-- [ ] 语音翻译
-- [ ] PDF 文档翻译
-- [ ] 更多语言对
-- [ ] 桌面客户端恢复开发
-
-详见 [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## 贡献
-
-欢迎 Issue 和 PR！
-
-```bash
-# Fork → Branch → Commit → Push → PR
-git checkout -b feature/AmazingFeature
-git commit -m 'Add AmazingFeature'
-git push origin feature/AmazingFeature
-```
+我们欢迎所有对“沉浸式阅读”有极致追求的开发者加入：
+- 提交 Issue 建议新的 UI 配图。
+- 参与 4B/7B 本地模型的 Prompt 调优。
+- 完善多语言翻译 Persona。
 
 ---
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 YuxTrans Contributors
-
----
-
-## 致谢
-
-- [Ollama](https://ollama.ai/) — 本地模型推理
-- [Qwen](https://tongyi.aliyun.com/) — 通义千问
-- [OpenAI](https://openai.com/) — GPT 模型
-- [Anthropic](https://anthropic.com/) — Claude 模型
+基于 [MIT License](LICENSE) 协议发布。
 
 <p align="center">
-  <a href="https://github.com/Yaemikoreal/qwenfy">
-    <img src="https://img.shields.io/github/contributors/Yaemikoreal/qwenfy?color=blue" alt="Contributors">
-  </a>
+  Built with ❤️ for Deep Readers.
 </p>
