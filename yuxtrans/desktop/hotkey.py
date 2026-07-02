@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Callable, Dict, Optional
 
 from PyQt6.QtCore import QObject, pyqtSignal
+from yuxtrans.utils.platform import is_macos
 
 
 class HotkeyState(Enum):
@@ -73,13 +74,19 @@ class HotkeyManager(QObject):
             print("警告: 未安装 keyboard 库，快捷键功能受限")
 
     def _init_macos(self):
-        """初始化 macOS 平台"""
+        """初始化 macOS 平台热键（使用 pynput GlobalHotKeys）"""
+        self._macos_bindings: Dict[str, dict] = {}
+        self._macos_listener = None
         try:
-            import pynput
+            from pynput.keyboard import GlobalHotKeys, HotKey, Key, KeyCode
 
-            self._pynput = pynput
+            self._pynput_GlobalHotKeys = GlobalHotKeys
+            self._pynput_HotKey = HotKey
+            self._pynput_Key = Key
+            self._pynput_KeyCode = KeyCode
+            self._pynput_available = True
         except ImportError:
-            self._pynput = None
+            self._pynput_available = False
 
     def _init_linux(self):
         """初始化 Linux 平台"""
@@ -144,7 +151,129 @@ class HotkeyManager(QObject):
             except Exception:
                 return False
 
+        if self._platform == "darwin" and self._pynput_available:
+            return self._register_macos(key, callback)
+
         return False
+
+    def _unregister_platform(self, key: str) -> bool:
+        """平台相关注销"""
+        if self._platform == "win32" and self._keyboard:
+            try:
+                self._keyboard.remove_hotkey(key)
+                return True
+            except Exception:
+                return False
+
+        if self._platform == "darwin" and self._pynput_available:
+            return self._unregister_macos(key)
+
+        return False
+
+    # ── macOS 热键实现（pynput GlobalHotKeys） ──────────────────────────
+
+    def _register_macos(self, full_key: str, callback: Callable) -> bool:
+        """注册 macOS 全局热键"""
+        try:
+            pynput_key = self._pynput_key_from_string(full_key)
+        except ValueError:
+            return False
+
+        self._macos_bindings[full_key] = {
+            "pynput_key": pynput_key,
+            "callback": callback,
+        }
+        self._restart_macos_listener()
+        return True
+
+    def _unregister_macos(self, full_key: str) -> bool:
+        """注销 macOS 全局热键"""
+        if full_key not in self._macos_bindings:
+            return False
+        del self._macos_bindings[full_key]
+        self._restart_macos_listener()
+        return True
+
+    def _restart_macos_listener(self):
+        """重启 GlobalHotKeys 监听器（注册/注销后反映变更）"""
+        if self._macos_listener is not None:
+            self._macos_listener.stop()
+            self._macos_listener = None
+
+        if not self._macos_bindings:
+            return
+
+        hotkey_dict = {}
+        for entry in self._macos_bindings.values():
+            # 用闭包包装回调，使其可被 pynput 线程安全调用
+            cb = entry["callback"]
+            hotkey_dict[entry["pynput_key"]] = cb
+
+        self._macos_listener = self._pynput_GlobalHotKeys(hotkey_dict)
+        self._macos_listener.daemon = True
+        self._macos_listener.start()
+
+    @staticmethod
+    def _pynput_key_from_string(key_str: str) -> str:
+        """
+        将 "Ctrl+Shift+T" 转换为 pynput 可识别的 "<ctrl>+<shift>+t"
+
+        支持修饰键: Ctrl, Shift, Alt, Cmd/Super/Win
+        特殊键名:  F1-F24, Space, Tab, Enter/Esc/Return, Up/Down/Left/Right
+        """
+        parts = key_str.lower().split("+")
+        pynput_parts = []
+
+        MODIFIER_MAP = {
+            "ctrl": "<ctrl>",
+            "shift": "<shift>",
+            "alt": "<alt>",
+            "option": "<alt>",
+            "cmd": "<cmd>",
+            "command": "<cmd>",
+            "super": "<cmd>",
+            "win": "<cmd>",
+            "meta": "<cmd>",
+        }
+
+        SPECIAL_KEYS = {
+            "space": "<space>",
+            "tab": "<tab>",
+            "enter": "<enter>",
+            "return": "<enter>",
+            "esc": "<esc>",
+            "escape": "<esc>",
+            "backspace": "<backspace>",
+            "delete": "<delete>",
+            "home": "<home>",
+            "end": "<end>",
+            "page_up": "<page_up>",
+            "page_down": "<page_down>",
+            "insert": "<insert>",
+            "menu": "<menu>",
+            "pause": "<pause>",
+            "print_screen": "<print_screen>",
+            "up": "<up>",
+            "down": "<down>",
+            "left": "<left>",
+            "right": "<right>",
+        }
+        # F1-F24
+        for i in range(1, 25):
+            SPECIAL_KEYS[f"f{i}"] = f"<f{i}>"
+
+        for part in parts:
+            if part in MODIFIER_MAP:
+                pynput_parts.append(MODIFIER_MAP[part])
+            elif part in SPECIAL_KEYS:
+                pynput_parts.append(SPECIAL_KEYS[part])
+            elif len(part) == 1:
+                # 单字符按键
+                pynput_parts.append(part)
+            else:
+                raise ValueError(f"无法识别的按键: {part}")
+
+        return "+".join(pynput_parts)
 
     def unregister(self, hotkey_id: str) -> bool:
         """
@@ -169,17 +298,6 @@ class HotkeyManager(QObject):
             del self._hotkeys[hotkey_id]
 
         return success
-
-    def _unregister_platform(self, key: str) -> bool:
-        """平台相关注销"""
-        if self._platform == "win32" and self._keyboard:
-            try:
-                self._keyboard.remove_hotkey(key)
-                return True
-            except Exception:
-                return False
-
-        return False
 
     def unregister_all(self):
         """注销所有快捷键"""

@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from yuxtrans.engine.base import TranslationRequest, TranslationResult
 from yuxtrans.engine.router import SmartRouter
 from yuxtrans.utils.config import ConfigManager
+from yuxtrans.utils.platform import chinese_font_name, ui_font_name
 
 
 class TranslationWorker(QThread):
@@ -111,7 +112,7 @@ class TranslationWindow(QMainWindow):
         header_layout.setContentsMargins(10, 5, 10, 5)
 
         self.title_label = QLabel("YuxTrans")
-        self.title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.title_label.setFont(QFont(ui_font_name(), 12, QFont.Weight.Bold))
         header_layout.addWidget(self.title_label)
 
         header_layout.addStretch()
@@ -141,24 +142,24 @@ class TranslationWindow(QMainWindow):
         content_layout.setContentsMargins(10, 10, 10, 10)
 
         source_label = QLabel("原文")
-        source_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        source_label.setFont(QFont(ui_font_name(), 10, QFont.Weight.Bold))
         content_layout.addWidget(source_label)
 
         self.source_text = QTextEdit()
         self.source_text.setObjectName("source_text")
         self.source_text.setReadOnly(True)
         self.source_text.setMaximumHeight(80)
-        self.source_text.setFont(QFont("Microsoft YaHei", 11))
+        self.source_text.setFont(QFont(chinese_font_name(), 11))
         content_layout.addWidget(self.source_text)
 
         target_label = QLabel("译文")
-        target_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        target_label.setFont(QFont(ui_font_name(), 10, QFont.Weight.Bold))
         content_layout.addWidget(target_label)
 
         self.target_text = QTextEdit()
         self.target_text.setObjectName("target_text")
         self.target_text.setReadOnly(True)
-        self.target_text.setFont(QFont("Microsoft YaHei", 12))
+        self.target_text.setFont(QFont(chinese_font_name(), 12))
         content_layout.addWidget(self.target_text)
 
         layout.addWidget(content)

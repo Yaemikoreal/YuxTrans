@@ -29,6 +29,13 @@ read -p "是否安装桌面端? (y/N): " install_desktop
 if [ "$install_desktop" = "y" ] || [ "$install_desktop" = "Y" ]; then
     echo "[2/4] 安装桌面端 (PyQt6)..."
     pip3 install PyQt6 -q
+
+    # macOS 额外安装 pynput（全局热键）
+    if [ "$(uname)" = "Darwin" ]; then
+        echo "    检测到 macOS，安装全局快捷键支持..."
+        pip3 install pynput -q
+    fi
+
     echo "    完成!"
 else
     echo "[2/4] 跳过桌面端安装"

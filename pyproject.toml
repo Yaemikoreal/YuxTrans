@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 desktop = ["PyQt6>=6.4.0"]
+macos = ["pynput>=1.7.0"]
 local = ["ollama>=0.1.0"]
 dev = [
     "pytest>=7.0.0",

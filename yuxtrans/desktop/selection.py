@@ -114,11 +114,14 @@ class SelectionManager(QObject):
         return None
 
     def _get_selected_macos(self) -> Optional[str]:
-        """macOS 平台获取选中文本"""
+        """macOS 平台获取选中文本（非破坏性：备份并恢复剪贴板）"""
+        clipboard = QApplication.clipboard()
+        backup = clipboard.text() if clipboard.supportsSelection() else clipboard.text()
+
         try:
             import subprocess
 
-            result = subprocess.run(
+            subprocess.run(
                 [
                     "osascript",
                     "-e",
@@ -130,13 +133,24 @@ class SelectionManager(QObject):
 
             import time
 
-            time.sleep(0.1)
+            time.sleep(0.05)
 
-            clipboard = QApplication.clipboard()
-            return clipboard.text()
+            text = clipboard.text()
+
+            # 如果复制出的文本和备份不同才视为选中内容
+            if text and text != backup:
+                return text
+            return None
 
         except Exception:
             return None
+
+        finally:
+            # 恢复原始剪贴板内容
+            try:
+                clipboard.setText(backup)
+            except Exception:
+                pass
 
     def _get_selected_linux(self) -> Optional[str]:
         """Linux 平台获取选中文本"""

@@ -23,6 +23,7 @@ setup(
     extras_require={
         "desktop": ["PyQt6>=6.4.0"],
         "local": ["ollama>=0.1.0"],
+        "macos": ["pynput>=1.7.0"],
         "dev": [
             "pytest>=7.0.0",
             "pytest-asyncio>=0.21.0",
