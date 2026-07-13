@@ -284,7 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderActiveConfig();
   }
 
-  // 渲染当前使用（ActiveConfig 只读展示）
+  // 渲染当前使用（ActiveConfig 可点击展示）
   function renderActiveConfig() {
     const nameEl = getById('activeProfileName');
     const detailEl = getById('activeProfileDetail');
@@ -300,6 +300,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     nameEl.textContent = activeProfile.label || `${providerLabel} - ${modelLabel || 'default'}`;
     detailEl.textContent = `${providerLabel}${modelLabel ? ' · ' + modelLabel : ''} · ${config.sourceLang || 'auto'} → ${config.targetLang || 'zh'} · ${config.translateStyle || 'normal'}`;
   }
+
+  // 点击「当前使用」卡片跳转到供应商档案标签页
+  getById('activeConfigCard')?.addEventListener('click', () => {
+    const profileTab = document.querySelector('.tab[data-tab="profiles"]');
+    if (profileTab) profileTab.click();
+  });
 
   // 初始化 UI
   updateProviderUI();
@@ -368,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!statusIcon || !statusText) return;
 
     // 阶段 1：检测 Ollama 服务
-    statusIcon.textContent = '⏳';
+    statusIcon.className = 'ollama-status-dot checking';
     statusText.textContent = '正在检测 Ollama 服务...';
     if (statusAction) statusAction.style.display = 'none';
 
@@ -387,7 +393,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (!ollamaRunning) {
-      statusIcon.textContent = '🔴';
+      statusIcon.className = 'ollama-status-dot error';
       statusText.innerHTML = 'Ollama 服务未运行。请安装并启动 Ollama，或运行 <code>setup-ollama.bat</code> 一键配置。';
       if (statusAction) {
         statusAction.style.display = 'block';
@@ -410,11 +416,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hasRecommended = models.some(name => name.includes(RECOMMENDED_MODEL) || name.includes('qwen3.5'));
 
     if (hasRecommended) {
-      statusIcon.textContent = '🟢';
+      statusIcon.className = 'ollama-status-dot ok';
       statusText.innerHTML = `Ollama 运行中 · 推荐模型已就绪`;
       if (statusAction) statusAction.style.display = 'none';
     } else {
-      statusIcon.textContent = '🟡';
+      statusIcon.className = 'ollama-status-dot warn';
       statusText.innerHTML = `Ollama 运行中 · 推荐模型未下载`;
       if (statusAction) {
         statusAction.style.display = 'block';
@@ -858,7 +864,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!container) return;
 
     if (!modelRecords || modelRecords.length === 0) {
-      container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sub); font-size: 13px;">暂无档案，请在上方配置并保存后在此管理。</div>';
+      container.innerHTML = '<div class="model-list-empty">暂无档案，请在上方配置并保存后在此管理。</div>';
       return;
     }
 
@@ -869,14 +875,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const providerLabel = PROVIDER_NAMES[m.provider] || m.provider;
       const modelLabel = m.model || m.localModel || '';
       return `
-        <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:${isActive ? 'var(--accent-soft)' : 'var(--bg-input)'};border-radius:14px;border:1px solid ${isActive ? 'rgba(216,160,81,0.3)' : 'var(--border-color)'};margin-bottom:10px;transition:all 0.3s;">
-          <div style="flex:1;">
-            <div style="font-weight:700;font-size:14px;color:var(--text-title);">${m.label || m.id}</div>
-            <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">${providerLabel} · ${modelLabel}</div>
+        <div class="model-list-item ${isActive ? 'active' : ''}">
+          <div class="model-list-info">
+            <div class="model-list-name">${m.label || m.id}</div>
+            <div class="model-list-detail">${providerLabel} · ${modelLabel}</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            ${!isActive ? `<button class="btn-test" data-activate="${idx}" style="font-size:12px;padding:6px 14px;">启用</button>` : '<span style="font-size:12px;color:var(--accent);font-weight:700;padding:6px 14px;">✓ 当前使用</span>'}
-            <button class="btn-test" data-remove="${idx}" style="font-size:12px;padding:6px 14px;color:#c0392b;border-color:rgba(192,57,43,0.2);">移除</button>
+          <div class="model-list-actions">
+            ${!isActive ? `<button class="btn-test" data-activate="${idx}">启用</button>` : '<span class="model-list-active-badge">当前使用</span>'}
+            <button class="btn-test" data-remove="${idx}">移除</button>
           </div>
         </div>
       `;

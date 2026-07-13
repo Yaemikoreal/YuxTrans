@@ -1,22 +1,54 @@
 /**
  * YuxTrans Content Styles
- * Apple 原生感 + Notion 极简感
- * 暖纸底色、黄铜强调、大量留白、细线分隔
+ * 现代、简约、克制的页面内翻译视觉系统
+ * 注入到宿主页面中，需保持自包含
  */
 
-/* ===== 基础变量 ===== */
+/* ===== 自包含设计令牌 ===== */
 :root {
-  --yxt-bg: #fdfbf7;
+  --yxt-bg: #ffffff;
   --yxt-bg-elevated: #ffffff;
-  --yxt-text: #2c2825;
-  --yxt-text-secondary: #6b6560;
-  --yxt-text-tertiary: #9e968d;
-  --yxt-accent: #c48a3a;
-  --yxt-accent-soft: rgba(196, 138, 58, 0.1);
-  --yxt-border: rgba(0, 0, 0, 0.06);
+  --yxt-bg-secondary: #f9fafb;
+  --yxt-text: #111827;
+  --yxt-text-secondary: #6b7280;
+  --yxt-text-tertiary: #9ca3af;
+  --yxt-accent: #4f46e5;
+  --yxt-accent-hover: #4338ca;
+  --yxt-accent-soft: rgba(79, 70, 229, 0.08);
+  --yxt-border: #e5e7eb;
   --yxt-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --yxt-success: #10b981;
+  --yxt-success-soft: rgba(16, 185, 129, 0.08);
+  --yxt-warning: #f59e0b;
+  --yxt-warning-soft: rgba(245, 158, 11, 0.08);
+  --yxt-error: #ef4444;
+  --yxt-error-soft: rgba(239, 68, 68, 0.08);
+  --yxt-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --yxt-radius: 8px;
-  --yxt-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --yxt-bg: #1f2937;
+    --yxt-bg-elevated: #111827;
+    --yxt-bg-secondary: #374151;
+    --yxt-text: #f9fafb;
+    --yxt-text-secondary: #9ca3af;
+    --yxt-text-tertiary: #6b7280;
+    --yxt-accent: #6366f1;
+    --yxt-accent-hover: #818cf8;
+    --yxt-accent-soft: rgba(99, 102, 241, 0.14);
+    --yxt-border: #374151;
+    --yxt-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+    --yxt-success: #34d399;
+    --yxt-success-soft: rgba(52, 211, 153, 0.12);
+    --yxt-warning: #fbbf24;
+    --yxt-warning-soft: rgba(251, 191, 36, 0.12);
+    --yxt-error: #f87171;
+    --yxt-error-soft: rgba(248, 113, 113, 0.12);
+  }
 }
 
 /* ===== 划词翻译弹窗 ===== */
@@ -36,6 +68,33 @@
   animation: yuxtrans-slideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+.yuxtrans-popup::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--yxt-bg-elevated);
+}
+
+.yuxtrans-popup::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid var(--yxt-border);
+  z-index: -1;
+}
+
 .yuxtrans-popup-header {
   display: flex;
   align-items: center;
@@ -45,10 +104,10 @@
 }
 
 .yuxtrans-popup-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--yxt-accent);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
@@ -66,11 +125,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .yuxtrans-popup-close:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--yxt-bg-secondary);
   color: var(--yxt-text);
 }
 
@@ -121,18 +180,18 @@
   gap: 4px;
   padding: 2px 7px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--yxt-bg-secondary);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.3px;
   color: var(--yxt-text-secondary);
 }
 
-.yuxtrans-status-badge.cache { background: rgba(39, 174, 96, 0.1); color: #219653; }
-.yuxtrans-status-badge.local { background: rgba(155, 89, 182, 0.1); color: #8e44ad; }
-.yuxtrans-status-badge.cloud { background: rgba(52, 152, 219, 0.1); color: #2980b9; }
-.yuxtrans-status-badge.error { background: rgba(231, 76, 60, 0.1); color: #c0392b; }
-.yuxtrans-status-badge.warning { background: rgba(243, 156, 18, 0.1); color: #d35400; }
+.yuxtrans-status-badge.cache { background: var(--yxt-success-soft); color: var(--yxt-success); }
+.yuxtrans-status-badge.local { background: rgba(99, 102, 241, 0.1); color: var(--yxt-accent); }
+.yuxtrans-status-badge.cloud { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.yuxtrans-status-badge.error { background: var(--yxt-error-soft); color: var(--yxt-error); }
+.yuxtrans-status-badge.warning { background: var(--yxt-warning-soft); color: var(--yxt-warning); }
 
 .yuxtrans-btn {
   background: var(--yxt-accent);
@@ -143,20 +202,22 @@
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .yuxtrans-btn:hover {
-  background: #b37d34;
+  background: var(--yxt-accent-hover);
 }
 
 .yuxtrans-btn-secondary {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--yxt-bg-secondary);
   color: var(--yxt-text);
+  border: 1px solid var(--yxt-border);
 }
 
 .yuxtrans-btn-secondary:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--yxt-bg-secondary);
+  border-color: var(--yxt-text-tertiary);
 }
 
 .yuxtrans-loading {
@@ -171,7 +232,7 @@
 .yuxtrans-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(196, 138, 58, 0.2);
+  border: 2px solid rgba(79, 70, 229, 0.2);
   border-top-color: var(--yxt-accent);
   border-radius: 50%;
   animation: yuxtrans-spin 0.8s linear infinite;
@@ -189,16 +250,16 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(196, 138, 58, 0.25);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+  transition: all 0.15s ease;
   opacity: 0;
   animation: yuxtrans-fadeIn 0.2s ease forwards;
 }
 
 .yuxtrans-float-btn:hover {
-  background: #b37d34;
+  background: var(--yxt-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(196, 138, 58, 0.3);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
 }
 
 .yuxtrans-float-btn:active {
@@ -208,29 +269,29 @@
 /* ===== 整页翻译：双语、流式、失败标记 ===== */
 .yuxtrans-bilingual-text {
   display: inline;
-  color: rgba(0, 0, 0, 0.45);
-  font-size: 0.92em;
+  color: var(--yxt-text-secondary);
+  font-size: 0.9em;
   margin-left: 0.35em;
   padding-left: 0.45em;
-  border-left: 1.5px solid rgba(196, 138, 58, 0.3);
+  border-left: 1.5px solid var(--yxt-border);
 }
 
 .yuxtrans-streaming-text {
   display: inline;
-  color: rgba(0, 0, 0, 0.55);
+  color: var(--yxt-text-secondary);
   font-size: 0.96em;
   margin-left: 0.25em;
   animation: yuxtrans-streamPulse 1.5s ease-in-out infinite;
 }
 
 .yuxtrans-failed {
-  border-bottom: 1px dashed rgba(243, 156, 18, 0.6) !important;
+  border-bottom: 1px dashed var(--yxt-warning) !important;
   cursor: pointer !important;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
 .yuxtrans-failed:hover {
-  background-color: rgba(243, 156, 18, 0.06) !important;
+  background-color: var(--yxt-warning-soft) !important;
 }
 
 /* ===== 整页翻译进度条 ===== */
@@ -246,7 +307,7 @@
 .yuxtrans-progress-bar-bg {
   width: 100%;
   height: 2px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--yxt-border);
   overflow: hidden;
 }
 
@@ -268,7 +329,7 @@
   background: var(--yxt-bg-elevated);
   border: 1px solid var(--yxt-border);
   border-radius: 20px;
-  box-shadow: var(--yxt-shadow);
+  box-shadow: var(--yxt-shadow-md);
   font-family: var(--yxt-font);
   font-size: 12px;
   font-weight: 600;
@@ -290,7 +351,7 @@
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
-  transition: color 0.2s ease;
+  transition: color 0.15s ease;
 }
 
 .yuxtrans-progress-cancel:hover,
@@ -305,17 +366,103 @@
 }
 
 .yuxtrans-progress-restore:hover {
-  color: #b37d34;
+  color: var(--yxt-accent-hover);
 }
 
 .yuxtrans-progress-done.has-failures {
-  color: #d35400;
+  color: var(--yxt-warning);
 }
 
 .yuxtrans-progress.yuxtrans-minimized {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+/* ===== 整页翻译控制条（新增） ===== */
+.yuxtrans-page-control {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--yxt-bg-elevated);
+  border: 1px solid var(--yxt-border);
+  border-radius: 20px;
+  box-shadow: var(--yxt-shadow-md);
+  font-family: var(--yxt-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yxt-text-secondary);
+  animation: yuxtrans-slideIn 0.3s ease;
+}
+
+.yuxtrans-page-control-progress {
+  width: 80px;
+  height: 4px;
+  background: var(--yxt-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.yuxtrans-page-control-progress-bar {
+  height: 100%;
+  background: var(--yxt-accent);
+  transition: width 0.3s ease;
+}
+
+.yuxtrans-page-control-btn {
+  background: none;
+  border: none;
+  color: var(--yxt-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.yuxtrans-page-control-btn:hover {
+  background: var(--yxt-bg-secondary);
+  color: var(--yxt-text);
+}
+
+.yuxtrans-page-control-btn.primary {
+  color: var(--yxt-accent);
+}
+
+.yuxtrans-page-control-btn.primary:hover {
+  background: var(--yxt-accent-soft);
+}
+
+/* ===== 站点规则反馈提示 ===== */
+.yuxtrans-site-rule-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  z-index: 2147483645;
+  padding: 10px 18px;
+  background: var(--yxt-bg-elevated);
+  border: 1px solid var(--yxt-border);
+  border-radius: 20px;
+  box-shadow: var(--yxt-shadow-md);
+  font-family: var(--yxt-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yxt-text-secondary);
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.yuxtrans-site-rule-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
 }
 
 /* ===== 侧边挂耳 ===== */
@@ -332,7 +479,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: -2px 0 8px rgba(196, 138, 58, 0.2);
+  box-shadow: -2px 0 8px rgba(79, 70, 229, 0.15);
   transition: all 0.3s ease;
   transform: translateX(100%);
   opacity: 0;

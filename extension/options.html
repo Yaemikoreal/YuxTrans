@@ -4,727 +4,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YuxTrans 设置</title>
-  <style>
-    :root {
-      /* Apple + Notion 极简变量 */
-      --bg-primary: #fdfbf7;
-      --bg-gradient: none;
-      --bg-container: #ffffff;
-      --bg-sidebar: transparent;
-      --bg-section: #ffffff;
-      --bg-input: #ffffff;
-
-      --text-title: #2c2825;
-      --text-main: #2c2825;
-      --text-sub: #6b6560;
-
-      --accent: #c48a3a;
-      --accent-hover: #b37d34;
-      --accent-soft: rgba(196, 138, 58, 0.08);
-      --accent-gradient: #c48a3a;
-      --accent-text: #ffffff;
-
-      --border-color: rgba(0, 0, 0, 0.06);
-      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
-      --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.05);
-      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
-
-      --glass-blur: 0px;
-      --radius: 8px;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg-primary: #1a1817;
-        --bg-gradient: none;
-        --bg-container: #23211f;
-        --bg-sidebar: transparent;
-        --bg-section: #23211f;
-        --bg-input: #2a2725;
-
-        --text-title: #f4f0e6;
-        --text-main: #e6e0d8;
-        --text-sub: #9e958a;
-
-        --accent: #d8a051;
-        --accent-hover: #eebb77;
-        --accent-soft: rgba(216, 160, 81, 0.12);
-        --accent-gradient: #d8a051;
-        --accent-text: #2c2825;
-
-        --border-color: rgba(244, 240, 230, 0.08);
-        --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
-        --shadow-md: 0 2px 8px rgba(0,0,0,0.25);
-        --shadow-lg: 0 8px 24px rgba(0,0,0,0.3);
-      }
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-main);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-    }
-
-    .container {
-      width: 100%;
-      max-width: 900px;
-      min-height: min(90vh, 800px);
-      background: var(--bg-container);
-      border-radius: 12px;
-      display: grid;
-      grid-template-columns: 220px 1fr;
-      box-shadow: var(--shadow-lg);
-      border: 1px solid var(--border-color);
-      overflow: hidden;
-    }
-
-    /* 侧边导航 */
-    .sidebar {
-      padding: 36px 24px;
-      background: var(--bg-sidebar);
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      user-select: none;
-    }
-
-    .sidebar h1 {
-      font-size: 22px;
-      color: var(--text-title);
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      margin-bottom: 4px;
-    }
-
-    .sidebar .subtitle {
-      font-size: 11px;
-      color: var(--text-sub);
-      margin-bottom: 36px;
-      letter-spacing: 0.6px;
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-
-    .tabs {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .tab {
-      display: flex;
-      align-items: center;
-      padding: 10px 14px;
-      border: none;
-      background: transparent;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-sub);
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s ease;
-      position: relative;
-    }
-
-    .tab:hover {
-      color: var(--text-main);
-      background: rgba(0, 0, 0, 0.03);
-    }
-
-    .tab.active {
-      color: var(--text-title);
-      background: var(--accent-soft);
-    }
-
-    .tab.active::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      width: 3px;
-      height: 16px;
-      background: var(--accent);
-      border-radius: 3px;
-    }
-
-    /* 主内容区 */
-    .main-content {
-      padding: 28px 40px 40px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      scroll-behavior: smooth;
-    }
-
-    /* 滚动条美化 */
-    .main-content::-webkit-scrollbar { width: 5px; }
-    .main-content::-webkit-scrollbar-track { background: transparent; }
-    .main-content::-webkit-scrollbar-thumb {
-      background: var(--border-color);
-      border-radius: 10px;
-    }
-
-    .tab-content {
-      display: none;
-      animation: contentFadeIn 0.3s ease;
-    }
-
-    @keyframes contentFadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    .section {
-      background: var(--bg-section);
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 18px;
-      border: 1px solid var(--border-color);
-    }
-
-    .section h2 {
-      font-size: 16px;
-      margin-bottom: 22px;
-      color: var(--text-title);
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section h2::before {
-      content: '';
-      width: 3px;
-      height: 16px;
-      background: var(--accent);
-      border-radius: 3px;
-    }
-
-    /* 表单控件 */
-    .form-group {
-      margin-bottom: 18px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 700;
-      color: var(--text-title);
-      font-size: 12px;
-    }
-
-    .hint {
-      font-size: 11px;
-      color: var(--text-sub);
-      margin-top: 6px;
-      line-height: 1.5;
-    }
-
-    input[type="text"],
-    input[type="password"],
-    input[type="number"],
-    select,
-    textarea {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      font-size: 13px;
-      font-family: inherit;
-      transition: all 0.2s ease;
-      background: var(--bg-input);
-      color: var(--text-main);
-    }
-
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    /* 隐藏数字输入框的原生箭头 */
-    input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    input[type="number"] {
-      -moz-appearance: textfield;
-    }
-
-    /* 定制下拉选择框 */
-    select {
-      appearance: none;
-      -webkit-appearance: none;
-      -moz-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 30px !important;
-    }
-
-    .input-row {
-      display: flex;
-      gap: 16px;
-    }
-
-    .input-row .form-group {
-      flex: 1;
-    }
-
-    /* 复选框与单选 */
-    .checkbox-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .checkbox-group input {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .radio-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .radio-group label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: var(--bg-input);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    }
-
-    .radio-group label:hover {
-      border-color: var(--accent);
-    }
-
-    .radio-group input {
-      accent-color: var(--accent);
-      width: 14px;
-      height: 14px;
-    }
-
-    /* 功能按钮 */
-    .buttons-row {
-      display: flex;
-      gap: 12px;
-      margin-top: auto;
-      padding-top: 20px;
-      justify-content: flex-end;
-      border-top: 1px solid var(--border-color);
-      flex-shrink: 0;
-    }
-
-    button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-primary {
-      background: var(--accent-gradient);
-      color: var(--accent-text);
-    }
-
-    .btn-primary:hover {
-      background: var(--accent-hover);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      color: var(--text-main);
-      border: 1px solid var(--border-color);
-    }
-
-    .btn-secondary:hover {
-      background: rgba(0, 0, 0, 0.02);
-      border-color: var(--accent);
-    }
-
-    label.btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin: 0;
-      line-height: 1;
-      height: auto;
-    }
-
-    .btn-test {
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 12px;
-      padding: 8px 14px;
-      border: 1px solid transparent;
-      border-radius: 6px;
-    }
-
-    .btn-test:hover {
-      border-color: var(--accent);
-    }
-
-    /* 统计看板 */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .stat-card {
-      background: transparent;
-      padding: 16px 12px;
-      border-radius: 8px;
-      text-align: center;
-      border: 1px solid var(--border-color);
-    }
-
-    .stat-value {
-      font-size: 22px;
-      font-weight: 800;
-      color: var(--text-title);
-      margin-bottom: 2px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .stat-label {
-      font-size: 10px;
-      color: var(--text-sub);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-
-    .status {
-      position: fixed;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(-20px);
-      z-index: 20000;
-      padding: 10px 24px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--bg-container);
-      border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-md);
-      transition: all 0.3s ease;
-      opacity: 0;
-      pointer-events: none;
-      color: var(--text-main);
-    }
-
-    .status.success {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-      color: #219653;
-      border-color: rgba(33, 150, 83, 0.2);
-    }
-
-    .status.error {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-      color: #c0392b;
-      border-color: rgba(192, 57, 43, 0.2);
-    }
-
-    .version {
-      font-size: 10px;
-      color: var(--text-sub);
-      text-align: center;
-    }
-
-    /* 更新横幅 */
-    .update-banner {
-      background: var(--accent-soft);
-      border: 1px solid rgba(196, 138, 58, 0.15);
-      border-radius: 8px;
-      padding: 14px 16px;
-      margin-bottom: 18px;
-      animation: slideDown 0.3s ease;
-    }
-    @keyframes slideDown {
-      from { transform: translateY(-12px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .update-banner-content { display: flex; align-items: center; gap: 12px; }
-    .update-icon { font-size: 20px; }
-    .update-info { flex: 1; }
-    .update-title { display: block; font-weight: 700; color: var(--accent); font-size: 13px; }
-    .update-desc { display: block; font-size: 11px; color: var(--text-sub); margin-top: 2px; }
-    .update-actions { display: flex; gap: 8px; }
-
-    /* 弹窗指引 */
-    .guide-step { display: flex; gap: 10px; margin-bottom: 16px; }
-    .step-num {
-      width: 24px; height: 24px; background: var(--accent); color: white;
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 12px; font-weight: 800;
-    }
-    .step-content { font-size: 13px; line-height: 1.6; color: var(--text-main); }
-    .step-content strong { color: var(--accent); }
-
-    /* 翻译风格卡片 */
-    .style-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-    .style-option {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 14px;
-      background: var(--bg-section);
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      position: relative;
-    }
-    .style-option:hover {
-      border-color: var(--accent);
-    }
-    .style-option input[type="radio"] {
-      width: 16px; height: 16px; margin-top: 2px;
-      accent-color: var(--accent);
-    }
-    .style-option:has(input:checked) {
-      background: var(--accent-soft);
-      border-color: var(--accent);
-    }
-    .style-name {
-      display: block;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-title);
-      margin-bottom: 2px;
-    }
-    .style-hint {
-      font-size: 10px;
-      color: var(--text-sub);
-      line-height: 1.5;
-    }
-
-    /* ===== 轻量模型推荐卡片 ===== */
-    .model-recommendations {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .model-card {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      grid-template-rows: auto auto;
-      gap: 10px;
-      align-items: center;
-      padding: 12px 14px;
-      background: var(--bg-input);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      transition: all 0.2s ease;
-    }
-
-    .model-card:hover {
-      border-color: var(--accent);
-    }
-
-    .model-card.installed {
-      background: rgba(33, 150, 83, 0.04);
-      border-color: rgba(33, 150, 83, 0.2);
-    }
-
-    .model-card-info {
-      grid-column: 1 / 2;
-    }
-
-    .model-card-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-title);
-      margin-bottom: 2px;
-    }
-
-    .model-card-meta {
-      font-size: 10px;
-      color: var(--text-sub);
-    }
-
-    .model-download-btn {
-      grid-column: 2 / 3;
-      grid-row: 1 / 2;
-      white-space: nowrap;
-    }
-
-    .model-download-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .model-card-progress {
-      grid-column: 1 / 3;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .model-progress-bar-bg {
-      flex: 1;
-      height: 4px;
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .model-progress-bar {
-      height: 100%;
-      background: var(--accent);
-      transition: width 0.3s ease;
-    }
-
-    .model-progress-text {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-sub);
-      min-width: 36px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* ===== 响应式布局 ===== */
-    @media (max-width: 800px) {
-      body { padding: 16px; }
-      .container {
-        grid-template-columns: 1fr;
-        min-height: auto;
-        border-radius: 12px;
-        max-height: none;
-      }
-      .sidebar {
-        padding: 20px 20px 12px;
-        border-right: none;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .sidebar h1 { font-size: 20px; }
-      .sidebar .subtitle { margin-bottom: 18px; }
-      .tabs {
-        flex-direction: row;
-        overflow-x: auto;
-        gap: 4px;
-        padding-bottom: 4px;
-      }
-      .tab {
-        padding: 8px 12px;
-        font-size: 12px;
-        white-space: nowrap;
-      }
-      .tab.active::after { display: none; }
-      .main-content { padding: 20px; }
-      .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @media (max-width: 520px) {
-      body { padding: 10px; }
-      .container { border-radius: 10px; }
-      .sidebar { padding: 16px 14px 10px; }
-      .sidebar h1 { font-size: 18px; }
-      .main-content { padding: 14px; }
-      .section { padding: 16px 14px; border-radius: 10px; }
-      .input-row { flex-direction: column; gap: 0; }
-      .stats-grid { grid-template-columns: 1fr; gap: 8px; }
-      .style-grid { grid-template-columns: 1fr; }
-      .buttons-row { flex-direction: column; gap: 8px; }
-      .buttons-row button { width: 100%; }
-      .radio-group {
-        flex-direction: column;
-        gap: 6px;
-      }
-      .radio-group label { width: 100%; }
-      .section h2 { font-size: 14px; }
-    }
-  </style>
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="container">
     <aside class="sidebar">
       <h1>YuxTrans</h1>
-      <p class="subtitle">Configuration Portal</p>
-      
+      <p class="subtitle">Configuration</p>
+
       <nav class="tabs">
-        <button class="tab active" data-tab="profiles">
-          供应商档案
-        </button>
-        <button class="tab" data-tab="general">
-          通用设置
-        </button>
+        <button class="tab active" data-tab="profiles">供应商档案</button>
+        <button class="tab" data-tab="general">通用设置</button>
       </nav>
 
-      <div style="margin-top: auto; padding-top: 40px; border-top: 1px solid var(--border-color); opacity: 0.5;">
-        <div style="font-size: 11px; color: var(--text-sub); text-align: center;">YuxTrans v0.3.0</div>
+      <div class="sidebar-footer">
+        <div class="sidebar-version">YuxTrans v0.3.0</div>
       </div>
     </aside>
 
     <main class="main-content">
-      <div id="updateBanner" class="update-banner" style="display: none; margin-bottom: 28px;">
+      <div id="updateBanner" class="update-banner" style="display: none;">
         <div class="update-banner-content">
-          <span class="update-icon">✨</span>
+          <div class="update-icon">✨</div>
           <div class="update-info">
             <span class="update-title" id="updateTitle">发现新版本</span>
             <span class="update-desc" id="updateDesc">新版本已在 GitHub 发布，快去下载体验吧！</span>
           </div>
           <div class="update-actions">
-             <a href="#" id="downloadZipBtn" class="btn-primary" style="padding: 8px 16px; font-size: 13px; text-decoration: none;">立即下载 ZIP</a>
-             <button id="showGuideBtn" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">查看三步更新指引</button>
+             <a href="#" id="downloadZipBtn" class="btn-primary" style="text-decoration: none;">立即下载 ZIP</a>
+             <button id="showGuideBtn" class="btn-secondary">查看三步更新指引</button>
           </div>
         </div>
       </div>
+
       <!-- 1. 供应商档案 -->
       <div class="tab-content active" id="tab-profiles">
         <div class="section">
-          <h2>服务商配置</h2>
+          <h2 class="section-title">服务商配置</h2>
           <div class="form-group">
-            <label for="provider">服务商</label>
+            <label class="form-label" for="provider">服务商</label>
             <select id="provider">
               <option value="qwen">通义千问 (Qwen)</option>
               <option value="openai">OpenAI</option>
@@ -739,22 +58,22 @@
           </div>
 
           <div class="form-group" id="apiKeyGroup">
-            <label for="apiKey">API Key</label>
+            <label class="form-label" for="apiKey">API Key</label>
             <input type="password" id="apiKey" placeholder="输入您的 API Key">
             <p class="hint">您的 API Key 将安全加密存储在浏览器本地中</p>
           </div>
 
           <div class="form-group" id="endpointGroup">
-            <label for="apiEndpoint">请求地址 (可选)</label>
+            <label class="form-label" for="apiEndpoint">请求地址 (可选)</label>
             <input type="text" id="apiEndpoint" placeholder="留空使用默认官方地址">
           </div>
 
           <div class="form-group" id="modelSelectGroup">
-            <label for="modelSelect">使用模型</label>
+            <label class="form-label" for="modelSelect">使用模型</label>
             <select id="modelSelect">
               <option value="">加载中...</option>
             </select>
-            <div style="margin-top: 12px; display: flex; gap: 10px;">
+            <div class="button-group">
               <button class="btn-test" id="fetchModelsBtn">刷新列表</button>
               <button class="btn-test" id="testProviderBtn">连接测试</button>
             </div>
@@ -762,30 +81,30 @@
           </div>
 
           <div class="form-group" id="localModelGroup" style="display: none;">
-            <label for="localModel">本地模型名称 (Ollama)</label>
+            <label class="form-label" for="localModel">本地模型名称 (Ollama)</label>
 
             <!-- Ollama 状态检测面板 -->
-            <div id="ollamaStatusPanel" class="ollama-status" style="margin-bottom: 16px; padding: 12px 14px; border-radius: 8px; background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border-color, #e0e0e0);">
-              <div id="ollamaStatusContent" style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                <span id="ollamaStatusIcon" style="font-size: 16px;">⏳</span>
-                <span id="ollamaStatusText">正在检测 Ollama 状态...</span>
+            <div id="ollamaStatusPanel" class="ollama-status">
+              <div class="ollama-status-content">
+                <span class="ollama-status-dot checking" id="ollamaStatusIcon"></span>
+                <span class="ollama-status-text" id="ollamaStatusText">正在检测 Ollama 状态...</span>
               </div>
-              <div id="ollamaStatusAction" style="margin-top: 10px; display: none;">
-                <button class="btn-test" id="downloadModelBtn" style="font-size: 12px; padding: 6px 14px;">下载 Qwen3.5-0.8B 模型</button>
-                <button class="btn-test" id="copyPullCmdBtn" style="font-size: 12px; padding: 6px 14px; margin-left: 8px;">复制命令</button>
+              <div id="ollamaStatusAction" class="ollama-status-actions" style="display: none;">
+                <button class="btn-test" id="downloadModelBtn">下载 Qwen3.5-0.8B 模型</button>
+                <button class="btn-test" id="copyPullCmdBtn">复制命令</button>
               </div>
             </div>
 
             <!-- 轻量模型推荐 -->
-            <div id="recommendedModelsPanel" style="margin-bottom: 16px;">
-              <div style="font-size: 12px; font-weight: 700; color: var(--text-title); margin-bottom: 10px;">轻量模型推荐</div>
-              <div class="model-recommendations" id="modelRecommendations">
+            <div id="recommendedModelsPanel" class="model-recommendations" style="margin-bottom: var(--yxt-space-4);">
+              <div class="model-recommendations-title">轻量模型推荐</div>
+              <div id="modelRecommendations">
                 <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 600MB">
                   <div class="model-card-info">
                     <div class="model-card-name">Qwen 3.5 · 0.8B</div>
                     <div class="model-card-meta">约 600MB · 中文优化 · 默认推荐</div>
                   </div>
-                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <div class="model-card-actions">
                     <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
                     <button class="btn-test model-cancel-btn" data-model="qwen3.5:0.8b" style="display: none;">取消</button>
                     <button class="btn-test model-copy-btn" data-model="qwen3.5:0.8b">复制命令</button>
@@ -800,7 +119,7 @@
                     <div class="model-card-name">Phi 4 · Mini</div>
                     <div class="model-card-meta">约 2GB · 英文能力强</div>
                   </div>
-                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <div class="model-card-actions">
                     <button class="btn-test model-download-btn" data-model="phi4-mini:latest">下载</button>
                     <button class="btn-test model-cancel-btn" data-model="phi4-mini:latest" style="display: none;">取消</button>
                     <button class="btn-test model-copy-btn" data-model="phi4-mini:latest">复制命令</button>
@@ -815,7 +134,7 @@
                     <div class="model-card-name">Gemma 3 · 1B</div>
                     <div class="model-card-meta">约 800MB · 多语言均衡</div>
                   </div>
-                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <div class="model-card-actions">
                     <button class="btn-test model-download-btn" data-model="gemma3:1b">下载</button>
                     <button class="btn-test model-cancel-btn" data-model="gemma3:1b" style="display: none;">取消</button>
                     <button class="btn-test model-copy-btn" data-model="gemma3:1b">复制命令</button>
@@ -828,35 +147,34 @@
               </div>
             </div>
 
-            <select id="localModelSelect" style="margin-bottom: 12px; display: none;">
+            <select id="localModelSelect" style="margin-bottom: var(--yxt-space-3); display: none;">
               <option value="">点击下方刷新获取模型...</option>
             </select>
-            <input type="text" id="localModel" placeholder="qwen3.5:0.8b" style="margin-top: 0;">
+            <input type="text" id="localModel" placeholder="qwen3.5:0.8b">
             <p class="hint">推荐模型: <strong>qwen3.5:0.8b</strong>（轻量离线翻译）。请确保 Ollama 已启动，或运行 <code>extension/setup-ollama.bat</code> 一键配置。</p>
-            <div style="margin-top: 14px; display: flex; gap: 10px;">
+            <div class="button-group">
               <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
               <button class="btn-test" id="testLocalBtn">连接测试</button>
             </div>
           </div>
 
           <div id="customProviderSection" style="display: none;">
-             <!-- 自定义服务商表单 -->
              <div class="form-group">
-                <label for="customName">供应商名称</label>
+                <label class="form-label" for="customName">供应商名称</label>
                 <input type="text" id="customName" placeholder="My Custom API">
              </div>
              <div class="form-group">
-                <label for="customEndpoint">API 端点地址</label>
+                <label class="form-label" for="customEndpoint">API 端点地址</label>
                 <input type="text" id="customEndpoint" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
                 <p class="hint">填入完整的 API 地址，例如 <code>/v1</code>、<code>/v1/chat/completions</code> 或 <code>/api</code>。获取模型列表时会自动尝试 <code>/models</code> 路径。</p>
              </div>
              <div class="input-row">
                <div class="form-group">
-                 <label for="customApiKey">API Key</label>
+                 <label class="form-label" for="customApiKey">API Key</label>
                  <input type="password" id="customApiKey">
                </div>
                <div class="form-group">
-                 <label for="customFormat">API 格式</label>
+                 <label class="form-label" for="customFormat">API 格式</label>
                  <select id="customFormat">
                    <option value="openai">OpenAI 兼容</option>
                    <option value="anthropic">Anthropic (Claude)</option>
@@ -866,32 +184,32 @@
              </div>
              <div class="input-row">
                <div class="form-group">
-                 <label for="customModelSelect">模型 ID</label>
+                 <label class="form-label" for="customModelSelect">模型 ID</label>
                  <select id="customModelSelect" style="margin-bottom: 8px;">
                    <option value="">请先获取模型列表或手动输入</option>
                  </select>
                  <input type="text" id="customModelManual" placeholder="gpt-4o-mini" style="display: none;">
                </div>
              </div>
-             <div style="margin-top: 16px; display: flex; gap: 10px;">
+             <div class="button-group">
                <button class="btn-test" id="fetchCustomModelsBtn">获取模型列表</button>
                <button class="btn-test" id="testCustomBtn">连接测试</button>
              </div>
-             <div id="customTestResult" style="margin-top: 12px;"></div>
+             <div id="customTestResult" style="margin-top: var(--yxt-space-3);"></div>
           </div>
 
-          <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border-color);">
-            <button class="btn-primary" id="saveProviderBtn" style="padding: 10px 24px; font-size: 13px;">保存并启用档案</button>
+          <div class="button-group-right">
+            <button class="btn-primary" id="saveProviderBtn">保存并启用档案</button>
           </div>
         </div>
 
         <!-- 档案管理 -->
         <div class="section">
-          <h2>档案管理</h2>
-          <p class="hint" style="margin-bottom: 16px;">在此管理所有已保存的 Provider 档案，可自由切换当前使用的翻译服务。</p>
+          <h2 class="section-title">档案管理</h2>
+          <p class="hint" style="margin-bottom: var(--yxt-space-4);">在此管理所有已保存的 Provider 档案，可自由切换当前使用的翻译服务。</p>
           <div id="modelList">
-            <div style="padding: 20px; text-align: center; color: var(--text-sub); font-size: 13px;">
-              暂无模型，请在上方配置并保存后在此管理。
+            <div class="model-list-empty">
+              暂无档案，请在上方配置并保存后在此管理。
             </div>
           </div>
         </div>
@@ -899,20 +217,20 @@
 
       <!-- 2. 通用设置 -->
       <div class="tab-content" id="tab-general">
-        <!-- 当前使用（ActiveConfig 只读展示） -->
+        <!-- 当前使用（ActiveConfig 可点击展示） -->
         <div class="section" id="activeConfigSection">
-          <h2>当前使用</h2>
-          <div style="padding: 16px; background: var(--bg-input); border-radius: 12px; border: 1px solid var(--border-color);">
-            <div id="activeProfileName" style="font-weight: 700; font-size: 14px; color: var(--text-title);">--</div>
-            <div id="activeProfileDetail" style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">--</div>
+          <h2 class="section-title">当前使用</h2>
+          <div class="active-config-card" id="activeConfigCard">
+            <div class="active-config-name" id="activeProfileName">--</div>
+            <div class="active-config-detail" id="activeProfileDetail">--</div>
           </div>
         </div>
 
         <div class="section">
-          <h2>语言偏好</h2>
+          <h2 class="section-title">语言偏好</h2>
           <div class="input-row">
             <div class="form-group">
-              <label for="sourceLang">默认源语言</label>
+              <label class="form-label" for="sourceLang">默认源语言</label>
               <select id="sourceLang">
                 <option value="auto">自动检测</option>
                 <option value="en">英语</option>
@@ -921,7 +239,7 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="targetLang">默认目标语言</label>
+              <label class="form-label" for="targetLang">默认目标语言</label>
               <select id="targetLang">
                 <option value="zh">中文简体</option>
                 <option value="en">英语</option>
@@ -931,7 +249,7 @@
           </div>
         </div>
         <div class="section">
-          <h2>翻译风格</h2>
+          <h2 class="section-title">翻译风格</h2>
           <div class="style-grid">
             <label class="style-option">
               <input type="radio" name="translateStyle" value="normal" checked>
@@ -964,7 +282,7 @@
           </div>
         </div>
         <div class="section">
-          <h2>划词翻译</h2>
+          <h2 class="section-title">划词翻译</h2>
           <div class="form-group">
             <div class="radio-group">
               <label><input type="radio" name="triggerMode" value="auto" checked> 选中后弹出</label>
@@ -975,23 +293,23 @@
           <div class="form-group">
             <div class="checkbox-group">
               <input type="checkbox" id="autoCopy">
-              <label for="autoCopy">翻译后自动复制结果</label>
+              <label class="form-label" for="autoCopy" style="margin: 0;">翻译后自动复制结果</label>
             </div>
           </div>
         </div>
         <div class="section">
-          <h2>流式输出</h2>
+          <h2 class="section-title">流式输出</h2>
           <div class="form-group">
             <div class="checkbox-group">
               <input type="checkbox" id="enableStreaming" checked>
-              <label for="enableStreaming">启用流式翻译（实时显示逐字输出）</label>
+              <label class="form-label" for="enableStreaming" style="margin: 0;">启用流式翻译（实时显示逐字输出）</label>
             </div>
           </div>
         </div>
         <div class="section">
-          <h2>网站规则控制</h2>
+          <h2 class="section-title">网站规则控制</h2>
           <div class="form-group">
-            <label for="siteRule">黑白名单模式</label>
+            <label class="form-label" for="siteRule">黑白名单模式</label>
             <select id="siteRule">
               <option value="all">全站启用</option>
               <option value="whitelist">仅白名单</option>
@@ -999,69 +317,69 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="siteList">域名列表 (每行一个)</label>
+            <label class="form-label" for="siteList">域名列表 (每行一个)</label>
             <textarea id="siteList" placeholder="google.com&#10;github.com"></textarea>
           </div>
           <div class="form-group">
             <div class="checkbox-group">
               <input type="checkbox" id="autoDetectLang" checked>
-              <label for="autoDetectLang">智能检测页面语言 (不触发翻译同语种内容)</label>
+              <label class="form-label" for="autoDetectLang" style="margin: 0;">智能检测页面语言 (不触发翻译同语种内容)</label>
             </div>
           </div>
           <div class="form-group">
             <div class="checkbox-group">
               <input type="checkbox" id="autoFallback" checked>
-              <label for="autoFallback">主供应商失败时自动切换备选（本地 ⟷ 云端）</label>
+              <label class="form-label" for="autoFallback" style="margin: 0;">主供应商失败时自动切换备选（本地 ⟷ 云端）</label>
             </div>
           </div>
         </div>
         <div class="section">
-          <h2>翻译数据概览</h2>
+          <h2 class="section-title">翻译数据概览</h2>
           <div class="stats-grid">
             <div class="stat-card">
-              <div class="stat-value" id="totalTranslatesCount">0</div>
-              <div class="stat-label">累计翻译成果</div>
+              <div class="stat-card-value" id="totalTranslatesCount">0</div>
+              <div class="stat-card-label">累计翻译成果</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="cacheHitsCount">0</div>
-              <div class="stat-label">本地缓存加速</div>
+              <div class="stat-card-value" id="cacheHitsCount">0</div>
+              <div class="stat-card-label">本地缓存加速</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" id="cacheHitRate">0%</div>
-              <div class="stat-label">API 命中节省率</div>
+              <div class="stat-card-value" id="cacheHitRate">0%</div>
+              <div class="stat-card-label">API 命中节省率</div>
             </div>
           </div>
         </div>
         <div class="section">
-          <h2>存储管理</h2>
+          <h2 class="section-title">存储管理</h2>
           <div class="form-group">
             <div class="checkbox-group">
               <input type="checkbox" id="cacheEnabled" checked>
-              <label for="cacheEnabled">开启全局翻译缓存</label>
+              <label class="form-label" for="cacheEnabled" style="margin: 0;">开启全局翻译缓存</label>
             </div>
           </div>
           <div class="form-group">
-            <label for="maxCacheMB">存储空间限额 (MB)</label>
+            <label class="form-label" for="maxCacheMB">存储空间限额 (MB)</label>
             <input type="number" id="maxCacheMB" value="200" min="10" max="1000">
             <p class="hint">建议：200MB - 500MB。缓存将自动回收以保持在此限制内。</p>
           </div>
 
-          <div class="storage-usage-container" style="margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span class="stat-label">物理空间占用</span>
-              <span class="stat-label" id="storageText">0 MB / 200 MB</span>
+          <div class="storage-usage-container">
+            <div class="storage-usage-header">
+              <span class="stat-card-label">物理空间占用</span>
+              <span class="stat-card-label" id="storageText">0 MB / 200 MB</span>
             </div>
-            <div class="progress-bar-bg" style="height: 12px; background: rgba(61, 55, 51, 0.05); border-radius: 6px; overflow: hidden;">
-              <div id="storageProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #d8a051, #e6b87d); transition: width 0.5s ease;"></div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar" id="storageProgressBar" style="width: 0%;"></div>
             </div>
           </div>
-          <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <div class="button-group">
             <button class="btn-secondary" id="exportConfigBtn">导出配置</button>
             <label class="btn-secondary" style="cursor: pointer;">
               导入配置<input type="file" id="importConfigInput" accept=".json" style="display:none">
             </label>
           </div>
-          <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border-color);">
+          <div class="button-group-right">
             <button class="btn-secondary" id="clearCacheBtn">清除本地数据</button>
             <button class="btn-primary" id="saveBtn">保存通用设置</button>
           </div>

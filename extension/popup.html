@@ -4,20 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YuxTrans</title>
+  <link rel="stylesheet" href="design-tokens.css">
   <style>
-    :root {
-      --bg: #fdfbf7;
-      --text: #2c2825;
-      --text-secondary: #6b6560;
-      --text-tertiary: #9e968d;
-      --accent: #c48a3a;
-      --accent-hover: #b37d34;
-      --border: rgba(0, 0, 0, 0.06);
-      --ok: #219653;
-      --warn: #d35400;
-      --error: #c0392b;
-    }
-
     * {
       margin: 0;
       padding: 0;
@@ -26,11 +14,11 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      font-family: var(--yxt-font);
       width: 320px;
-      background: var(--bg);
-      color: var(--text);
-      padding: 16px;
+      background: var(--yxt-bg);
+      color: var(--yxt-text);
+      padding: var(--yxt-space-4);
     }
 
     /* Header */
@@ -38,63 +26,64 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
+      margin-bottom: var(--yxt-space-3);
     }
 
     .brand {
       display: flex;
       align-items: baseline;
-      gap: 6px;
+      gap: var(--yxt-space-1);
     }
 
     .brand h1 {
-      font-size: 15px;
-      font-weight: 800;
+      font-size: var(--yxt-text-lg);
+      font-weight: var(--yxt-font-bold);
       letter-spacing: -0.3px;
-      color: var(--accent);
+      color: var(--yxt-text);
     }
 
     .version {
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--text-tertiary);
+      font-size: var(--yxt-text-xs);
+      font-weight: var(--yxt-font-semibold);
+      color: var(--yxt-text-tertiary);
     }
 
     .icon-btn {
       background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px 8px;
-      color: var(--text-secondary);
+      border: 1px solid var(--yxt-border);
+      border-radius: var(--yxt-radius-sm);
+      padding: var(--yxt-space-1) var(--yxt-space-2);
+      color: var(--yxt-text-secondary);
       cursor: pointer;
-      font-size: 11px;
-      font-weight: 700;
-      transition: all 0.2s ease;
+      font-size: var(--yxt-text-xs);
+      font-weight: var(--yxt-font-semibold);
+      transition: all var(--yxt-transition-fast);
     }
 
     .icon-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
+      border-color: var(--yxt-border-strong);
+      color: var(--yxt-text);
+      background: var(--yxt-bg-hover);
     }
 
     /* Status + Model row */
     .control-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: var(--yxt-space-2);
+      margin-bottom: var(--yxt-space-3);
     }
 
     .status-pill {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 4px 9px;
-      border-radius: 20px;
-      font-size: 10px;
-      font-weight: 700;
-      background: rgba(0, 0, 0, 0.03);
-      color: var(--text-secondary);
+      gap: var(--yxt-space-1);
+      padding: var(--yxt-space-1) var(--yxt-space-2);
+      border-radius: var(--yxt-radius-full);
+      font-size: var(--yxt-text-xs);
+      font-weight: var(--yxt-font-semibold);
+      background: var(--yxt-bg-secondary);
+      color: var(--yxt-text-secondary);
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -106,55 +95,58 @@
       background: currentColor;
     }
 
-    .status-pill.ok { color: var(--ok); background: rgba(33, 150, 83, 0.08); }
-    .status-pill.error { color: var(--error); background: rgba(192, 57, 43, 0.08); }
-    .status-pill.warn { color: var(--warn); background: rgba(211, 84, 0, 0.08); }
+    .status-pill.ok { color: var(--yxt-success); background: var(--yxt-success-soft); }
+    .status-pill.error { color: var(--yxt-error); background: var(--yxt-error-soft); }
+    .status-pill.warn { color: var(--yxt-warning); background: var(--yxt-warning-soft); }
+    .status-pill.checking { color: var(--yxt-text-tertiary); background: var(--yxt-bg-tertiary); }
 
     .model-select {
       flex: 1;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: #fff;
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 600;
+      padding: var(--yxt-space-2) var(--yxt-space-3);
+      border: 1px solid var(--yxt-border);
+      border-radius: var(--yxt-radius-md);
+      background: var(--yxt-bg-elevated);
+      color: var(--yxt-text);
+      font-size: var(--yxt-text-sm);
+      font-weight: var(--yxt-font-medium);
       outline: none;
       cursor: pointer;
       appearance: none;
       -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 9px center;
-      padding-right: 26px;
+      background-position: right 10px center;
+      padding-right: 28px;
     }
 
     .model-select:focus {
-      border-color: var(--accent);
+      border-color: var(--yxt-accent);
+      box-shadow: 0 0 0 2px var(--yxt-accent-soft);
     }
 
     .model-select:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+      background-color: var(--yxt-bg-secondary);
     }
 
     /* Main action */
     .action-btn {
       width: 100%;
       padding: 11px;
-      background: var(--accent);
-      color: #fff;
+      background: var(--yxt-accent);
+      color: var(--yxt-text-on-accent);
       border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 800;
+      border-radius: var(--yxt-radius-md);
+      font-size: var(--yxt-text-md);
+      font-weight: var(--yxt-font-bold);
       cursor: pointer;
-      transition: all 0.2s ease;
-      margin-bottom: 14px;
+      transition: all var(--yxt-transition-fast);
+      margin-bottom: var(--yxt-space-3);
     }
 
     .action-btn:hover {
-      background: var(--accent-hover);
+      background: var(--yxt-accent-hover);
     }
 
     .action-btn:active {
@@ -165,31 +157,30 @@
     .stats-row {
       display: flex;
       justify-content: space-around;
-      padding: 10px 0;
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 12px;
+      padding: var(--yxt-space-3) 0;
+      border-top: 1px solid var(--yxt-divider);
+      border-bottom: 1px solid var(--yxt-divider);
+      margin-bottom: var(--yxt-space-3);
     }
 
     .stat-item {
       text-align: center;
-      min-width: 60px;
+      min-width: 70px;
     }
 
     .stat-value {
-      font-size: 14px;
-      font-weight: 800;
-      color: var(--text);
+      font-size: var(--yxt-text-base);
+      font-weight: var(--yxt-font-bold);
+      color: var(--yxt-text);
       line-height: 1.2;
       font-variant-numeric: tabular-nums;
     }
 
     .stat-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-tertiary);
-      margin-top: 3px;
-      text-transform: uppercase;
+      font-size: var(--yxt-text-xs);
+      font-weight: var(--yxt-font-semibold);
+      color: var(--yxt-text-tertiary);
+      margin-top: var(--yxt-space-1);
       letter-spacing: 0.3px;
     }
 
@@ -201,14 +192,14 @@
     }
 
     .toggle-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
+      font-size: var(--yxt-text-sm);
+      font-weight: var(--yxt-font-semibold);
+      color: var(--yxt-text);
     }
 
     .toggle-hint {
-      font-size: 10px;
-      color: var(--text-tertiary);
+      font-size: var(--yxt-text-xs);
+      color: var(--yxt-text-tertiary);
       margin-top: 1px;
     }
 
@@ -232,9 +223,9 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.1);
-      transition: 0.25s;
-      border-radius: 20px;
+      background-color: var(--yxt-border-strong);
+      transition: var(--yxt-transition-normal);
+      border-radius: var(--yxt-radius-full);
     }
 
     .slider:before {
@@ -244,28 +235,29 @@
       width: 14px;
       left: 3px;
       bottom: 3px;
-      background-color: #fff;
-      transition: 0.25s;
+      background-color: var(--yxt-bg-elevated);
+      transition: var(--yxt-transition-normal);
       border-radius: 50%;
+      box-shadow: var(--yxt-shadow-sm);
     }
 
-    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider { background-color: var(--yxt-accent); }
     input:checked + .slider:before { transform: translateX(16px); }
 
     /* Toast */
     .toast {
       position: fixed;
-      bottom: 12px;
+      bottom: var(--yxt-space-3);
       left: 50%;
       transform: translateX(-50%) translateY(40px);
-      background: var(--text);
-      color: #fff;
-      padding: 7px 14px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
+      background: var(--yxt-text);
+      color: var(--yxt-bg);
+      padding: var(--yxt-space-2) var(--yxt-space-3);
+      border-radius: var(--yxt-radius-full);
+      font-size: var(--yxt-text-xs);
+      font-weight: var(--yxt-font-semibold);
       z-index: 1000;
-      transition: all 0.3s ease;
+      transition: all var(--yxt-transition-normal);
       opacity: 0;
       white-space: nowrap;
       pointer-events: none;
@@ -277,7 +269,8 @@
     }
 
     .toast.error {
-      background: var(--error);
+      background: var(--yxt-error);
+      color: #fff;
     }
   </style>
 </head>
@@ -291,7 +284,7 @@
   </div>
 
   <div class="control-row">
-    <span class="status-pill" id="connectionStatus">
+    <span class="status-pill checking" id="connectionStatus">
       <span class="status-dot"></span>
       <span id="connectionText">检测中</span>
     </span>
@@ -320,7 +313,7 @@
   <div class="toggle-row">
     <div>
       <div class="toggle-label">流式翻译</div>
-      <div class="toggle-hint">逐字显示翻译结果</div>
+      <div class="toggle-hint">默认使用流式输出</div>
     </div>
     <label class="switch">
       <input type="checkbox" id="streamToggle">

@@ -1,0 +1,124 @@
+/**
+ * YuxTrans Design Tokens
+ * 现代、简约、克制的视觉系统
+ * 统一 Popup / Options / Content Script 三端样式
+ */
+
+:root {
+  /* ===== 颜色系统 ===== */
+
+  /* 背景 */
+  --yxt-bg: #ffffff;
+  --yxt-bg-elevated: #ffffff;
+  --yxt-bg-secondary: #f9fafb;
+  --yxt-bg-tertiary: #f3f4f6;
+  --yxt-bg-hover: rgba(0, 0, 0, 0.03);
+  --yxt-bg-active: rgba(0, 0, 0, 0.05);
+
+  /* 文字 */
+  --yxt-text: #111827;
+  --yxt-text-secondary: #6b7280;
+  --yxt-text-tertiary: #9ca3af;
+  --yxt-text-on-accent: #ffffff;
+
+  /* 强调色：克制的靛蓝 */
+  --yxt-accent: #4f46e5;
+  --yxt-accent-hover: #4338ca;
+  --yxt-accent-active: #3730a3;
+  --yxt-accent-soft: rgba(79, 70, 229, 0.08);
+  --yxt-accent-soft-hover: rgba(79, 70, 229, 0.12);
+
+  /* 边框与分隔 */
+  --yxt-border: #e5e7eb;
+  --yxt-border-strong: #d1d5db;
+  --yxt-divider: rgba(0, 0, 0, 0.06);
+
+  /* 阴影：极轻、克制 */
+  --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+
+  /* 状态色：低饱和度、功能性 */
+  --yxt-success: #10b981;
+  --yxt-success-soft: rgba(16, 185, 129, 0.08);
+  --yxt-warning: #f59e0b;
+  --yxt-warning-soft: rgba(245, 158, 11, 0.08);
+  --yxt-error: #ef4444;
+  --yxt-error-soft: rgba(239, 68, 68, 0.08);
+
+  /* ===== 字体系统 ===== */
+  --yxt-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  --yxt-text-xs: 10px;
+  --yxt-text-sm: 12px;
+  --yxt-text-md: 13px;
+  --yxt-text-base: 14px;
+  --yxt-text-lg: 15px;
+  --yxt-text-xl: 18px;
+
+  --yxt-font-normal: 400;
+  --yxt-font-medium: 500;
+  --yxt-font-semibold: 600;
+  --yxt-font-bold: 700;
+
+  /* ===== 间距系统 ===== */
+  --yxt-space-1: 4px;
+  --yxt-space-2: 8px;
+  --yxt-space-3: 12px;
+  --yxt-space-4: 16px;
+  --yxt-space-5: 20px;
+  --yxt-space-6: 24px;
+  --yxt-space-8: 32px;
+
+  /* ===== 尺寸系统 ===== */
+  --yxt-radius-sm: 6px;
+  --yxt-radius-md: 8px;
+  --yxt-radius-lg: 10px;
+  --yxt-radius-xl: 12px;
+  --yxt-radius-full: 9999px;
+
+  /* ===== 动效系统 ===== */
+  --yxt-transition-fast: 0.12s ease;
+  --yxt-transition-normal: 0.2s ease;
+  --yxt-transition-slow: 0.3s ease;
+}
+
+/* ===== Dark Mode ===== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --yxt-bg: #111827;
+    --yxt-bg-elevated: #1f2937;
+    --yxt-bg-secondary: #1f2937;
+    --yxt-bg-tertiary: #374151;
+    --yxt-bg-hover: rgba(255, 255, 255, 0.04);
+    --yxt-bg-active: rgba(255, 255, 255, 0.07);
+
+    --yxt-text: #f9fafb;
+    --yxt-text-secondary: #9ca3af;
+    --yxt-text-tertiary: #6b7280;
+    --yxt-text-on-accent: #ffffff;
+
+    --yxt-accent: #6366f1;
+    --yxt-accent-hover: #818cf8;
+    --yxt-accent-active: #a5b4fc;
+    --yxt-accent-soft: rgba(99, 102, 241, 0.14);
+    --yxt-accent-soft-hover: rgba(99, 102, 241, 0.2);
+
+    --yxt-border: #374151;
+    --yxt-border-strong: #4b5563;
+    --yxt-divider: rgba(255, 255, 255, 0.08);
+
+    --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+    --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 10px 10px -5px rgba(0, 0, 0, 0.35);
+
+    --yxt-success: #34d399;
+    --yxt-success-soft: rgba(52, 211, 153, 0.12);
+    --yxt-warning: #fbbf24;
+    --yxt-warning-soft: rgba(251, 191, 36, 0.12);
+    --yxt-error: #f87171;
+    --yxt-error-soft: rgba(248, 113, 113, 0.12);
+  }
+}
