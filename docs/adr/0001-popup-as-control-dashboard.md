@@ -21,7 +21,7 @@ Accepted
 - 需要新增 popup → content script 的整页翻译消息通道。
 - background 需要维护 token 用量统计（由响应中 usage 字段或字符数估算）。
 - 模型下拉栏的数据源改为 ProviderProfile 列表，要求 Options 页先完成档案化改造。
-- 视觉上保持 Warm Paper 风格，宽度仍控制在 320px，信息密度提高但需避免拥挤。
+- 视觉上保持现代简约风格，宽度仍控制在 320px，信息密度提高但需避免拥挤。
 
 ## 拒绝的替代方案
 

@@ -30,7 +30,7 @@ E:/Pythonproject/YuxTrans
 │   ├── manifest.json
 │   ├── background.js            # Service Worker（核心）
 │   ├── content.js               # 内容脚本（划词 + 整页翻译）
-│   ├── content.css              # Warm Paper 风格样式
+│   ├── content.css              # 现代简约风格样式
 │   ├── popup.html / popup.js    # 弹窗界面
 │   └── options.html / options.js# 设置页面
 ├── tests/                       # 根目录测试（pytest 实际运行的测试集）
@@ -123,7 +123,7 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 | `content.js` | 内容脚本：划词翻译浮窗、整页翻译（保持样式）、批量翻译、可视区域优先、彩虹进度条 |
 | `popup.js` | 弹窗快捷翻译 |
 | `options.js` | 设置页面：供应商 / 模型 / 语言 / 缓存 / 快捷键 |
-| `content.css` | Warm Paper 黄铜纸本风格样式 |
+| `content.css` | 现代简约风格样式 |
 
 ### 4.3 关键技术设计
 

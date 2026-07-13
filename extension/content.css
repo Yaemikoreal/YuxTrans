@@ -4,44 +4,102 @@
  * 注入到宿主页面中，需保持自包含
  */
 
-/* ===== 自包含设计令牌 ===== */
+/* ===== 自包含设计令牌（与 design-tokens.css 保持一致） ===== */
 :root {
+  /* 背景 */
   --yxt-bg: #ffffff;
   --yxt-bg-elevated: #ffffff;
   --yxt-bg-secondary: #f9fafb;
+  --yxt-bg-tertiary: #f3f4f6;
+  --yxt-bg-hover: rgba(0, 0, 0, 0.03);
+  --yxt-bg-active: rgba(0, 0, 0, 0.05);
+
+  /* 文字 */
   --yxt-text: #111827;
   --yxt-text-secondary: #6b7280;
   --yxt-text-tertiary: #9ca3af;
+  --yxt-text-on-accent: #ffffff;
+
+  /* 强调色：克制的靛蓝 */
   --yxt-accent: #4f46e5;
   --yxt-accent-hover: #4338ca;
+  --yxt-accent-active: #3730a3;
   --yxt-accent-soft: rgba(79, 70, 229, 0.08);
+  --yxt-accent-soft-hover: rgba(79, 70, 229, 0.12);
+
+  /* 边框与分隔 */
   --yxt-border: #e5e7eb;
-  --yxt-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --yxt-border-strong: #d1d5db;
+  --yxt-divider: rgba(0, 0, 0, 0.06);
+
+  /* 阴影：极轻、克制 */
+  --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+
+  /* 状态色 */
   --yxt-success: #10b981;
   --yxt-success-soft: rgba(16, 185, 129, 0.08);
   --yxt-warning: #f59e0b;
   --yxt-warning-soft: rgba(245, 158, 11, 0.08);
   --yxt-error: #ef4444;
   --yxt-error-soft: rgba(239, 68, 68, 0.08);
+
+  /* 字体 */
   --yxt-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --yxt-radius: 8px;
+
+  /* 间距 */
+  --yxt-space-1: 4px;
+  --yxt-space-2: 8px;
+  --yxt-space-3: 12px;
+  --yxt-space-4: 16px;
+  --yxt-space-5: 20px;
+  --yxt-space-6: 24px;
+  --yxt-space-8: 32px;
+
+  /* 尺寸 */
+  --yxt-radius-sm: 6px;
+  --yxt-radius-md: 8px;
+  --yxt-radius-lg: 10px;
+  --yxt-radius-xl: 12px;
+  --yxt-radius-full: 9999px;
+
+  /* 动效 */
+  --yxt-transition-fast: 0.12s ease;
+  --yxt-transition-normal: 0.2s ease;
+  --yxt-transition-slow: 0.3s ease;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --yxt-bg: #1f2937;
-    --yxt-bg-elevated: #111827;
-    --yxt-bg-secondary: #374151;
+    --yxt-bg: #111827;
+    --yxt-bg-elevated: #1f2937;
+    --yxt-bg-secondary: #1f2937;
+    --yxt-bg-tertiary: #374151;
+    --yxt-bg-hover: rgba(255, 255, 255, 0.04);
+    --yxt-bg-active: rgba(255, 255, 255, 0.07);
+
     --yxt-text: #f9fafb;
     --yxt-text-secondary: #9ca3af;
     --yxt-text-tertiary: #6b7280;
+    --yxt-text-on-accent: #ffffff;
+
     --yxt-accent: #6366f1;
     --yxt-accent-hover: #818cf8;
+    --yxt-accent-active: #a5b4fc;
     --yxt-accent-soft: rgba(99, 102, 241, 0.14);
+    --yxt-accent-soft-hover: rgba(99, 102, 241, 0.2);
+
     --yxt-border: #374151;
-    --yxt-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --yxt-border-strong: #4b5563;
+    --yxt-divider: rgba(255, 255, 255, 0.08);
+
+    --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+    --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 10px 10px -5px rgba(0, 0, 0, 0.35);
+
     --yxt-success: #34d399;
     --yxt-success-soft: rgba(52, 211, 153, 0.12);
     --yxt-warning: #fbbf24;
@@ -57,7 +115,7 @@
   z-index: 2147483647;
   background: var(--yxt-bg-elevated);
   border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius);
+  border-radius: var(--yxt-radius-md);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   font-family: var(--yxt-font);
   font-size: 14px;
@@ -188,8 +246,8 @@
 }
 
 .yuxtrans-status-badge.cache { background: var(--yxt-success-soft); color: var(--yxt-success); }
-.yuxtrans-status-badge.local { background: rgba(99, 102, 241, 0.1); color: var(--yxt-accent); }
-.yuxtrans-status-badge.cloud { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.yuxtrans-status-badge.local { background: var(--yxt-accent-soft); color: var(--yxt-accent); }
+.yuxtrans-status-badge.cloud { background: var(--yxt-accent-soft); color: var(--yxt-accent); }
 .yuxtrans-status-badge.error { background: var(--yxt-error-soft); color: var(--yxt-error); }
 .yuxtrans-status-badge.warning { background: var(--yxt-warning-soft); color: var(--yxt-warning); }
 
@@ -245,13 +303,13 @@
   background: var(--yxt-accent);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--yxt-radius-md);
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
-  transition: all 0.15s ease;
+  box-shadow: var(--yxt-shadow-md);
+  transition: all var(--yxt-transition-fast);
   opacity: 0;
   animation: yuxtrans-fadeIn 0.2s ease forwards;
 }
@@ -259,7 +317,7 @@
 .yuxtrans-float-btn:hover {
   background: var(--yxt-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+  box-shadow: var(--yxt-shadow-lg);
 }
 
 .yuxtrans-float-btn:active {
@@ -294,92 +352,7 @@
   background-color: var(--yxt-warning-soft) !important;
 }
 
-/* ===== 整页翻译进度条 ===== */
-.yuxtrans-progress {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2147483647;
-  pointer-events: none;
-}
-
-.yuxtrans-progress-bar-bg {
-  width: 100%;
-  height: 2px;
-  background: var(--yxt-border);
-  overflow: hidden;
-}
-
-.yuxtrans-progress-bar {
-  height: 100%;
-  width: 0%;
-  background: var(--yxt-accent);
-  transition: width 0.3s ease;
-}
-
-.yuxtrans-progress-status {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  background: var(--yxt-bg-elevated);
-  border: 1px solid var(--yxt-border);
-  border-radius: 20px;
-  box-shadow: var(--yxt-shadow-md);
-  font-family: var(--yxt-font);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--yxt-text-secondary);
-  pointer-events: auto;
-}
-
-.yuxtrans-progress-count,
-.yuxtrans-progress-percent {
-  font-variant-numeric: tabular-nums;
-}
-
-.yuxtrans-progress-cancel,
-.yuxtrans-progress-restore {
-  background: none;
-  border: none;
-  color: var(--yxt-text-tertiary);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  transition: color 0.15s ease;
-}
-
-.yuxtrans-progress-cancel:hover,
-.yuxtrans-progress-restore:hover {
-  color: var(--yxt-text);
-}
-
-.yuxtrans-progress-restore {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--yxt-accent);
-}
-
-.yuxtrans-progress-restore:hover {
-  color: var(--yxt-accent-hover);
-}
-
-.yuxtrans-progress-done.has-failures {
-  color: var(--yxt-warning);
-}
-
-.yuxtrans-progress.yuxtrans-minimized {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-}
-
-/* ===== 整页翻译控制条（新增） ===== */
+/* ===== 整页翻译控制条 ===== */
 .yuxtrans-page-control {
   position: fixed;
   bottom: 24px;
@@ -387,47 +360,64 @@
   z-index: 2147483646;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: var(--yxt-space-2);
+  padding: var(--yxt-space-2) var(--yxt-space-3);
   background: var(--yxt-bg-elevated);
   border: 1px solid var(--yxt-border);
-  border-radius: 20px;
-  box-shadow: var(--yxt-shadow-md);
+  border-radius: var(--yxt-radius-xl);
+  box-shadow: var(--yxt-shadow-lg);
   font-family: var(--yxt-font);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--yxt-text-sm);
+  font-weight: var(--yxt-font-semibold);
   color: var(--yxt-text-secondary);
   animation: yuxtrans-slideIn 0.3s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .yuxtrans-page-control-progress {
-  width: 80px;
-  height: 4px;
-  background: var(--yxt-border);
-  border-radius: 2px;
+  width: 96px;
+  height: 6px;
+  background: var(--yxt-bg-tertiary);
+  border-radius: var(--yxt-radius-full);
   overflow: hidden;
 }
 
 .yuxtrans-page-control-progress-bar {
   height: 100%;
   background: var(--yxt-accent);
-  transition: width 0.3s ease;
+  border-radius: var(--yxt-radius-full);
+  transition: width var(--yxt-transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.yuxtrans-page-control-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: yuxtrans-shimmer 1.5s ease-in-out infinite;
 }
 
 .yuxtrans-page-control-btn {
   background: none;
   border: none;
   color: var(--yxt-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--yxt-text-sm);
+  font-weight: var(--yxt-font-semibold);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: all 0.15s ease;
+  padding: var(--yxt-space-1) var(--yxt-space-2);
+  border-radius: var(--yxt-radius-md);
+  transition: all var(--yxt-transition-fast);
+  white-space: nowrap;
 }
 
 .yuxtrans-page-control-btn:hover {
-  background: var(--yxt-bg-secondary);
+  background: var(--yxt-bg-hover);
   color: var(--yxt-text);
 }
 
@@ -446,59 +436,25 @@
   left: 50%;
   transform: translateX(-50%) translateY(100px);
   z-index: 2147483645;
-  padding: 10px 18px;
+  padding: var(--yxt-space-2) var(--yxt-space-4);
   background: var(--yxt-bg-elevated);
   border: 1px solid var(--yxt-border);
-  border-radius: 20px;
-  box-shadow: var(--yxt-shadow-md);
+  border-radius: var(--yxt-radius-xl);
+  box-shadow: var(--yxt-shadow-lg);
   font-family: var(--yxt-font);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--yxt-text-sm);
+  font-weight: var(--yxt-font-semibold);
   color: var(--yxt-text-secondary);
   opacity: 0;
-  transition: all 0.3s ease;
+  transition: all var(--yxt-transition-slow);
   pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .yuxtrans-site-rule-toast.show {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
-}
-
-/* ===== 侧边挂耳 ===== */
-.yuxtrans-side-tab {
-  position: fixed;
-  right: 0;
-  top: 40%;
-  z-index: 2147483646;
-  width: 28px;
-  height: 44px;
-  background: var(--yxt-accent);
-  border-radius: 8px 0 0 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: -2px 0 8px rgba(79, 70, 229, 0.15);
-  transition: all 0.3s ease;
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-.yuxtrans-side-tab.show {
-  transform: translateX(0);
-  opacity: 1;
-}
-
-.yuxtrans-side-tab:hover {
-  width: 34px;
-}
-
-.yuxtrans-side-tab-icon {
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  user-select: none;
 }
 
 /* ===== 动画 ===== */
@@ -519,4 +475,9 @@
 @keyframes yuxtrans-streamPulse {
   0%, 100% { opacity: 0.75; }
   50% { opacity: 0.95; }
+}
+
+@keyframes yuxtrans-shimmer {
+  0% { transform: translateX(-24px); }
+  100% { transform: translateX(120px); }
 }
