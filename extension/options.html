@@ -692,17 +692,11 @@
       <p class="subtitle">Configuration Portal</p>
       
       <nav class="tabs">
-        <button class="tab active" data-tab="engine">
-          翻译服务
+        <button class="tab active" data-tab="profiles">
+          供应商档案
         </button>
-        <button class="tab" data-tab="language">
-          语言与样式
-        </button>
-        <button class="tab" data-tab="behavior">
-          操作与网站规则
-        </button>
-        <button class="tab" data-tab="cache">
-          数据与统计
+        <button class="tab" data-tab="general">
+          通用设置
         </button>
       </nav>
 
@@ -725,8 +719,8 @@
           </div>
         </div>
       </div>
-      <!-- 1. AI 模型服务 -->
-      <div class="tab-content active" id="tab-engine">
+      <!-- 1. 供应商档案 -->
+      <div class="tab-content active" id="tab-profiles">
         <div class="section">
           <h2>服务商配置</h2>
           <div class="form-group">
@@ -791,7 +785,26 @@
                     <div class="model-card-name">Qwen 3.5 · 0.8B</div>
                     <div class="model-card-meta">约 600MB · 中文优化 · 默认推荐</div>
                   </div>
-                  <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
+                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
+                    <button class="btn-test model-cancel-btn" data-model="qwen3.5:0.8b" style="display: none;">取消</button>
+                    <button class="btn-test model-copy-btn" data-model="qwen3.5:0.8b">复制命令</button>
+                  </div>
+                  <div class="model-card-progress" style="display: none;">
+                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                    <div class="model-progress-text">0%</div>
+                  </div>
+                </div>
+                <div class="model-card" data-model="phi4-mini:latest" data-size="约 2GB">
+                  <div class="model-card-info">
+                    <div class="model-card-name">Phi 4 · Mini</div>
+                    <div class="model-card-meta">约 2GB · 英文能力强</div>
+                  </div>
+                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-test model-download-btn" data-model="phi4-mini:latest">下载</button>
+                    <button class="btn-test model-cancel-btn" data-model="phi4-mini:latest" style="display: none;">取消</button>
+                    <button class="btn-test model-copy-btn" data-model="phi4-mini:latest">复制命令</button>
+                  </div>
                   <div class="model-card-progress" style="display: none;">
                     <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
                     <div class="model-progress-text">0%</div>
@@ -802,7 +815,11 @@
                     <div class="model-card-name">Gemma 3 · 1B</div>
                     <div class="model-card-meta">约 800MB · 多语言均衡</div>
                   </div>
-                  <button class="btn-test model-download-btn" data-model="gemma3:1b">下载</button>
+                  <div class="model-card-actions" style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn-test model-download-btn" data-model="gemma3:1b">下载</button>
+                    <button class="btn-test model-cancel-btn" data-model="gemma3:1b" style="display: none;">取消</button>
+                    <button class="btn-test model-copy-btn" data-model="gemma3:1b">复制命令</button>
+                  </div>
                   <div class="model-card-progress" style="display: none;">
                     <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
                     <div class="model-progress-text">0%</div>
@@ -880,8 +897,17 @@
         </div>
       </div>
 
-      <!-- 2. 语言与样式 -->
-      <div class="tab-content" id="tab-language">
+      <!-- 2. 通用设置 -->
+      <div class="tab-content" id="tab-general">
+        <!-- 当前使用（ActiveConfig 只读展示） -->
+        <div class="section" id="activeConfigSection">
+          <h2>当前使用</h2>
+          <div style="padding: 16px; background: var(--bg-input); border-radius: 12px; border: 1px solid var(--border-color);">
+            <div id="activeProfileName" style="font-weight: 700; font-size: 14px; color: var(--text-title);">--</div>
+            <div id="activeProfileDetail" style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">--</div>
+          </div>
+        </div>
+
         <div class="section">
           <h2>语言偏好</h2>
           <div class="input-row">
@@ -937,10 +963,6 @@
             </label>
           </div>
         </div>
-      </div>
-
-      <!-- 3. 操作与网站规则 -->
-      <div class="tab-content" id="tab-behavior">
         <div class="section">
           <h2>划词翻译</h2>
           <div class="form-group">
@@ -954,6 +976,15 @@
             <div class="checkbox-group">
               <input type="checkbox" id="autoCopy">
               <label for="autoCopy">翻译后自动复制结果</label>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <h2>流式输出</h2>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="enableStreaming" checked>
+              <label for="enableStreaming">启用流式翻译（实时显示逐字输出）</label>
             </div>
           </div>
         </div>
@@ -984,10 +1015,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 4. 数据与统计 -->
-      <div class="tab-content" id="tab-cache">
         <div class="section">
           <h2>翻译数据概览</h2>
           <div class="stats-grid">
@@ -1034,19 +1061,18 @@
               导入配置<input type="file" id="importConfigInput" accept=".json" style="display:none">
             </label>
           </div>
+          <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border-color);">
+            <button class="btn-secondary" id="clearCacheBtn">清除本地数据</button>
+            <button class="btn-primary" id="saveBtn">保存通用设置</button>
+          </div>
         </div>
-      </div>
-
-      <!-- 操作底部固定区 -->
-      <div class="buttons-row">
-        <button class="btn-secondary" id="clearCacheBtn">清除本地数据</button>
-        <button class="btn-primary" id="saveBtn">保存通用设置</button>
       </div>
 
       <div id="status" class="status"></div>
     </main>
   </div>
 
+  <script src="common.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

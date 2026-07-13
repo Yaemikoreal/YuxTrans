@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteListTextarea = getById('siteList');
   const autoDetectLangInput = getById('autoDetectLang');
   const autoFallbackInput = getById('autoFallback');
+  const enableStreamingInput = getById('enableStreaming');
 
   // 6. 统计看板
   const totalTranslatesCountEl = getById('totalTranslatesCount');
@@ -196,7 +197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     config = await chrome.runtime.sendMessage({ action: 'getConfig' });
   } catch (error) {
-    console.error('加载系统配置失败:', error);
+    console.error('[YuxTrans] 加载系统配置失败:', error);
   }
 
   // 从 background 获取供应商默认端点与模型列表（单一来源）
@@ -208,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       defaults.models = res.models || {};
     }
   } catch (error) {
-    console.error('加载供应商默认配置失败:', error);
+    console.error('[YuxTrans] 加载供应商默认配置失败:', error);
   }
 
   function getActiveProfile(cfg) {
@@ -279,6 +280,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (siteListTextarea) siteListTextarea.value = (config.siteList || []).join('\n');
     if (autoDetectLangInput) autoDetectLangInput.checked = config.autoDetectLang !== false;
     if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
+    if (enableStreamingInput) enableStreamingInput.checked = config.enableStreaming !== false;
+    renderActiveConfig();
+  }
+
+  // 渲染当前使用（ActiveConfig 只读展示）
+  function renderActiveConfig() {
+    const nameEl = getById('activeProfileName');
+    const detailEl = getById('activeProfileDetail');
+    if (!nameEl || !detailEl) return;
+    const activeProfile = getActiveProfile(config);
+    if (!activeProfile) {
+      nameEl.textContent = '未选择供应商档案';
+      detailEl.textContent = '请在「供应商档案」标签页配置并保存一个档案';
+      return;
+    }
+    const providerLabel = PROVIDER_NAMES[activeProfile.provider] || activeProfile.provider;
+    const modelLabel = activeProfile.model || activeProfile.localModel || '';
+    nameEl.textContent = activeProfile.label || `${providerLabel} - ${modelLabel || 'default'}`;
+    detailEl.textContent = `${providerLabel}${modelLabel ? ' · ' + modelLabel : ''} · ${config.sourceLang || 'auto'} → ${config.targetLang || 'zh'} · ${config.translateStyle || 'normal'}`;
   }
 
   // 初始化 UI
@@ -382,6 +402,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           };
         }
       }
+      updateRecommendationCards(models, false);
       return;
     }
 
@@ -411,48 +432,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 同步更新推荐卡片状态
-    updateRecommendationCards(models);
+    updateRecommendationCards(models, true);
   }
 
   // ===== 轻量模型推荐卡片 =====
-  function updateRecommendationCards(installedModels) {
+  function updateRecommendationCards(installedModels, ollamaRunning) {
     const cards = document.querySelectorAll('.model-card');
     cards.forEach(card => {
       const modelName = card.dataset.model;
-      const btn = card.querySelector('.model-download-btn');
+      const downloadBtn = card.querySelector('.model-download-btn');
+      const cancelBtn = card.querySelector('.model-cancel-btn');
+      const copyBtn = card.querySelector('.model-copy-btn');
       const isInstalled = installedModels.some(name => name === modelName || name.startsWith(modelName + ':'));
 
       if (isInstalled) {
         card.classList.add('installed');
-        if (btn) {
-          btn.textContent = '已就绪';
-          btn.disabled = true;
+        if (downloadBtn) {
+          downloadBtn.textContent = '已就绪';
+          downloadBtn.disabled = true;
         }
-      } else if (!btn?.disabled) {
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (copyBtn) copyBtn.style.display = 'none';
+      } else {
         card.classList.remove('installed');
-        if (btn) {
-          btn.textContent = '下载';
-          btn.disabled = false;
+        if (downloadBtn) {
+          // 若正在下载中，不覆盖按钮文字（由 pullModel 管理）
+          if (downloadBtn.textContent !== '下载中') {
+            downloadBtn.textContent = '下载';
+            downloadBtn.disabled = !ollamaRunning;
+          }
         }
+        if (copyBtn) copyBtn.style.display = 'inline-block';
       }
     });
   }
+
+  const activePulls = new Map();
 
   async function pullModel(modelName, btn) {
     const card = btn.closest('.model-card');
     const progressEl = card?.querySelector('.model-card-progress');
     const progressBar = card?.querySelector('.model-progress-bar');
     const progressText = card?.querySelector('.model-progress-text');
+    const cancelBtn = card?.querySelector('.model-cancel-btn');
+    const copyBtn = card?.querySelector('.model-copy-btn');
+
+    const controller = new AbortController();
+    activePulls.set(modelName, controller);
 
     btn.textContent = '下载中';
     btn.disabled = true;
+    if (cancelBtn) cancelBtn.style.display = 'inline-block';
+    if (copyBtn) copyBtn.style.display = 'none';
     if (progressEl) progressEl.style.display = 'flex';
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
 
     try {
       const response = await fetch(`${OLLAMA_API}/api/pull`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: modelName })
+        body: JSON.stringify({ name: modelName }),
+        signal: controller.signal
       });
 
       if (!response.ok || !response.body) {
@@ -491,8 +532,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       btn.textContent = '已就绪';
+      btn.disabled = true;
+      if (cancelBtn) cancelBtn.style.display = 'none';
       card?.classList.add('installed');
-      if (progressEl) progressEl.style.display = 'none';
       showStatus(`${modelName} 下载完成`, 'success');
 
       // 刷新本地模型列表
@@ -501,12 +543,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (success && localModelInput && !localModelInput.value.trim()) {
         localModelInput.value = modelName;
       }
+      // 刷新 Ollama 状态与卡片
+      checkOllamaStatus();
     } catch (error) {
-      console.error('[YuxTrans] 拉取模型失败:', error);
-      btn.textContent = '重试';
+      if (error.name === 'AbortError') {
+        btn.textContent = '下载';
+        showStatus(`${modelName} 下载已取消`, 'info');
+      } else {
+        console.error('[YuxTrans] 拉取模型失败:', error);
+        btn.textContent = '重试';
+        showStatus(`下载 ${modelName} 失败: ${error.message}`, 'error');
+      }
       btn.disabled = false;
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      if (copyBtn) copyBtn.style.display = 'inline-block';
       if (progressEl) progressEl.style.display = 'none';
-      showStatus(`下载 ${modelName} 失败: ${error.message}`, 'error');
+    } finally {
+      activePulls.delete(modelName);
     }
   }
 
@@ -516,6 +569,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const modelName = btn.dataset.model;
         if (!modelName || btn.disabled) return;
         pullModel(modelName, btn);
+      });
+    });
+
+    document.querySelectorAll('.model-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modelName = btn.dataset.model;
+        const controller = activePulls.get(modelName);
+        if (controller) controller.abort();
+      });
+    });
+
+    document.querySelectorAll('.model-copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modelName = btn.dataset.model;
+        if (!modelName) return;
+        navigator.clipboard.writeText(`ollama pull ${modelName}`).then(() => {
+          const originalText = btn.textContent;
+          btn.textContent = '已复制 ✓';
+          setTimeout(() => { btn.textContent = originalText; }, 2000);
+        });
       });
     });
   }
@@ -716,12 +789,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ===== 保存 ProviderProfile =====
-  const providerNames = {
-    qwen: '通义千问', openai: 'OpenAI', deepseek: 'DeepSeek',
-    anthropic: 'Anthropic', groq: 'Groq', moonshot: 'Moonshot',
-    siliconflow: 'SiliconFlow', local: 'Ollama', custom: '自定义'
-  };
-
   const saveProviderBtn = getById('saveProviderBtn');
   saveProviderBtn?.addEventListener('click', async () => {
     const provider = providerSelect.value;
@@ -738,7 +805,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const profile = {
       provider,
-      label: `${providerNames[provider] || provider} - ${modelId || 'default'}`,
+      label: `${PROVIDER_NAMES[provider] || provider} - ${modelId || 'default'}`,
       apiKey: isLocal || isCustom ? '' : apiKeyInput.value.trim(),
       apiEndpoint: isLocal || isCustom ? '' : apiEndpointInput.value.trim(),
       model: isLocal ? '' : modelId,
@@ -760,6 +827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         config = await chrome.runtime.sendMessage({ action: 'getConfig' });
         showStatus('档案已保存并启用', 'success');
         loadModelList();
+        renderActiveConfig();
       } else {
         showStatus(`保存失败: ${res?.error || '未知错误'}`, 'error');
       }
@@ -798,7 +866,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     container.innerHTML = modelRecords.map((m, idx) => {
       const isActive = m.id === currentId;
-      const providerLabel = providerNames[m.provider] || m.provider;
+      const providerLabel = PROVIDER_NAMES[m.provider] || m.provider;
       const modelLabel = m.model || m.localModel || '';
       return `
         <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:${isActive ? 'var(--accent-soft)' : 'var(--bg-input)'};border-radius:14px;border:1px solid ${isActive ? 'rgba(216,160,81,0.3)' : 'var(--border-color)'};margin-bottom:10px;transition:all 0.3s;">
@@ -833,6 +901,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyProfileToForm(getActiveProfile(config));
         updateProviderUI();
         renderModelList();
+        renderActiveConfig();
         showStatus(`已切换至 ${record.label || record.id}`, 'success');
       } else {
         showStatus(`切换失败: ${res?.error || '未知错误'}`, 'error');
@@ -851,6 +920,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         config = await chrome.runtime.sendMessage({ action: 'getConfig' });
         modelRecords.splice(idx, 1);
         renderModelList();
+        renderActiveConfig();
         showStatus(`已移除 ${record.label || record.id}`, 'success');
       } else {
         showStatus(`移除失败: ${res?.error || '未知错误'}`, 'error');
@@ -879,13 +949,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         siteRule: getVal(siteRuleSelect) || 'all',
         siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
         autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
-        autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true
+        autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
+        enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true
       };
 
       const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
       if (res?.success) {
         showStatus('通用设置已保存', 'success');
         config = { ...config, ...activeConfig };
+        renderActiveConfig();
       } else {
         showStatus(`保存失败: ${res?.error || '未知响应'}`, 'error');
       }

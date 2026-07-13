@@ -23,18 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let modelRecords = [];
   let statsInterval = null;
 
-  const providerNames = {
-    qwen: '通义千问',
-    openai: 'OpenAI',
-    deepseek: 'DeepSeek',
-    anthropic: 'Anthropic',
-    groq: 'Groq',
-    moonshot: 'Moonshot',
-    siliconflow: 'SiliconFlow',
-    local: 'Ollama',
-    custom: '自定义'
-  };
-
   // ===== 初始化 =====
   try {
     const manifest = chrome.runtime.getManifest();
@@ -82,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     modelRecords.forEach((record) => {
       const opt = document.createElement('option');
       opt.value = record.id;
-      const providerLabel = providerNames[record.provider] || record.provider;
+      const providerLabel = PROVIDER_NAMES[record.provider] || record.provider;
       const modelName = record.model || record.localModel || 'default';
       opt.textContent = `${providerLabel} · ${modelName}`;
       if (record.id === currentId) opt.selected = true;
@@ -104,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await chrome.runtime.sendMessage({ action: 'setActiveProfile', profileId: record.id });
       if (res?.success) {
         config = await chrome.runtime.sendMessage({ action: 'getConfig' }) || {};
-        showToast(`已切换至 ${providerNames[record.provider] || record.provider}`);
+        showToast(`已切换至 ${PROVIDER_NAMES[record.provider] || record.provider}`);
         await checkConnection();
       } else {
         showToast(res?.error || '切换失败', true);
@@ -178,7 +166,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!res?.success) return;
 
       const { usage, stats } = res;
-      tokenStat.textContent = formatCompact(usage?.totalTokens);
+      const sessionTokens = usage?.sessionTokens ?? 0;
+      const totalTokens = usage?.totalTokens ?? 0;
+      tokenStat.textContent = `${formatCompact(sessionTokens)} / ${formatCompact(totalTokens)}`;
 
       const total = usage?.totalCount || 0;
       const hits = usage?.cacheHits || 0;

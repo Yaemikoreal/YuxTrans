@@ -27,7 +27,7 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-      width: 280px;
+      width: 320px;
       background: var(--bg);
       color: var(--text);
       padding: 16px;
@@ -304,8 +304,8 @@
 
   <div class="stats-row">
     <div class="stat-item">
-      <div class="stat-value" id="tokenStat">--</div>
-      <div class="stat-label">Tokens</div>
+      <div class="stat-value" id="tokenStat">-- / --</div>
+      <div class="stat-label">会话 / 累计 Tokens</div>
     </div>
     <div class="stat-item">
       <div class="stat-value" id="cacheHitStat">--</div>
@@ -330,6 +330,7 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="common.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

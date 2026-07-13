@@ -72,6 +72,19 @@ const REQUEST_TIMEOUT_MS = 30000;
 // 批量翻译单批最大字符数（避免超出模型上下文或导致响应过长）
 const MAX_BATCH_CHARS = 4000;
 
+// 速率限制配置
+const RATE_LIMIT_CONFIG = {
+  MIN_CONCURRENT: 1,        // 最小并发数
+  MAX_CONCURRENT: 10,       // 最大并发数
+  MIN_DELAY: 0,             // 最小延迟
+  MAX_DELAY: 2000,          // 最大延迟（2秒）
+  SUCCESS_TO_RECOVER: 5,    // 连续成功多少次后开始恢复
+  ERROR_TO_LIMIT: 2,        // 连续错误多少次后开始限速
+  RECOVERY_STEP: 2,         // 每次恢复增加的并发数
+  LIMIT_STEP: 3,            // 每次限速减少的并发数
+  RATE_LIMIT_COOLDOWN: 30000 // rate limit 后的冷却时间（30秒）
+};
+
 // ===== 自适应速率限制 =====
 let rateLimitState = {
   concurrentLimit: 10,      // 当前并发限制
@@ -104,21 +117,7 @@ async function loadRateLimitState() {
       rateLimitState.isRateLimited = saved.isRateLimited || false;
       rateLimitState.lastRateLimitTime = saved.lastRateLimitTime || 0;
       // 如果已冷却超过 30 秒，主动尝试恢复一点并发
-      if (rateLimitState.isRateLimited &&
-          Date.now() - rateLimitState.lastRateLimitTime > RATE_LIMIT_CONFIG.RATE_LIMIT_COOLDOWN) {
-        rateLimitState.concurrentLimit = Math.min(
-          rateLimitState.concurrentLimit + RATE_LIMIT_CONFIG.RECOVERY_STEP,
-          RATE_LIMIT_CONFIG.MAX_CONCURRENT
-        );
-        rateLimitState.requestDelay = Math.max(
-          rateLimitState.requestDelay - 200,
-          RATE_LIMIT_CONFIG.MIN_DELAY
-        );
-        if (rateLimitState.concurrentLimit >= RATE_LIMIT_CONFIG.MAX_CONCURRENT &&
-            rateLimitState.requestDelay <= RATE_LIMIT_CONFIG.MIN_DELAY) {
-          rateLimitState.isRateLimited = false;
-        }
-      }
+      tryRecoverRateLimit(false);
     }
   } catch (e) {
     console.warn('[YuxTrans] 加载速率限制状态失败:', e);
@@ -142,18 +141,31 @@ async function persistRateLimitState() {
   }
 }
 
-// 速率限制配置
-const RATE_LIMIT_CONFIG = {
-  MIN_CONCURRENT: 1,        // 最小并发数
-  MAX_CONCURRENT: 10,       // 最大并发数
-  MIN_DELAY: 0,             // 最小延迟
-  MAX_DELAY: 2000,          // 最大延迟（2秒）
-  SUCCESS_TO_RECOVER: 5,    // 连续成功多少次后开始恢复
-  ERROR_TO_LIMIT: 2,        // 连续错误多少次后开始限速
-  RECOVERY_STEP: 2,         // 每次恢复增加的并发数
-  LIMIT_STEP: 3,            // 每次限速减少的并发数
-  RATE_LIMIT_COOLDOWN: 30000 // rate limit 后的冷却时间（30秒）
-};
+/**
+ * 尝试从限速状态中恢复。
+ * 当 requireConsecutiveSuccess 为 true 时，需要满足连续成功次数门槛。
+ * 返回是否执行了恢复操作。
+ */
+function tryRecoverRateLimit(requireConsecutiveSuccess = false) {
+  if (!rateLimitState.isRateLimited) return false;
+  if (Date.now() - rateLimitState.lastRateLimitTime <= RATE_LIMIT_CONFIG.RATE_LIMIT_COOLDOWN) return false;
+  if (requireConsecutiveSuccess && rateLimitState.consecutiveSuccess < RATE_LIMIT_CONFIG.SUCCESS_TO_RECOVER) return false;
+
+  rateLimitState.concurrentLimit = Math.min(
+    rateLimitState.concurrentLimit + RATE_LIMIT_CONFIG.RECOVERY_STEP,
+    RATE_LIMIT_CONFIG.MAX_CONCURRENT
+  );
+  rateLimitState.requestDelay = Math.max(
+    rateLimitState.requestDelay - 200,
+    RATE_LIMIT_CONFIG.MIN_DELAY
+  );
+
+  if (rateLimitState.concurrentLimit >= RATE_LIMIT_CONFIG.MAX_CONCURRENT &&
+      rateLimitState.requestDelay <= RATE_LIMIT_CONFIG.MIN_DELAY) {
+    rateLimitState.isRateLimited = false;
+  }
+  return true;
+}
 
 // 更新速率限制状态
 function updateRateLimitState(success, isRateLimitError = false) {
@@ -169,24 +181,7 @@ function updateRateLimitState(success, isRateLimitError = false) {
     rateLimitState.consecutiveErrors = 0;
 
     // 检查是否可以恢复
-    if (rateLimitState.isRateLimited &&
-        rateLimitState.consecutiveSuccess >= RATE_LIMIT_CONFIG.SUCCESS_TO_RECOVER &&
-        Date.now() - rateLimitState.lastRateLimitTime > RATE_LIMIT_CONFIG.RATE_LIMIT_COOLDOWN) {
-      // 开始恢复
-      rateLimitState.concurrentLimit = Math.min(
-        rateLimitState.concurrentLimit + RATE_LIMIT_CONFIG.RECOVERY_STEP,
-        RATE_LIMIT_CONFIG.MAX_CONCURRENT
-      );
-      rateLimitState.requestDelay = Math.max(
-        rateLimitState.requestDelay - 200,
-        RATE_LIMIT_CONFIG.MIN_DELAY
-      );
-
-      if (rateLimitState.concurrentLimit >= RATE_LIMIT_CONFIG.MAX_CONCURRENT &&
-          rateLimitState.requestDelay <= RATE_LIMIT_CONFIG.MIN_DELAY) {
-        rateLimitState.isRateLimited = false;
-      }
-
+    if (tryRecoverRateLimit(true)) {
       console.log(`[YuxTrans] 速率恢复: 并发=${rateLimitState.concurrentLimit}, 延迟=${rateLimitState.requestDelay}ms`);
     }
   } else {
@@ -446,7 +441,7 @@ let cacheOrder = [];
 let cacheStats = { wordCount: 0, sizeBytes: 0 };
 let db = null;
 
-let usageStats = { totalCount: 0, cacheHits: 0, totalTokens: 0 };
+let usageStats = { totalCount: 0, cacheHits: 0, totalTokens: 0, sessionTokens: 0 };
 
 // 连接状态轻量缓存，避免 popup 每次打开都发起真实 API 探测
 let connectionCache = { profileId: '', timestamp: 0, result: null };
@@ -457,6 +452,8 @@ async function loadUsageStats() {
   if (stored.usageStats) usageStats = stored.usageStats;
   // 兼容旧格式：若缺少 totalTokens 字段则补零
   if (typeof usageStats.totalTokens !== 'number') usageStats.totalTokens = 0;
+  // 会话 token 数不持久化，每次启动/加载时重置
+  usageStats.sessionTokens = 0;
 }
 
 function estimateTokens(text) {
@@ -468,9 +465,11 @@ function estimateTokens(text) {
 function recordUsage(isCacheHit, count = 1, tokens = 0) {
   usageStats.totalCount += count;
   usageStats.totalTokens += tokens;
+  usageStats.sessionTokens = (usageStats.sessionTokens || 0) + tokens;
   if (isCacheHit) usageStats.cacheHits += count;
-  // 简易防抖保存
-  chrome.storage.local.set({ usageStats });
+  // 简易防抖保存（sessionTokens 不持久化）
+  const { sessionTokens, ...toSave } = usageStats;
+  chrome.storage.local.set({ usageStats: toSave });
 }
 
 // ===== IndexedDB（带重连机制） =====
@@ -2164,67 +2163,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     }
 
-    else if (request.action === 'updateActiveModels') {
-      config.activeModels = request.models || [];
-      // 同时写入 IndexedDB 和 chrome.storage.sync
-      saveModelsToDB(config.activeModels);
-      saveConfig(config).then(() => sendResponse({ success: true })).catch(e => sendResponse({ success: false, error: e.message }));
-    }
-
-    else if (request.action === 'getActiveModels') {
-      // 优先从 IndexedDB 读取，回退到 config
-      loadModelsFromDB().then(models => {
-        if (models.length > 0) {
-          sendResponse({ success: true, models });
-        } else {
-          sendResponse({ success: true, models: config.activeModels || [] });
-        }
-      });
-      return true; // 保持消息通道打开（异步响应）
-    }
-
-    // 保存服务商配置到 profiles（旧 action，保留兼容）
-    else if (request.action === 'saveProviderConfig') {
-      const record = request.record;
-      if (!record || !record.provider) {
-        sendResponse({ success: false, error: '无效的配置记录' });
-        return;
-      }
-      const profileId = addOrUpdateProfile(record);
-      config.activeProfileId = profileId;
-      // 保持旧版 IndexedDB 同步
-      saveProviderRecord({ ...record, id: profileId });
-      saveConfig(config)
-        .then(() => sendResponse({ success: true, activeProfileId: profileId }))
-        .catch(e => sendResponse({ success: false, error: e.message }));
-    }
-
-    // 获取所有服务商配置记录（优先返回 profiles，回退 IndexedDB）
-    else if (request.action === 'getModelRecords') {
-      if (config.profiles && config.profiles.length > 0) {
-        sendResponse({ success: true, records: config.profiles });
-        return;
-      }
-      loadProviderRecords().then(records => {
-        sendResponse({ success: true, records });
-      }).catch(e => sendResponse({ success: false, error: e.message }));
-      return true; // 异步响应
-    }
-
-    // 移除指定服务商配置记录
-    else if (request.action === 'removeModelRecord') {
-      const recordId = request.recordId;
-      if (!recordId) {
-        sendResponse({ success: false, error: '缺少记录 ID' });
-        return;
-      }
-      removeProfile(recordId);
-      removeProviderRecord(recordId).then(() => {
-        saveConfig(config).then(() => sendResponse({ success: true }));
-      }).catch(e => sendResponse({ success: false, error: e.message }));
-    }
-
-    // ===== 新版 ProviderProfile 管理接口 =====
+    // ===== ProviderProfile 管理接口 =====
     else if (request.action === 'getProfiles') {
       sendResponse({ success: true, profiles: config.profiles || [], activeProfileId: config.activeProfileId });
     }
