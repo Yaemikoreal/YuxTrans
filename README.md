@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>轻量 · 准确 · 稳定</strong><br>
-  <span>一款面向深阅读的 AI 翻译浏览器扩展</span>
+  <span>一款面向深阅读的 AI 翻译浏览器扩展</span><br>
+  <em>A lightweight AI translation browser extension for deep reading.</em>
 </p>
 
 <p align="center">
