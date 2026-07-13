@@ -19,7 +19,7 @@ class YuxTransContent {
     this.sideTab = null;
     this.autoCloseTimer = null;
     this.config = {
-      concurrency: 15, // 并发请求数（云端默认 15，本地自动降为 1）
+      concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
       batchSize: 20,  // 批量大小（减少 API 调用次数）
       minTextLength: 2, // 最小翻译文本长度
       preserveStyles: true, // 保持样式
@@ -491,7 +491,7 @@ class YuxTransContent {
           if (!parent) return NodeFilter.FILTER_REJECT;
 
           // 排除特定元素
-          if (parent.closest('script, style, noscript, iframe, canvas, svg, code, pre, .yuxtrans-progress, .yuxtrans-popup, [contenteditable="true"]')) {
+          if (parent.closest('script, style, noscript, iframe, canvas, svg, code, pre, .yuxtrans-progress, .yuxtrans-popup, .yuxtrans-page-control, .yuxtrans-side-tab, .yuxtrans-float-btn, .yuxtrans-site-rule-toast, [contenteditable="true"]')) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -500,8 +500,8 @@ class YuxTransContent {
             return NodeFilter.FILTER_REJECT;
           }
 
-          // 排除已翻译节点
-          if (parent.classList.contains('yuxtrans-translated')) {
+          // 排除已翻译节点（含双语模式）
+          if (parent.classList.contains('yuxtrans-translated') || parent.classList.contains('yuxtrans-translated-bilingual')) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -945,26 +945,27 @@ class YuxTransContent {
   }
 
   showProgressIndicator(total) {
-    this.hideProgressIndicator(true);  // 完全移除旧的进度面板，防止 DOM 泄漏
+    this.hideProgressIndicator(true);
 
-    const progress = document.createElement('div');
-    progress.className = 'yuxtrans-progress';
-    progress.innerHTML = `
-      <div class="yuxtrans-progress-bar-bg">
-        <div class="yuxtrans-progress-bar" style="width: 0%"></div>
+    const control = document.createElement('div');
+    control.className = 'yuxtrans-page-control';
+    control.id = 'yuxtrans-page-control';
+    control.innerHTML = `
+      <div class="yuxtrans-page-control-progress">
+        <div class="yuxtrans-page-control-progress-bar" id="yuxtrans-progress-bar" style="width: 0%"></div>
       </div>
-      <div class="yuxtrans-progress-status">
-        <span class="yuxtrans-progress-count">0 / ${total}</span>
-        <span class="yuxtrans-progress-percent">0%</span>
-        <button class="yuxtrans-progress-cancel" id="yuxtrans-cancel-btn" title="取消翻译">✕</button>
-      </div>
+      <span class="yuxtrans-page-control-text" id="yuxtrans-progress-text">0 / ${total}</span>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-cancel-btn">取消</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn" style="display:none">双语</button>
+      <button class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn" style="display:none">恢复原文</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-close-btn" style="display:none">关闭</button>
     `;
 
-    document.body.appendChild(progress);
-    this.progressIndicator = progress;
+    document.body.appendChild(control);
+    this.progressIndicator = control;
 
     // 取消按钮
-    progress.querySelector('#yuxtrans-cancel-btn').addEventListener('click', () => {
+    control.querySelector('#yuxtrans-cancel-btn').addEventListener('click', () => {
       this.pageTranslationState.isTranslating = false;
       this.restoreOriginalTexts();
       this.hideProgressIndicator(true);
@@ -976,46 +977,64 @@ class YuxTransContent {
 
     const percent = Math.round((current / total) * 100);
 
-    const bar = this.progressIndicator.querySelector('.yuxtrans-progress-bar');
-    const count = this.progressIndicator.querySelector('.yuxtrans-progress-count');
-    const percentEl = this.progressIndicator.querySelector('.yuxtrans-progress-percent');
+    const bar = this.progressIndicator.querySelector('#yuxtrans-progress-bar');
+    const text = this.progressIndicator.querySelector('#yuxtrans-progress-text');
 
     if (bar) bar.style.width = `${percent}%`;
-    if (count) count.textContent = `${current} / ${total}`;
-    if (percentEl) percentEl.textContent = `${percent}%`;
+    if (text) text.textContent = `${current} / ${total} · ${percent}%`;
   }
 
   showProgressComplete(successCount, totalCount, elapsed, duplicateCount = 0, failCount = 0) {
     if (!this.progressIndicator) return;
 
     const hasFailures = failCount > 0;
+    const isBilingual = this.config.bilingualMode !== false;
 
-    this.progressIndicator.innerHTML = `
-      <div class="yuxtrans-progress-bar-bg">
-        <div class="yuxtrans-progress-bar" style="width: 100%; opacity: 0.6;"></div>
-      </div>
-      <div class="yuxtrans-progress-status">
-        <span class="yuxtrans-progress-done ${hasFailures ? 'has-failures' : ''}">完成 ${successCount}/${totalCount}${hasFailures ? ` · 失败 ${failCount}` : ''}</span>
-        <button class="yuxtrans-progress-restore" id="yuxtrans-restore-btn">恢复原文</button>
-      </div>
-    `;
+    const textEl = this.progressIndicator.querySelector('#yuxtrans-progress-text');
+    if (textEl) {
+      textEl.textContent = `完成 ${successCount}/${totalCount}${hasFailures ? ` · 失败 ${failCount}` : ''}`;
+    }
+
+    const bar = this.progressIndicator.querySelector('#yuxtrans-progress-bar');
+    if (bar) bar.style.width = '100%';
+
+    // 隐藏取消，显示恢复原文、双语切换、关闭
+    const cancelBtn = this.progressIndicator.querySelector('#yuxtrans-cancel-btn');
+    const restoreBtn = this.progressIndicator.querySelector('#yuxtrans-restore-btn');
+    const bilingualBtn = this.progressIndicator.querySelector('#yuxtrans-bilingual-btn');
+    const closeBtn = this.progressIndicator.querySelector('#yuxtrans-close-btn');
+
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (restoreBtn) restoreBtn.style.display = 'inline-block';
+    if (bilingualBtn) {
+      bilingualBtn.style.display = 'inline-block';
+      bilingualBtn.textContent = isBilingual ? '仅译文' : '双语';
+    }
+    if (closeBtn) closeBtn.style.display = 'inline-block';
 
     // 恢复原文按钮
-    this.progressIndicator.querySelector('#yuxtrans-restore-btn').addEventListener('click', () => {
-      this.restoreOriginalTexts();
-      this.hideProgressIndicator(true);
-    });
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', () => {
+        this.restoreOriginalTexts();
+        this.hideProgressIndicator(true);
+      });
+    }
 
-    // 点击外部区域自动最小化
-    this.setupClickOutsideHandler();
+    // 双语/仅译文切换按钮
+    if (bilingualBtn) {
+      bilingualBtn.addEventListener('click', () => {
+        const newMode = this.config.bilingualMode === false;
+        this.toggleBilingualMode(newMode);
+        bilingualBtn.textContent = newMode ? '仅译文' : '双语';
+      });
+    }
 
-    // 自动最小化定时器（3秒后）
-    if (this.autoCloseTimer) clearTimeout(this.autoCloseTimer);
-    this.autoCloseTimer = setTimeout(() => {
-      if (this.progressIndicator && !this.progressIndicator.classList.contains('yuxtrans-minimized')) {
-        this.toggleProgressIndicator(false);
-      }
-    }, 3000);  // 3秒后自动最小化
+    // 关闭按钮
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.hideProgressIndicator(true);
+      });
+    }
   }
 
   /**
@@ -1134,14 +1153,12 @@ class YuxTransContent {
       const parent = node.parentElement;
       if (parent) {
         if (originalData.bilingualNode && originalData.bilingualNode.parentNode === parent) {
-          // 清理双语接点
+          // 清理双语节点并恢复原文
           parent.removeChild(originalData.bilingualNode);
-          parent.classList.remove('yuxtrans-translated-bilingual');
-        } else {
-          // 恢复替换的文本
-          node.textContent = originalData.text;
-          parent.classList.remove('yuxtrans-translated');
         }
+        // 无论是否双语，都恢复原文文本并清除翻译标记
+        node.textContent = originalData.text;
+        parent.classList.remove('yuxtrans-translated', 'yuxtrans-translated-bilingual');
 
         // 清除添加的内联样式
         if (originalData.styles) {
