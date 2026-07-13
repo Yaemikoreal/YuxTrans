@@ -207,54 +207,54 @@ class TranslationWindow(QMainWindow):
                 border: 1px solid #e0e0e0;
                 border-radius: 8px;
             }
-            
+
             QFrame#header {
                 background-color: #f5f5f5;
                 border-bottom: 1px solid #e0e0e0;
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
             }
-            
+
             QLabel {
                 color: #333333;
             }
-            
+
             QLabel#engine_label {
                 color: #3498db;
                 font-size: 10px;
             }
-            
+
             QLabel#time_label {
                 color: #95a5a6;
                 font-size: 10px;
             }
-            
+
             QPushButton#close_btn {
                 background-color: transparent;
                 color: #95a5a6;
                 border: none;
                 font-size: 16px;
             }
-            
+
             QPushButton#close_btn:hover {
                 color: #e74c3c;
             }
-            
+
             QTextEdit {
                 background-color: #fafafa;
                 border: 1px solid #e0e0e0;
                 border-radius: 4px;
                 padding: 5px;
             }
-            
+
             QTextEdit#source_text {
                 color: #7f8c8d;
             }
-            
+
             QTextEdit#target_text {
                 color: #2c3e50;
             }
-            
+
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -262,11 +262,11 @@ class TranslationWindow(QMainWindow):
                 border-radius: 4px;
                 padding: 6px 12px;
             }
-            
+
             QPushButton:hover {
                 background-color: #2980b9;
             }
-            
+
             QLabel#status_label {
                 color: #95a5a6;
             }
@@ -280,41 +280,41 @@ class TranslationWindow(QMainWindow):
                 border: 1px solid #34495e;
                 border-radius: 8px;
             }
-            
+
             QFrame#header {
                 background-color: #34495e;
                 border-bottom: 1px solid #2c3e50;
             }
-            
+
             QLabel {
                 color: #ecf0f1;
             }
-            
+
             QLabel#engine_label {
                 color: #3498db;
             }
-            
+
             QLabel#time_label {
                 color: #95a5a6;
             }
-            
+
             QPushButton#close_btn {
                 background-color: transparent;
                 color: #95a5a6;
                 border: none;
             }
-            
+
             QPushButton#close_btn:hover {
                 color: #e74c3c;
             }
-            
+
             QTextEdit {
                 background-color: #34495e;
                 border: 1px solid #2c3e50;
                 border-radius: 4px;
                 color: #ecf0f1;
             }
-            
+
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -322,7 +322,7 @@ class TranslationWindow(QMainWindow):
                 border-radius: 4px;
                 padding: 6px 12px;
             }
-            
+
             QPushButton:hover {
                 background-color: #2980b9;
             }

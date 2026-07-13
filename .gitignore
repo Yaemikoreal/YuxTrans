@@ -66,6 +66,14 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Agent / cache
+.agent_tasks/
+.claude/
+.ruff_cache/
+
+# Node.js
+node_modules/
+
 # Package files
 *.tar.gz
 *.zip

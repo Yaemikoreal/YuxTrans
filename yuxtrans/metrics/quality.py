@@ -394,7 +394,10 @@ DEFAULT_TEST_CASES = [
     ),
     TranslationTestCase(
         id="tc_005",
-        source_text="Despite the challenges, the team remained committed to delivering high-quality results.",
+        source_text=(
+            "Despite the challenges, the team remained committed to "
+            "delivering high-quality results."
+        ),
         reference_translations=["尽管面临挑战，团队仍致力于交付高质量的成果。"],
         category="business",
         difficulty="hard",

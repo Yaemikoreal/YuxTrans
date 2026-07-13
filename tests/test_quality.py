@@ -1,13 +1,12 @@
 """单元测试 - 质量评估"""
 
-import pytest
 
 from yuxtrans.metrics.quality import (
     BLEUScore,
-    WordErrorRate,
     CharacterErrorRate,
     QualityMetrics,
     TranslationTestCase,
+    WordErrorRate,
 )
 
 

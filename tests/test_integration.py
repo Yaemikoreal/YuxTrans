@@ -1,19 +1,20 @@
 """集成测试 - 完整翻译流程"""
 
-import pytest
 import asyncio
-import tempfile
 import os
+import tempfile
 
-from yuxtrans.engine.base import TranslationRequest, TranslationResult, EngineType
+import pytest
+
 from yuxtrans.cache.database import TranslationCache
 from yuxtrans.cache.warmup import CacheWarmupStrategy
+from yuxtrans.engine.base import EngineType, TranslationRequest, TranslationResult
 from yuxtrans.engine.router import SmartRouter
-from yuxtrans.utils.retry import RetryExecutor, RetryConfig, RetryStrategy
-from yuxtrans.utils.concurrency import RateLimiter, ConcurrencyController
-from yuxtrans.utils.config import ConfigManager, AppConfig
-from yuxtrans.metrics.quality import QualityMetrics, BLEUScore
 from yuxtrans.metrics.benchmark import PerformanceBenchmark
+from yuxtrans.metrics.quality import BLEUScore, QualityMetrics
+from yuxtrans.utils.concurrency import ConcurrencyController, RateLimiter
+from yuxtrans.utils.config import AppConfig, ConfigManager
+from yuxtrans.utils.retry import RetryConfig, RetryExecutor, RetryStrategy
 
 
 @pytest.fixture
@@ -27,7 +28,6 @@ def temp_config():
 async def temp_cache_db():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test_cache.db")
-        cache = None
         yield db_path
         # Cleanup: close any open cache connections
         # Note: The test should close the cache, but we also try here
@@ -90,7 +90,7 @@ async def test_retry_mechanism():
 
     result = await executor.execute(failing_func)
 
-    assert result.success == True
+    assert result.success
     assert result.attempts == 3
     assert result.result == "success"
 
@@ -106,7 +106,7 @@ async def test_retry_max_exceeded():
 
     result = await executor.execute(always_fail)
 
-    assert result.success == False
+    assert not result.success
     assert result.attempts == 3
 
 
@@ -161,7 +161,7 @@ def test_config_manager(temp_config):
 
     config = manager.load()
 
-    assert config.engine.prefer_local == True
+    assert config.engine.prefer_local
     assert config.engine.local_model == "qwen2:7b"
     assert config.performance.max_retries == 3
     assert config.ui.theme == "light"
@@ -184,7 +184,7 @@ def test_config_save_and_load(temp_config):
 
     loaded_config = manager.load()
 
-    assert loaded_config.engine.prefer_local == False
+    assert not loaded_config.engine.prefer_local
     assert loaded_config.performance.bleu_threshold == 0.75
 
 
@@ -196,7 +196,7 @@ async def test_quality_with_pipeline(temp_cache_db):
         warmup = CacheWarmupStrategy(cache)
         await warmup.warmup_common_words()
 
-        metrics = QualityMetrics()
+        QualityMetrics()
         bleu = BLEUScore()
 
         test_translations = [
@@ -274,7 +274,7 @@ async def test_cache_stats_tracking(temp_cache_db):
 
         req1 = TranslationRequest(text="test1", source_lang="en", target_lang="zh")
         req2 = TranslationRequest(text="test2", source_lang="en", target_lang="zh")
-        req3 = TranslationRequest(text="test1", source_lang="en", target_lang="zh")
+        TranslationRequest(text="test1", source_lang="en", target_lang="zh")
 
         await cache.store(req1, result)
 

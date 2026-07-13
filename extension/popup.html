@@ -3,30 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YuxTrans 翻译</title>
+  <title>YuxTrans</title>
   <style>
     :root {
-      /* Warm Paper (护眼书页) 全局风格对齐 */
-      --bg-primary: #fdfbf7;
-      --bg-gradient: radial-gradient(circle at 50% 50%, #fefcf9 0%, #f2ede4 100%);
-      --bg-card: rgba(255, 255, 255, 0.8);
-      --bg-secondary: rgba(140, 130, 121, 0.05);
-      
-      --text-main: #3d3733; 
-      --text-secondary: #8c8279;
-      
-      --brass: #d8a051;
-      --brass-hover: #eebb77;
-      --brass-gradient: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
-      --brass-text: #ffffff;
-      
-      --border-color: rgba(61, 55, 51, 0.08);
-      --shadow-deep: 0 16px 40px rgba(61, 55, 51, 0.1);
-      
-      --glass-blur: 32px;
-      --radius-outer: 28px;
-      --radius-inner: 18px;
-      --padding-main: 20px;
+      --bg: #fdfbf7;
+      --text: #2c2825;
+      --text-secondary: #6b6560;
+      --text-tertiary: #9e968d;
+      --accent: #c48a3a;
+      --accent-hover: #b37d34;
+      --border: rgba(0, 0, 0, 0.06);
+      --ok: #219653;
+      --warn: #d35400;
+      --error: #c0392b;
     }
 
     * {
@@ -38,237 +27,248 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-      width: 320px; 
-      background: var(--bg-primary);
-      background-image: var(--bg-gradient);
-      color: var(--text-main);
-      padding: var(--padding-main);
-      display: flex;
-      flex-direction: column;
-      gap: 16px; 
-      border-radius: var(--radius-outer); 
-      overflow: hidden;
-      border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-deep);
+      width: 280px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
     }
 
-    /* 顶部导航栏 - Warm Paper 风格 */
+    /* Header */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 4px;
+      margin-bottom: 14px;
     }
 
-    .header h1 {
-      font-size: 14px; 
-      font-weight: 700;
-      letter-spacing: -0.3px;
-      color: var(--text-main);
-      opacity: 0.8;
-    }
-
-    .header-btns {
+    .brand {
       display: flex;
-      gap: 8px;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .brand h1 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--accent);
+    }
+
+    .version {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-tertiary);
     }
 
     .icon-btn {
       background: transparent;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
-      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
     }
 
     .icon-btn:hover {
-      background: rgba(216, 160, 81, 0.1);
-      color: var(--accent);
       border-color: var(--accent);
-      transform: translateY(-1px);
+      color: var(--accent);
     }
 
-    /* 输入/输出卡片 - 等距圆角与磨砂玻璃 */
-    .card {
-      background: var(--bg-card);
-      backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-inner);
-      padding: 16px;
-      box-shadow: 0 8px 24px rgba(61, 55, 51, 0.05);
-      transition: all 0.4s;
-    }
-
-    .label-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    label {
-      font-size: 10px;
-      font-weight: 800;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      opacity: 0.8;
-    }
-
-    .lang-indicator {
+    /* Status + Model row */
+    .control-row {
       display: flex;
       align-items: center;
-      gap: 6px;
-      background: var(--bg-secondary);
-      padding: 4px 10px;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
       border-radius: 20px;
       font-size: 10px;
-      font-weight: 800;
-      color: var(--brass);
-      border: 1px solid rgba(216, 160, 81, 0.1);
-    }
-
-    textarea {
-      width: 100%;
-      height: 90px; 
-      background: transparent;
-      border: none;
-      resize: none;
-      font-size: 14.5px;
-      line-height: 1.6;
-      font-family: inherit;
-      color: var(--text-main);
-      outline: none;
-    }
-
-    textarea::placeholder {
+      font-weight: 700;
+      background: rgba(0, 0, 0, 0.03);
       color: var(--text-secondary);
-      opacity: 0.4;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
-    /* 核心按钮 - 黄铜金属质感（调优对比度） */
-    .translate-btn {
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-pill.ok { color: var(--ok); background: rgba(33, 150, 83, 0.08); }
+    .status-pill.error { color: var(--error); background: rgba(192, 57, 43, 0.08); }
+    .status-pill.warn { color: var(--warn); background: rgba(211, 84, 0, 0.08); }
+
+    .model-select {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+      padding-right: 26px;
+    }
+
+    .model-select:focus {
+      border-color: var(--accent);
+    }
+
+    .model-select:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Main action */
+    .action-btn {
       width: 100%;
-      padding: 14px;
-      background: var(--brass-gradient);
-      color: var(--brass-text);
+      padding: 11px;
+      background: var(--accent);
+      color: #fff;
       border: none;
-      border-radius: 16px;
-      font-size: 15px;
+      border-radius: 8px;
+      font-size: 13px;
       font-weight: 800;
       cursor: pointer;
-      box-shadow: 0 8px 24px rgba(216, 160, 81, 0.25);
-      transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
+      margin-bottom: 14px;
     }
 
-    .translate-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(216, 160, 81, 0.35);
-    }
-    
-    .translate-btn:active {
-      transform: translateY(0) scale(0.98);
-      opacity: 0.9;
+    .action-btn:hover {
+      background: var(--accent-hover);
     }
 
-    /* 结果显示 - 呼吸感控制 */
-    .result-section {
-      display: none;
-      margin-top: -2px;
+    .action-btn:active {
+      transform: scale(0.98);
     }
 
-    .result-section.active {
-      display: block;
-      animation: materialRise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    @keyframes materialRise {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .result-card {
-      min-height: 90px;
-      max-height: 200px;
-      overflow-y: auto;
-      border-color: rgba(216, 160, 81, 0.1);
-    }
-
-    .result-text {
-      font-size: 14.5px;
-      line-height: 1.6;
-      color: var(--text-main);
-    }
-
-    .action-row {
+    /* Stats row */
+    .stats-row {
       display: flex;
-      gap: 10px;
-      margin-top: 14px;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
     }
 
-    .btn-action {
-      flex: 1;
-      padding: 10px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      border-radius: 12px;
+    .stat-item {
+      text-align: center;
+      min-width: 60px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text-tertiary);
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* Toggle row */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .toggle-label {
       font-size: 12px;
       font-weight: 700;
+      color: var(--text);
+    }
+
+    .toggle-hint {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
       cursor: pointer;
-      transition: all 0.4s;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.1);
+      transition: 0.25s;
+      border-radius: 20px;
     }
 
-    .btn-action:hover {
-      background: rgba(216, 160, 81, 0.05);
-      border-color: var(--brass);
-      color: var(--brass);
-    }
-
-    .loading-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--brass);
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 1px;
-    }
-
-    .spinner {
-      width: 14px;
+    .slider:before {
+      position: absolute;
+      content: "";
       height: 14px;
-      border: 2px solid rgba(216, 160, 81, 0.1);
-      border-top-color: var(--brass);
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #fff;
+      transition: 0.25s;
       border-radius: 50%;
-      animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    input:checked + .slider { background-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(16px); }
 
+    /* Toast */
     .toast {
       position: fixed;
-      bottom: 24px;
+      bottom: 12px;
       left: 50%;
       transform: translateX(-50%) translateY(40px);
-      background: #fff;
-      color: var(--brass);
-      padding: 10px 20px;
-      border-radius: 30px;
-      font-size: 12px;
-      font-weight: 800;
+      background: var(--text);
+      color: #fff;
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
       z-index: 1000;
-      border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-deep);
-      transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.3s ease;
       opacity: 0;
       white-space: nowrap;
-      backdrop-filter: blur(20px);
+      pointer-events: none;
     }
 
     .toast.show {
@@ -276,93 +276,59 @@
       opacity: 1;
     }
 
-    #switchLangBtn {
-      border: none;
-      background: transparent;
-      width: 24px;
-      height: 24px;
-      cursor: pointer;
-      color: var(--accent);
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s;
-      opacity: 0.6;
-    }
-    
-    #switchLangBtn:hover {
-      transform: rotate(180deg);
-      opacity: 1;
-    }
-
-    .toast.show {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-    }
-
-    #switchLangBtn {
-      border: none;
-      background: transparent;
-      width: 24px;
-      height: 24px;
-      cursor: pointer;
-      color: var(--brass);
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s;
-      opacity: 0.6;
-    }
-    
-    #switchLangBtn:hover {
-      transform: rotate(180deg);
-      opacity: 1;
+    .toast.error {
+      background: var(--error);
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>YuxTrans <span id="versionBadge" style="font-size: 10px; opacity: 0.5; font-weight: 400; margin-left: 4px;"></span></h1>
-    <div class="header-btns">
-      <button class="icon-btn" id="settingsBtn">⚙ 设置</button>
+    <div class="brand">
+      <h1>YuxTrans</h1>
+      <span class="version" id="versionBadge"></span>
+    </div>
+    <button class="icon-btn" id="settingsBtn">设置</button>
+  </div>
+
+  <div class="control-row">
+    <span class="status-pill" id="connectionStatus">
+      <span class="status-dot"></span>
+      <span id="connectionText">检测中</span>
+    </span>
+    <select class="model-select" id="modelSelect">
+      <option value="">加载中...</option>
+    </select>
+  </div>
+
+  <button class="action-btn" id="translatePageBtn">翻译整页</button>
+
+  <div class="stats-row">
+    <div class="stat-item">
+      <div class="stat-value" id="tokenStat">--</div>
+      <div class="stat-label">Tokens</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="cacheHitStat">--</div>
+      <div class="stat-label">缓存命中</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="hotwordStat">--</div>
+      <div class="stat-label">热词数</div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="label-row">
-      <label>输入</label>
-      <div class="lang-indicator">
-        <span id="currentSourceLang">自动</span>
-        <button id="switchLangBtn">⇄</button>
-        <span id="currentTargetLang">中文</span>
-      </div>
+  <div class="toggle-row">
+    <div>
+      <div class="toggle-label">流式翻译</div>
+      <div class="toggle-hint">逐字显示翻译结果</div>
     </div>
-    <textarea id="inputText" placeholder="输入内容... (⌘+Enter)"></textarea>
+    <label class="switch">
+      <input type="checkbox" id="streamToggle">
+      <span class="slider"></span>
+    </label>
   </div>
 
-  <button class="translate-btn" id="translateBtn">立即翻译</button>
-
-  <div class="result-section" id="resultArea">
-    <div class="card result-card">
-      <div class="label-row">
-        <label>结果</label>
-        <div id="statusText" class="loading-indicator" style="display: none;">
-          <div class="spinner"></div>
-          <span>TRANSLATING</span>
-        </div>
-      </div>
-      <div class="result-text" id="resultText"></div>
-    </div>
-
-    <div class="action-row">
-      <button class="btn-action" id="copyBtn">复制内容</button>
-      <button class="btn-action" id="clearBtn">移除所有</button>
-    </div>
-  </div>
-
-  <div id="updateToast" class="toast">核心配置更新成功</div>
+  <div id="toast" class="toast"></div>
 
   <script src="popup.js"></script>
 </body>

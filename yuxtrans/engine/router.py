@@ -103,7 +103,7 @@ class SmartRouter(BaseTranslator):
                 except TranslationError:
                     pass
 
-        response_time = self._measure_time(start_time)
+        self._measure_time(start_time)
         self._record_error()
 
         raise TranslationError("所有翻译引擎均不可用", engine="router")

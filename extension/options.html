@@ -6,56 +6,56 @@
   <title>YuxTrans 设置</title>
   <style>
     :root {
-      /* 护眼书页主题变量 (高级纸本感) */
+      /* Apple + Notion 极简变量 */
       --bg-primary: #fdfbf7;
-      --bg-gradient: radial-gradient(circle at 50% 50%, #fefcf9 0%, #f2ede4 100%);
-      --bg-container: rgba(255, 255, 255, 0.8);
-      --bg-sidebar: rgba(140, 130, 121, 0.05);
-      --bg-section: rgba(251, 248, 241, 0.7);
-      --bg-input: rgba(255, 255, 255, 0.9);
-      
+      --bg-gradient: none;
+      --bg-container: #ffffff;
+      --bg-sidebar: transparent;
+      --bg-section: #ffffff;
+      --bg-input: #ffffff;
+
       --text-title: #2c2825;
-      --text-main: #3d3733;
-      --text-sub: #8c8279;
-      
-      --accent: #d8a051;
-      --accent-hover: #c98e41;
-      --accent-soft: rgba(216, 160, 81, 0.1);
-      --accent-gradient: linear-gradient(135deg, #dfab66 0%, #d19747 100%);
+      --text-main: #2c2825;
+      --text-sub: #6b6560;
+
+      --accent: #c48a3a;
+      --accent-hover: #b37d34;
+      --accent-soft: rgba(196, 138, 58, 0.08);
+      --accent-gradient: #c48a3a;
       --accent-text: #ffffff;
-      
-      --border-color: rgba(61, 55, 51, 0.08);
-      --shadow-sm: 0 4px 12px rgba(61, 55, 51, 0.04);
-      --shadow-md: 0 8px 24px rgba(61, 55, 51, 0.06);
-      --shadow-lg: 0 16px 40px rgba(61, 55, 51, 0.08);
-      
-      --glass-blur: 32px;
+
+      --border-color: rgba(0, 0, 0, 0.06);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.06);
+
+      --glass-blur: 0px;
+      --radius: 8px;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        /* 深夜书房主题变量 */
         --bg-primary: #1a1817;
-        --bg-gradient: radial-gradient(circle at 50% 0%, #2a2725 0%, #151312 100%);
-        --bg-container: rgba(43, 39, 37, 0.85);
-        --bg-sidebar: rgba(0, 0, 0, 0.2);
-        --bg-section: rgba(53, 49, 46, 0.5);
-        --bg-input: rgba(33, 30, 28, 0.8);
-        
+        --bg-gradient: none;
+        --bg-container: #23211f;
+        --bg-sidebar: transparent;
+        --bg-section: #23211f;
+        --bg-input: #2a2725;
+
         --text-title: #f4f0e6;
         --text-main: #e6e0d8;
         --text-sub: #9e958a;
-        
+
         --accent: #d8a051;
         --accent-hover: #eebb77;
-        --accent-soft: rgba(216, 160, 81, 0.15);
-        --accent-gradient: linear-gradient(135deg, #e5b67a 0%, #d8a051 100%);
+        --accent-soft: rgba(216, 160, 81, 0.12);
+        --accent-gradient: #d8a051;
         --accent-text: #2c2825;
-        
+
         --border-color: rgba(244, 240, 230, 0.08);
-        --shadow-sm: 0 4px 12px rgba(0,0,0,0.3);
-        --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
-        --shadow-lg: 0 16px 48px rgba(0,0,0,0.5);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+        --shadow-md: 0 2px 8px rgba(0,0,0,0.25);
+        --shadow-lg: 0 8px 24px rgba(0,0,0,0.3);
       }
     }
 
@@ -69,25 +69,22 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
       background: var(--bg-primary);
-      background-image: var(--bg-gradient);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 40px;
+      padding: 32px;
     }
 
     .container {
       width: 100%;
-      max-width: 1040px;
-      height: 880px; /* 纵向拉伸以增强质感 */
+      max-width: 900px;
+      min-height: min(90vh, 800px);
       background: var(--bg-container);
-      backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-      border-radius: 28px;
+      border-radius: 12px;
       display: grid;
-      grid-template-columns: 280px 1fr;
+      grid-template-columns: 220px 1fr;
       box-shadow: var(--shadow-lg);
       border: 1px solid var(--border-color);
       overflow: hidden;
@@ -95,7 +92,7 @@
 
     /* 侧边导航 */
     .sidebar {
-      padding: 48px 32px;
+      padding: 36px 24px;
       background: var(--bg-sidebar);
       border-right: 1px solid var(--border-color);
       display: flex;
@@ -104,78 +101,76 @@
     }
 
     .sidebar h1 {
-      font-size: 28px;
+      font-size: 22px;
       color: var(--text-title);
       font-weight: 800;
-      letter-spacing: -0.8px;
+      letter-spacing: -0.5px;
       margin-bottom: 4px;
     }
 
     .sidebar .subtitle {
-      font-size: 13px;
+      font-size: 11px;
       color: var(--text-sub);
-      margin-bottom: 48px;
-      letter-spacing: 0.5px;
+      margin-bottom: 36px;
+      letter-spacing: 0.6px;
       text-transform: uppercase;
-      font-weight: 600;
-      opacity: 0.8;
+      font-weight: 700;
     }
 
     .tabs {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 4px;
     }
 
     .tab {
       display: flex;
       align-items: center;
-      padding: 14px 18px;
+      padding: 10px 14px;
       border: none;
       background: transparent;
-      border-radius: 14px;
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: 13px;
       font-weight: 600;
       color: var(--text-sub);
       cursor: pointer;
       text-align: left;
-      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
       position: relative;
     }
 
     .tab:hover {
       color: var(--text-main);
-      background: rgba(140, 130, 121, 0.08);
+      background: rgba(0, 0, 0, 0.03);
     }
 
     .tab.active {
       color: var(--text-title);
       background: var(--accent-soft);
-      box-shadow: inset 0 0 0 1px rgba(216, 160, 81, 0.1);
     }
 
     .tab.active::after {
       content: '';
       position: absolute;
       left: 0;
-      width: 4px;
-      height: 18px;
+      width: 3px;
+      height: 16px;
       background: var(--accent);
-      border-radius: 4px;
+      border-radius: 3px;
     }
 
     /* 主内容区 */
     .main-content {
-      padding: 32px 64px 48px;
+      padding: 28px 40px 40px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      flex: 1; /* 确保占满剩余空间 */
+      flex: 1;
       scroll-behavior: smooth;
     }
 
     /* 滚动条美化 */
-    .main-content::-webkit-scrollbar { width: 6px; }
+    .main-content::-webkit-scrollbar { width: 5px; }
     .main-content::-webkit-scrollbar-track { background: transparent; }
     .main-content::-webkit-scrollbar-thumb {
       background: var(--border-color);
@@ -184,11 +179,11 @@
 
     .tab-content {
       display: none;
-      animation: contentFadeIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation: contentFadeIn 0.3s ease;
     }
 
     @keyframes contentFadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -198,48 +193,48 @@
 
     .section {
       background: var(--bg-section);
-      border-radius: 20px;
-      padding: 32px;
-      margin-bottom: 24px;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 18px;
       border: 1px solid var(--border-color);
     }
 
     .section h2 {
-      font-size: 18px;
-      margin-bottom: 28px;
+      font-size: 16px;
+      margin-bottom: 22px;
       color: var(--text-title);
       font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .section h2::before {
       content: '';
-      width: 4px;
-      height: 20px;
-      background: var(--accent-gradient);
-      border-radius: 4px;
+      width: 3px;
+      height: 16px;
+      background: var(--accent);
+      border-radius: 3px;
     }
 
     /* 表单控件 */
     .form-group {
-      margin-bottom: 24px;
+      margin-bottom: 18px;
     }
 
     label {
       display: block;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       font-weight: 700;
       color: var(--text-title);
-      font-size: 13px;
+      font-size: 12px;
     }
 
     .hint {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-sub);
-      margin-top: 8px;
-      line-height: 1.6;
+      margin-top: 6px;
+      line-height: 1.5;
     }
 
     input[type="text"],
@@ -248,12 +243,12 @@
     select,
     textarea {
       width: 100%;
-      padding: 14px 16px;
+      padding: 10px 12px;
       border: 1px solid var(--border-color);
-      border-radius: 14px;
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: 13px;
       font-family: inherit;
-      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
       background: var(--bg-input);
       color: var(--text-main);
     }
@@ -261,11 +256,9 @@
     input:focus, select:focus, textarea:focus {
       outline: none;
       border-color: var(--accent);
-      box-shadow: 0 0 0 4px var(--accent-soft);
-      background: #fff;
     }
 
-    /* 隐藏数字输入框的原生箭头 (图三) */
+    /* 隐藏数字输入框的原生箭头 */
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button {
       -webkit-appearance: none;
@@ -275,24 +268,20 @@
       -moz-appearance: textfield;
     }
 
-    /* 定制下拉选择框 (图四) */
+    /* 定制下拉选择框 */
     select {
       appearance: none;
       -webkit-appearance: none;
       -moz-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23d8a051' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b6560' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 16px center;
-      padding-right: 42px !important;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      input:focus, select:focus, textarea:focus { background: #2a2725 !important; }
+      background-position: right 10px center;
+      padding-right: 30px !important;
     }
 
     .input-row {
       display: flex;
-      gap: 20px;
+      gap: 16px;
     }
 
     .input-row .form-group {
@@ -303,12 +292,12 @@
     .checkbox-group {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .checkbox-group input {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       accent-color: var(--accent);
       cursor: pointer;
     }
@@ -316,20 +305,20 @@
     .radio-group {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
     }
 
     .radio-group label {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 20px;
+      padding: 10px 16px;
       background: var(--bg-input);
       border: 1px solid var(--border-color);
-      border-radius: 14px;
+      border-radius: 8px;
       cursor: pointer;
       font-weight: 500;
-      transition: all 0.3s;
+      transition: all 0.2s ease;
     }
 
     .radio-group label:hover {
@@ -338,75 +327,73 @@
 
     .radio-group input {
       accent-color: var(--accent);
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
     }
 
     /* 功能按钮 */
     .buttons-row {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       margin-top: auto;
-      padding-top: 24px;
+      padding-top: 20px;
       justify-content: flex-end;
       border-top: 1px solid var(--border-color);
       flex-shrink: 0;
     }
 
     button {
-      padding: 14px 28px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 14px;
-      font-size: 14px;
+      border-radius: 8px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
     }
 
     .btn-primary {
       background: var(--accent-gradient);
       color: var(--accent-text);
-      box-shadow: 0 8px 24px rgba(216, 160, 81, 0.2);
     }
 
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(216, 160, 81, 0.3);
+      background: var(--accent-hover);
     }
 
     .btn-secondary {
-      background: var(--bg-sidebar);
+      background: transparent;
       color: var(--text-main);
       border: 1px solid var(--border-color);
     }
 
     .btn-secondary:hover {
-      background: var(--bg-input);
-      transform: translateY(-1px);
+      background: rgba(0, 0, 0, 0.02);
+      border-color: var(--accent);
     }
 
-    /* 修正导入配置标签按钮样式 - 确保与原生 button 像素级对齐 */
     label.btn-secondary {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 14px 28px;
-      border-radius: 14px;
-      font-size: 14px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
-      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: all 0.2s ease;
       margin: 0;
       line-height: 1;
-      height: auto; /* 移除固定高度，采用 padding 撑开以保持同步 */
+      height: auto;
     }
 
     .btn-test {
       background: var(--accent-soft);
       color: var(--accent);
-      font-size: 13px;
-      padding: 10px 18px;
+      font-size: 12px;
+      padding: 8px 14px;
       border: 1px solid transparent;
+      border-radius: 6px;
     }
 
     .btn-test:hover {
@@ -417,51 +404,51 @@
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 32px;
+      gap: 12px;
+      margin-bottom: 24px;
     }
 
     .stat-card {
-      background: var(--bg-input);
-      padding: 24px 20px;
-      border-radius: 18px;
+      background: transparent;
+      padding: 16px 12px;
+      border-radius: 8px;
       text-align: center;
       border: 1px solid var(--border-color);
-      box-shadow: var(--shadow-sm);
     }
 
     .stat-value {
-      font-size: 28px;
+      font-size: 22px;
       font-weight: 800;
-      color: var(--accent);
-      margin-bottom: 4px;
+      color: var(--text-title);
+      margin-bottom: 2px;
+      font-variant-numeric: tabular-nums;
     }
 
     .stat-label {
-      font-size: 12px;
+      font-size: 10px;
       color: var(--text-sub);
-      font-weight: 600;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
 
     .status {
       position: fixed;
-      top: 32px;
+      top: 24px;
       left: 50%;
       transform: translateX(-50%) translateY(-20px);
       z-index: 20000;
-      padding: 12px 36px;
-      border-radius: 40px;
-      font-size: 14px;
+      padding: 10px 24px;
+      border-radius: 20px;
+      font-size: 13px;
       font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 10px;
-      backdrop-filter: blur(28px) saturate(200%);
-      -webkit-backdrop-filter: blur(28px) saturate(200%);
-      background: rgba(44, 40, 37, 0.08);
-      border: 1px solid rgba(216, 160, 81, 0.15);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
-      transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+      gap: 8px;
+      background: var(--bg-container);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-md);
+      transition: all 0.3s ease;
       opacity: 0;
       pointer-events: none;
       color: var(--text-main);
@@ -470,78 +457,76 @@
     .status.success {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
-      background: rgba(46, 204, 113, 0.1);
-      color: #27ae60;
-      border-color: rgba(46, 204, 113, 0.2);
+      color: #219653;
+      border-color: rgba(33, 150, 83, 0.2);
     }
 
     .status.error {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
-      background: rgba(231, 76, 60, 0.1);
       color: #c0392b;
-      border-color: rgba(231, 76, 60, 0.2);
+      border-color: rgba(192, 57, 43, 0.2);
     }
 
     .version {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-sub);
-      opacity: 0.5;
       text-align: center;
     }
 
-    /* 傻瓜式更新横幅样式 */
+    /* 更新横幅 */
     .update-banner {
-      background: #fdf6ec; border: 1px solid #faecd8; border-radius: 12px;
-      padding: 16px 20px; box-shadow: 0 4px 12px rgba(216, 160, 81, 0.1);
-      animation: slideDown 0.4s ease-out;
+      background: var(--accent-soft);
+      border: 1px solid rgba(196, 138, 58, 0.15);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      animation: slideDown 0.3s ease;
     }
     @keyframes slideDown {
-      from { transform: translateY(-20px); opacity: 0; }
+      from { transform: translateY(-12px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    .update-banner-content { display: flex; align-items: center; gap: 16px; }
-    .update-icon { font-size: 24px; }
+    .update-banner-content { display: flex; align-items: center; gap: 12px; }
+    .update-icon { font-size: 20px; }
     .update-info { flex: 1; }
-    .update-title { display: block; font-weight: 600; color: #d8a051; font-size: 15px; }
-    .update-desc { display: block; font-size: 13px; color: #666; margin-top: 4px; }
-    .update-actions { display: flex; gap: 10px; }
-    
-    /* 弹窗指引样式 */
-    .guide-step { display: flex; gap: 12px; margin-bottom: 20px; }
-    .step-num {
-      width: 28px; height: 28px; background: #d8a051; color: white;
-      border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 14px; font-weight: bold;
-    }
-    .step-content { font-size: 14px; line-height: 1.6; color: #3d3733; }
-    .step-content strong { color: #d8a051; }
+    .update-title { display: block; font-weight: 700; color: var(--accent); font-size: 13px; }
+    .update-desc { display: block; font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+    .update-actions { display: flex; gap: 8px; }
 
-    /* 翻译风格卡片式布局 */
+    /* 弹窗指引 */
+    .guide-step { display: flex; gap: 10px; margin-bottom: 16px; }
+    .step-num {
+      width: 24px; height: 24px; background: var(--accent); color: white;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 12px; font-weight: 800;
+    }
+    .step-content { font-size: 13px; line-height: 1.6; color: var(--text-main); }
+    .step-content strong { color: var(--accent); }
+
+    /* 翻译风格卡片 */
     .style-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
+      gap: 12px;
     }
     .style-option {
       display: flex;
       align-items: flex-start;
-      gap: 14px;
-      padding: 16px;
+      gap: 10px;
+      padding: 14px;
       background: var(--bg-section);
-      border-radius: 16px;
+      border-radius: 8px;
       border: 1px solid var(--border-color);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
       position: relative;
     }
     .style-option:hover {
       border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-sm);
     }
     .style-option input[type="radio"] {
-      width: 18px; height: 18px; margin-top: 2px;
+      width: 16px; height: 16px; margin-top: 2px;
       accent-color: var(--accent);
     }
     .style-option:has(input:checked) {
@@ -550,15 +535,153 @@
     }
     .style-name {
       display: block;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
       color: var(--text-title);
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .style-hint {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-sub);
       line-height: 1.5;
+    }
+
+    /* ===== 轻量模型推荐卡片 ===== */
+    .model-recommendations {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .model-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .model-card:hover {
+      border-color: var(--accent);
+    }
+
+    .model-card.installed {
+      background: rgba(33, 150, 83, 0.04);
+      border-color: rgba(33, 150, 83, 0.2);
+    }
+
+    .model-card-info {
+      grid-column: 1 / 2;
+    }
+
+    .model-card-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-title);
+      margin-bottom: 2px;
+    }
+
+    .model-card-meta {
+      font-size: 10px;
+      color: var(--text-sub);
+    }
+
+    .model-download-btn {
+      grid-column: 2 / 3;
+      grid-row: 1 / 2;
+      white-space: nowrap;
+    }
+
+    .model-download-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .model-card-progress {
+      grid-column: 1 / 3;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .model-progress-bar-bg {
+      flex: 1;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .model-progress-bar {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .model-progress-text {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-sub);
+      min-width: 36px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== 响应式布局 ===== */
+    @media (max-width: 800px) {
+      body { padding: 16px; }
+      .container {
+        grid-template-columns: 1fr;
+        min-height: auto;
+        border-radius: 12px;
+        max-height: none;
+      }
+      .sidebar {
+        padding: 20px 20px 12px;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .sidebar h1 { font-size: 20px; }
+      .sidebar .subtitle { margin-bottom: 18px; }
+      .tabs {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 4px;
+        padding-bottom: 4px;
+      }
+      .tab {
+        padding: 8px 12px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .tab.active::after { display: none; }
+      .main-content { padding: 20px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 10px; }
+      .container { border-radius: 10px; }
+      .sidebar { padding: 16px 14px 10px; }
+      .sidebar h1 { font-size: 18px; }
+      .main-content { padding: 14px; }
+      .section { padding: 16px 14px; border-radius: 10px; }
+      .input-row { flex-direction: column; gap: 0; }
+      .stats-grid { grid-template-columns: 1fr; gap: 8px; }
+      .style-grid { grid-template-columns: 1fr; }
+      .buttons-row { flex-direction: column; gap: 8px; }
+      .buttons-row button { width: 100%; }
+      .radio-group {
+        flex-direction: column;
+        gap: 6px;
+      }
+      .radio-group label { width: 100%; }
+      .section h2 { font-size: 14px; }
     }
   </style>
 </head>
@@ -570,7 +693,7 @@
       
       <nav class="tabs">
         <button class="tab active" data-tab="engine">
-          AI 模型服务
+          翻译服务
         </button>
         <button class="tab" data-tab="language">
           语言与样式
@@ -646,11 +769,53 @@
 
           <div class="form-group" id="localModelGroup" style="display: none;">
             <label for="localModel">本地模型名称 (Ollama)</label>
+
+            <!-- Ollama 状态检测面板 -->
+            <div id="ollamaStatusPanel" class="ollama-status" style="margin-bottom: 16px; padding: 12px 14px; border-radius: 8px; background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border-color, #e0e0e0);">
+              <div id="ollamaStatusContent" style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
+                <span id="ollamaStatusIcon" style="font-size: 16px;">⏳</span>
+                <span id="ollamaStatusText">正在检测 Ollama 状态...</span>
+              </div>
+              <div id="ollamaStatusAction" style="margin-top: 10px; display: none;">
+                <button class="btn-test" id="downloadModelBtn" style="font-size: 12px; padding: 6px 14px;">下载 Qwen3.5-0.8B 模型</button>
+                <button class="btn-test" id="copyPullCmdBtn" style="font-size: 12px; padding: 6px 14px; margin-left: 8px;">复制命令</button>
+              </div>
+            </div>
+
+            <!-- 轻量模型推荐 -->
+            <div id="recommendedModelsPanel" style="margin-bottom: 16px;">
+              <div style="font-size: 12px; font-weight: 700; color: var(--text-title); margin-bottom: 10px;">轻量模型推荐</div>
+              <div class="model-recommendations" id="modelRecommendations">
+                <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 600MB">
+                  <div class="model-card-info">
+                    <div class="model-card-name">Qwen 3.5 · 0.8B</div>
+                    <div class="model-card-meta">约 600MB · 中文优化 · 默认推荐</div>
+                  </div>
+                  <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
+                  <div class="model-card-progress" style="display: none;">
+                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                    <div class="model-progress-text">0%</div>
+                  </div>
+                </div>
+                <div class="model-card" data-model="gemma3:1b" data-size="约 800MB">
+                  <div class="model-card-info">
+                    <div class="model-card-name">Gemma 3 · 1B</div>
+                    <div class="model-card-meta">约 800MB · 多语言均衡</div>
+                  </div>
+                  <button class="btn-test model-download-btn" data-model="gemma3:1b">下载</button>
+                  <div class="model-card-progress" style="display: none;">
+                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                    <div class="model-progress-text">0%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <select id="localModelSelect" style="margin-bottom: 12px; display: none;">
               <option value="">点击下方刷新获取模型...</option>
             </select>
-            <input type="text" id="localModel" placeholder="qwen2:7b" style="margin-top: 0;">
-            <p class="hint">请确保 Ollama 服务已启动 (http://localhost:11434)。选择列表或手动输入 Tag。</p>
+            <input type="text" id="localModel" placeholder="qwen3.5:0.8b" style="margin-top: 0;">
+            <p class="hint">推荐模型: <strong>qwen3.5:0.8b</strong>（轻量离线翻译）。请确保 Ollama 已启动，或运行 <code>extension/setup-ollama.bat</code> 一键配置。</p>
             <div style="margin-top: 14px; display: flex; gap: 10px;">
               <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
               <button class="btn-test" id="testLocalBtn">连接测试</button>
@@ -665,7 +830,8 @@
              </div>
              <div class="form-group">
                 <label for="customEndpoint">API 端点地址</label>
-                <input type="text" id="customEndpoint" placeholder="https://api.domain.com/v1">
+                <input type="text" id="customEndpoint" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
+                <p class="hint">填入完整的 API 地址，例如 <code>/v1</code>、<code>/v1/chat/completions</code> 或 <code>/api</code>。获取模型列表时会自动尝试 <code>/models</code> 路径。</p>
              </div>
              <div class="input-row">
                <div class="form-group">
@@ -673,10 +839,43 @@
                  <input type="password" id="customApiKey">
                </div>
                <div class="form-group">
-                 <label for="customModel">模型 ID</label>
-                 <input type="text" id="customModel">
+                 <label for="customFormat">API 格式</label>
+                 <select id="customFormat">
+                   <option value="openai">OpenAI 兼容</option>
+                   <option value="anthropic">Anthropic (Claude)</option>
+                   <option value="qwen">通义千问 (DashScope)</option>
+                 </select>
                </div>
              </div>
+             <div class="input-row">
+               <div class="form-group">
+                 <label for="customModelSelect">模型 ID</label>
+                 <select id="customModelSelect" style="margin-bottom: 8px;">
+                   <option value="">请先获取模型列表或手动输入</option>
+                 </select>
+                 <input type="text" id="customModelManual" placeholder="gpt-4o-mini" style="display: none;">
+               </div>
+             </div>
+             <div style="margin-top: 16px; display: flex; gap: 10px;">
+               <button class="btn-test" id="fetchCustomModelsBtn">获取模型列表</button>
+               <button class="btn-test" id="testCustomBtn">连接测试</button>
+             </div>
+             <div id="customTestResult" style="margin-top: 12px;"></div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--border-color);">
+            <button class="btn-primary" id="saveProviderBtn" style="padding: 10px 24px; font-size: 13px;">保存并启用档案</button>
+          </div>
+        </div>
+
+        <!-- 档案管理 -->
+        <div class="section">
+          <h2>档案管理</h2>
+          <p class="hint" style="margin-bottom: 16px;">在此管理所有已保存的 Provider 档案，可自由切换当前使用的翻译服务。</p>
+          <div id="modelList">
+            <div style="padding: 20px; text-align: center; color: var(--text-sub); font-size: 13px;">
+              暂无模型，请在上方配置并保存后在此管理。
+            </div>
           </div>
         </div>
       </div>
@@ -778,6 +977,12 @@
               <label for="autoDetectLang">智能检测页面语言 (不触发翻译同语种内容)</label>
             </div>
           </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="autoFallback" checked>
+              <label for="autoFallback">主供应商失败时自动切换备选（本地 ⟷ 云端）</label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -835,7 +1040,7 @@
       <!-- 操作底部固定区 -->
       <div class="buttons-row">
         <button class="btn-secondary" id="clearCacheBtn">清除本地数据</button>
-        <button class="btn-primary" id="saveBtn">保存所有更改</button>
+        <button class="btn-primary" id="saveBtn">保存通用设置</button>
       </div>
 
       <div id="status" class="status"></div>

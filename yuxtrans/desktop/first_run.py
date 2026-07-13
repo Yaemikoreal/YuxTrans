@@ -4,24 +4,20 @@
 """
 
 from pathlib import Path
-from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpacerItem,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from yuxtrans.engine.cloud import CloudTranslator
 from yuxtrans.utils.config import ConfigManager
 
 
@@ -375,10 +371,14 @@ class ApiKeyPage(QWidget):
     def update_provider(self, provider: str):
         """更新供应商信息"""
         help_links = {
-            "qwen": '<a href="https://dashscope.console.aliyun.com/apiKey">获取通义千问 API Key</a>',
-            "openai": '<a href="https://platform.openai.com/api-keys">获取 OpenAI API Key</a>',
-            "deepseek": '<a href="https://platform.deepseek.com/api_keys">获取 DeepSeek API Key</a>',
-            "anthropic": '<a href="https://console.anthropic.com/settings/keys">获取 Claude API Key</a>',
+            "qwen": '<a href="https://dashscope.console.aliyun.com/apiKey">'
+                    "获取通义千问 API Key</a>",
+            "openai": '<a href="https://platform.openai.com/api-keys">'
+                      "获取 OpenAI API Key</a>",
+            "deepseek": '<a href="https://platform.deepseek.com/api_keys">'
+                        "获取 DeepSeek API Key</a>",
+            "anthropic": '<a href="https://console.anthropic.com/settings/keys">'
+                         "获取 Claude API Key</a>",
             "groq": '<a href="https://console.groq.com/keys">获取 Groq API Key</a>',
             "local": "无需 API Key，请确保 Ollama 已安装并运行",
         }

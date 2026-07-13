@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-10
+
+### Added
+
+- **ProviderProfile / ActiveConfig 拆分** - 设置页保存多组翻译服务档案，popup 与内容脚本同步当前激活档案。
+- **Popup 控制面板重构** - 去除输入框，新增整页翻译、流式开关、档案切换、连接状态与用量看板。
+- **批量翻译去重** - 同一批次内相同原文仅请求一次，结果映射回所有出现位置。
+- **批量 JSON 模式** - 对已知 OpenAI 兼容供应商的非流式批量请求附加 `response_format: json_object`，提升 JSON 输出稳定性。
+- **连接状态缓存** - popup 连接检测增加 15s 轻量缓存，避免每次打开都发起真实 API 探测。
+- **自动复制译文** - 内容脚本支持在设置中开启翻译后自动复制结果。
+
+### Changed
+
+- **缓存键归一化增强** - 新增 NFC、引号、破折号、省略号、全半角统一，提高缓存命中率。
+- **压缩 batch prompt** - 精简规则描述，降低 token 消耗与 API 成本。
+- **简化设置页文案** - “AI 模型服务”改为“翻译服务”，“模型管理”改为“档案管理”。
+- **重写 README 与 PROVIDERS.md** - 使用方式与供应商配置说明同步到当前版本。
+
+### Fixed
+
+- 修复删除档案时 `removeModelRecord` 未定义导致的异常。
+- 修复本地 Ollama 连接测试误带 `Authorization` 头的问题。
+- 修复内容脚本在输入框、代码块、可编辑区域误触发划词浮按钮的问题。
+- 修复内容脚本无翻译价值文本（纯数字、URL、纯符号）进入翻译流程的问题。
+
+### Technical Details
+
+- 扩展核心测试覆盖增加至 21 个用例，覆盖缓存键、档案、JSON 模式、请求构建等。
+- `background.js` 导出 `buildRequest` 与 `supportsJsonMode` 供单元测试验证。
+
 ## [0.2.0] - 2026-04-04
 
 ### Added
@@ -157,5 +187,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.3.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.1.0

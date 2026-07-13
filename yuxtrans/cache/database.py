@@ -158,15 +158,15 @@ class TranslationCache(BaseTranslator):
                 )
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_source_target 
+                CREATE INDEX IF NOT EXISTS idx_source_target
                 ON translations(source_lang, target_lang)
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_access_count 
+                CREATE INDEX IF NOT EXISTS idx_access_count
                 ON translations(access_count DESC)
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_accessed_at 
+                CREATE INDEX IF NOT EXISTS idx_accessed_at
                 ON translations(accessed_at)
             """)
             conn.commit()
@@ -176,8 +176,8 @@ class TranslationCache(BaseTranslator):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                SELECT key, source_text, translated_text, source_lang, 
-                       target_lang, engine, confidence, created_at, 
+                SELECT key, source_text, translated_text, source_lang,
+                       target_lang, engine, confidence, created_at,
                        accessed_at, access_count, metadata
                 FROM translations
                 WHERE access_count >= ?
@@ -272,8 +272,8 @@ class TranslationCache(BaseTranslator):
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.execute(
                         """
-                        SELECT key, source_text, translated_text, source_lang, 
-                               target_lang, engine, confidence, created_at, 
+                        SELECT key, source_text, translated_text, source_lang,
+                               target_lang, engine, confidence, created_at,
                                accessed_at, access_count, metadata
                         FROM translations
                         WHERE key = ?
@@ -285,7 +285,7 @@ class TranslationCache(BaseTranslator):
                     if row:
                         conn.execute(
                             """
-                            UPDATE translations 
+                            UPDATE translations
                             SET accessed_at = CURRENT_TIMESTAMP,
                                 access_count = access_count + 1
                             WHERE key = ?
@@ -340,9 +340,9 @@ class TranslationCache(BaseTranslator):
                 with sqlite3.connect(self.db_path) as conn:
                     conn.execute(
                         """
-                        INSERT OR REPLACE INTO translations 
-                        (key, source_text, translated_text, source_lang, 
-                         target_lang, engine, confidence, created_at, 
+                        INSERT OR REPLACE INTO translations
+                        (key, source_text, translated_text, source_lang,
+                         target_lang, engine, confidence, created_at,
                          accessed_at, access_count, metadata)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -438,8 +438,8 @@ class TranslationCache(BaseTranslator):
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 """
-                SELECT key, source_text, translated_text, source_lang, 
-                       target_lang, engine, confidence, created_at, 
+                SELECT key, source_text, translated_text, source_lang,
+                       target_lang, engine, confidence, created_at,
                        accessed_at, access_count, metadata
                 FROM translations
                 ORDER BY access_count DESC

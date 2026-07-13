@@ -197,7 +197,7 @@ class PerformanceBenchmark:
         failed = [m for m in metrics if not m.success]
 
         response_times = [m.response_time_ms for m in successful]
-        memory_deltas = [m.memory_delta_mb for m in metrics]
+        [m.memory_delta_mb for m in metrics]
         memory_afters = [m.memory_after_mb for m in metrics]
         cpu_percents = [m.cpu_percent for m in metrics]
 

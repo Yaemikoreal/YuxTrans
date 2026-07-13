@@ -239,7 +239,10 @@ class ApiKeyDialog(QDialog):
         if self._testing:
             return
 
-        provider_map = ["qwen", "openai", "deepseek", "anthropic", "groq", "moonshot", "siliconflow"]
+        provider_map = [
+            "qwen", "openai", "deepseek", "anthropic",
+            "groq", "moonshot", "siliconflow"
+        ]
         provider = provider_map[self.provider_combo.currentIndex()]
         api_key = self.api_key_input.text().strip()
 
@@ -254,7 +257,7 @@ class ApiKeyDialog(QDialog):
 
         try:
             # 简单验证 API Key 格式
-            translator = CloudTranslator(
+            CloudTranslator(
                 provider=provider,
                 api_key=api_key,
             )
@@ -270,7 +273,10 @@ class ApiKeyDialog(QDialog):
 
     def _save_and_close(self):
         """保存并关闭"""
-        provider_map = ["qwen", "openai", "deepseek", "anthropic", "groq", "moonshot", "siliconflow"]
+        provider_map = [
+            "qwen", "openai", "deepseek", "anthropic",
+            "groq", "moonshot", "siliconflow"
+        ]
         provider = provider_map[self.provider_combo.currentIndex()]
         api_key = self.api_key_input.text().strip()
 

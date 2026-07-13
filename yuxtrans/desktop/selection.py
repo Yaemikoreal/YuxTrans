@@ -118,7 +118,7 @@ class SelectionManager(QObject):
         try:
             import subprocess
 
-            result = subprocess.run(
+            subprocess.run(
                 [
                     "osascript",
                     "-e",

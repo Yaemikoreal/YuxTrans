@@ -3,29 +3,6 @@
  * 支持完整的设置功能：自定义供应商、语言设置、操作行为、历史记录
  */
 
-// 默认 API 端点和模型
-const DEFAULT_ENDPOINTS = {
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-  openai: 'https://api.openai.com/v1/chat/completions',
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  anthropic: 'https://api.anthropic.com/v1/messages',
-  groq: 'https://api.groq.com/openai/v1/chat/completions',
-  moonshot: 'https://api.moonshot.cn/v1/chat/completions',
-  siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
-  local: 'http://localhost:11434/api/chat'
-};
-
-const DEFAULT_MODELS = {
-  qwen: ['qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-max-longcontext'],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  deepseek: ['deepseek-chat', 'deepseek-coder'],
-  anthropic: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'],
-  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-  moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-  siliconflow: ['Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'],
-  local: []
-};
-
 document.addEventListener('DOMContentLoaded', async () => {
   // ===== 元素引用 (增加防御性) =====
   const getById = (id) => document.getElementById(id);
@@ -64,7 +41,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const customEndpointInput = getById('customEndpoint');
   const customApiKeyInput = getById('customApiKey');
   const customFormatSelect = getById('customFormat');
-  const customModelInput = getById('customModel');
+  const customModelSelect = getById('customModelSelect');
+  const customModelManual = getById('customModelManual');
+
+  // 获取当前实际选中的模型值（下拉框或手动输入）
+  function getCustomModelValue() {
+    if (customModelSelect.value === '__manual__') {
+      return customModelManual.value.trim();
+    }
+    return customModelSelect.value;
+  }
 
   // 3. 版本号
   const versionBadge = getById('versionBadge');
@@ -86,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteRuleSelect = getById('siteRule');
   const siteListTextarea = getById('siteList');
   const autoDetectLangInput = getById('autoDetectLang');
+  const autoFallbackInput = getById('autoFallback');
 
   // 6. 统计看板
   const totalTranslatesCountEl = getById('totalTranslatesCount');
@@ -212,38 +199,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('加载系统配置失败:', error);
   }
 
+  // 从 background 获取供应商默认端点与模型列表（单一来源）
+  const defaults = { endpoints: {}, models: {} };
+  try {
+    const res = await chrome.runtime.sendMessage({ action: 'getProviderDefaults' });
+    if (res?.success) {
+      defaults.endpoints = res.endpoints || {};
+      defaults.models = res.models || {};
+    }
+  } catch (error) {
+    console.error('加载供应商默认配置失败:', error);
+  }
+
+  function getActiveProfile(cfg) {
+    if (!cfg) return null;
+    if (cfg.profiles && cfg.activeProfileId) {
+      return cfg.profiles.find((p) => p.id === cfg.activeProfileId) || null;
+    }
+    return null;
+  }
+
+  function applyProfileToForm(profile) {
+    const fallback = profile || {};
+    if (providerSelect) providerSelect.value = fallback.provider || 'qwen';
+    if (apiKeyInput) apiKeyInput.value = fallback.apiKey || '';
+    if (apiEndpointInput) apiEndpointInput.value = fallback.apiEndpoint || '';
+    if (localModelInput) localModelInput.value = fallback.localModel || 'qwen3.5:0.8b';
+
+    const cp = fallback.customProvider || {};
+    if (customNameInput) customNameInput.value = cp.name || '';
+    if (customEndpointInput) customEndpointInput.value = cp.endpoint || '';
+    if (customApiKeyInput) customApiKeyInput.value = cp.apiKey || '';
+    if (customFormatSelect) customFormatSelect.value = cp.format || 'openai';
+
+    const savedModel = cp.model || '';
+    if (customModelSelect) {
+      customModelSelect.innerHTML = '';
+      if (savedModel) {
+        const opt = document.createElement('option');
+        opt.value = savedModel;
+        opt.textContent = savedModel;
+        customModelSelect.appendChild(opt);
+      }
+      const manualOpt = document.createElement('option');
+      manualOpt.value = '__manual__';
+      manualOpt.textContent = '✏️ 手动输入...';
+      customModelSelect.appendChild(manualOpt);
+      if (savedModel) {
+        customModelSelect.value = savedModel;
+        if (customModelManual) customModelManual.style.display = 'none';
+      } else {
+        customModelSelect.value = '__manual__';
+        if (customModelManual) customModelManual.style.display = 'block';
+      }
+    }
+    if (customModelManual) customModelManual.value = savedModel;
+  }
+
   if (config) {
-    if (providerSelect) providerSelect.value = config.provider || 'qwen';
-    if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
-    if (apiEndpointInput) apiEndpointInput.value = config.apiEndpoint || '';
-    if (localModelInput) localModelInput.value = config.localModel || 'qwen2:7b';
+    const activeProfile = getActiveProfile(config);
+    applyProfileToForm(activeProfile || config);
+
     if (cacheEnabledInput) cacheEnabledInput.checked = config.cacheEnabled !== false;
     if (maxCacheMBInput) maxCacheMBInput.value = config.maxCacheMB || 200;
-
-    // 自定义
-    if (config.customProvider) {
-      if (customNameInput) customNameInput.value = config.customProvider.name || '';
-      if (customEndpointInput) customEndpointInput.value = config.customProvider.endpoint || '';
-      if (customApiKeyInput) customApiKeyInput.value = config.customProvider.apiKey || '';
-      if (customFormatSelect) customFormatSelect.value = config.customProvider.format || 'openai';
-      if (customModelInput) customModelInput.value = config.customProvider.model || '';
-    }
 
     // 语言与风格
     if (sourceLangSelect) sourceLangSelect.value = config.sourceLang || 'auto';
     if (targetLangSelect) targetLangSelect.value = config.targetLang || 'zh';
-    translateStyleRadios.forEach(radio => {
+    translateStyleRadios.forEach((radio) => {
       radio.checked = radio.value === (config.translateStyle || 'normal');
     });
 
     // 行为
-    triggerModeRadios.forEach(radio => {
+    triggerModeRadios.forEach((radio) => {
       radio.checked = radio.value === (config.triggerMode || 'auto');
     });
     if (autoCopyCheckbox) autoCopyCheckbox.checked = config.autoCopy || false;
     if (siteRuleSelect) siteRuleSelect.value = config.siteRule || 'all';
     if (siteListTextarea) siteListTextarea.value = (config.siteList || []).join('\n');
     if (autoDetectLangInput) autoDetectLangInput.checked = config.autoDetectLang !== false;
+    if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
   }
 
   // 初始化 UI
@@ -264,7 +299,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ===== 模型列表逻辑 =====
   function loadModelOptions(provider, selectedModel = '') {
     if (!modelSelect) return;
-    const models = DEFAULT_MODELS[provider] || [];
+    const models = defaults.models[provider] || [];
     modelSelect.innerHTML = '';
     if (models.length === 0) {
       const opt = document.createElement('option');
@@ -272,7 +307,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       modelSelect.appendChild(opt);
       return;
     }
-    models.forEach(m => {
+    // 如果 selectedModel 不在默认列表中，将其添加到列表头部
+    const allModels = selectedModel && !models.includes(selectedModel)
+      ? [selectedModel, ...models] : [...models];
+    allModels.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m; opt.textContent = m;
       if (m === selectedModel) opt.selected = true;
@@ -289,15 +327,231 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (modelSelectGroup) modelSelectGroup.style.display = (isLocal || isCustom) ? 'none' : 'block';
     if (localModelGroup) localModelGroup.style.display = isLocal ? 'block' : 'none';
     if (customProviderSection) customProviderSection.style.display = isCustom ? 'block' : 'none';
-    if (!isLocal && !isCustom) loadModelOptions(provider, config?.model);
+    const activeProfile = getActiveProfile(config);
+    const selectedModel = activeProfile?.model || config?.model || '';
+    if (!isLocal && !isCustom) loadModelOptions(provider, selectedModel);
   }
 
   providerSelect?.addEventListener('change', updateProviderUI);
 
-  // ===== 连接测试 (通用) =====
-  async function handleTestConnection(provider, btnEl) {
-    const apiKey = apiKeyInput.value.trim();
-    const endpoint = apiEndpointInput.value.trim() || DEFAULT_ENDPOINTS[provider];
+  // ===== Ollama 状态检测 =====
+  const OLLAMA_API = 'http://localhost:11434';
+  const RECOMMENDED_MODEL = 'qwen3.5:0.8b';
+
+  async function checkOllamaStatus() {
+    const statusIcon = getById('ollamaStatusIcon');
+    const statusText = getById('ollamaStatusText');
+    const statusAction = getById('ollamaStatusAction');
+    const downloadBtn = getById('downloadModelBtn');
+    const copyBtn = getById('copyPullCmdBtn');
+
+    if (!statusIcon || !statusText) return;
+
+    // 阶段 1：检测 Ollama 服务
+    statusIcon.textContent = '⏳';
+    statusText.textContent = '正在检测 Ollama 服务...';
+    if (statusAction) statusAction.style.display = 'none';
+
+    let ollamaRunning = false;
+    let models = [];
+
+    try {
+      const resp = await fetch(`${OLLAMA_API}/api/tags`, { signal: AbortSignal.timeout(3000) });
+      if (resp.ok) {
+        const data = await resp.json();
+        models = (data.models || []).map(m => m.name);
+        ollamaRunning = true;
+      }
+    } catch (e) {
+      ollamaRunning = false;
+    }
+
+    if (!ollamaRunning) {
+      statusIcon.textContent = '🔴';
+      statusText.innerHTML = 'Ollama 服务未运行。请安装并启动 Ollama，或运行 <code>setup-ollama.bat</code> 一键配置。';
+      if (statusAction) {
+        statusAction.style.display = 'block';
+        if (downloadBtn) downloadBtn.style.display = 'none';
+        if (copyBtn) {
+          copyBtn.style.display = 'inline-block';
+          copyBtn.textContent = '复制安装命令';
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText('ollama serve');
+            copyBtn.textContent = '已复制 ✓';
+            setTimeout(() => { copyBtn.textContent = '复制安装命令'; }, 2000);
+          };
+        }
+      }
+      return;
+    }
+
+    // 阶段 2：检测推荐模型
+    const hasRecommended = models.some(name => name.includes(RECOMMENDED_MODEL) || name.includes('qwen3.5'));
+
+    if (hasRecommended) {
+      statusIcon.textContent = '🟢';
+      statusText.innerHTML = `Ollama 运行中 · 推荐模型已就绪`;
+      if (statusAction) statusAction.style.display = 'none';
+    } else {
+      statusIcon.textContent = '🟡';
+      statusText.innerHTML = `Ollama 运行中 · 推荐模型未下载`;
+      if (statusAction) {
+        statusAction.style.display = 'block';
+        if (downloadBtn) downloadBtn.style.display = 'none';
+        if (copyBtn) {
+          copyBtn.style.display = 'inline-block';
+          copyBtn.textContent = '复制 pull 命令';
+          copyBtn.onclick = () => {
+            navigator.clipboard.writeText(`ollama pull ${RECOMMENDED_MODEL}`);
+            copyBtn.textContent = '已复制 ✓';
+            setTimeout(() => { copyBtn.textContent = '复制 pull 命令'; }, 2000);
+          };
+        }
+      }
+    }
+
+    // 同步更新推荐卡片状态
+    updateRecommendationCards(models);
+  }
+
+  // ===== 轻量模型推荐卡片 =====
+  function updateRecommendationCards(installedModels) {
+    const cards = document.querySelectorAll('.model-card');
+    cards.forEach(card => {
+      const modelName = card.dataset.model;
+      const btn = card.querySelector('.model-download-btn');
+      const isInstalled = installedModels.some(name => name === modelName || name.startsWith(modelName + ':'));
+
+      if (isInstalled) {
+        card.classList.add('installed');
+        if (btn) {
+          btn.textContent = '已就绪';
+          btn.disabled = true;
+        }
+      } else if (!btn?.disabled) {
+        card.classList.remove('installed');
+        if (btn) {
+          btn.textContent = '下载';
+          btn.disabled = false;
+        }
+      }
+    });
+  }
+
+  async function pullModel(modelName, btn) {
+    const card = btn.closest('.model-card');
+    const progressEl = card?.querySelector('.model-card-progress');
+    const progressBar = card?.querySelector('.model-progress-bar');
+    const progressText = card?.querySelector('.model-progress-text');
+
+    btn.textContent = '下载中';
+    btn.disabled = true;
+    if (progressEl) progressEl.style.display = 'flex';
+
+    try {
+      const response = await fetch(`${OLLAMA_API}/api/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: modelName })
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Ollama 返回 ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (typeof data.completed === 'number' && typeof data.total === 'number' && data.total > 0) {
+              const percent = Math.min(100, Math.round((data.completed / data.total) * 100));
+              if (progressBar) progressBar.style.width = `${percent}%`;
+              if (progressText) progressText.textContent = `${percent}%`;
+            }
+            if (data.status && data.status.includes('error')) {
+              throw new Error(data.error || data.status);
+            }
+          } catch (e) {
+            // 忽略不可解析行，错误已在上面抛出
+            if (e.message !== 'Unexpected end of JSON input') throw e;
+          }
+        }
+      }
+
+      btn.textContent = '已就绪';
+      card?.classList.add('installed');
+      if (progressEl) progressEl.style.display = 'none';
+      showStatus(`${modelName} 下载完成`, 'success');
+
+      // 刷新本地模型列表
+      const success = await handleFetchModels('local', fetchLocalModelsBtn, localModelSelect);
+      // 如果当前输入框为空，自动填入刚下载的模型
+      if (success && localModelInput && !localModelInput.value.trim()) {
+        localModelInput.value = modelName;
+      }
+    } catch (error) {
+      console.error('[YuxTrans] 拉取模型失败:', error);
+      btn.textContent = '重试';
+      btn.disabled = false;
+      if (progressEl) progressEl.style.display = 'none';
+      showStatus(`下载 ${modelName} 失败: ${error.message}`, 'error');
+    }
+  }
+
+  function bindRecommendationCards() {
+    document.querySelectorAll('.model-download-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const modelName = btn.dataset.model;
+        if (!modelName || btn.disabled) return;
+        pullModel(modelName, btn);
+      });
+    });
+  }
+
+  // 切换到 local 时自动检测
+  const _origUpdateProviderUI = updateProviderUI;
+  function updateProviderUIWithCheck() {
+    _origUpdateProviderUI();
+    if (providerSelect.value === 'local') {
+      checkOllamaStatus();
+    }
+  }
+  providerSelect?.removeEventListener('change', updateProviderUI);
+  providerSelect?.addEventListener('change', updateProviderUIWithCheck);
+
+  // 页面加载时绑定推荐卡片
+  bindRecommendationCards();
+
+  // 页面加载时如果当前是 local 也检测
+  if (providerSelect?.value === 'local') {
+    checkOllamaStatus();
+  }
+
+  // ===== 连接测试（使用真实翻译端点） =====
+  async function handleTestConnection(provider, btnEl, customConfig) {
+    let apiKey, endpoint, model;
+    if (customConfig) {
+      // 自定义供应商使用独立字段
+      apiKey = customConfig.apiKey;
+      endpoint = customConfig.endpoint;
+      model = customConfig.model;
+    } else {
+      apiKey = apiKeyInput.value.trim();
+      endpoint = apiEndpointInput.value.trim() || defaults.endpoints[provider];
+      model = modelSelect.value || '';
+    }
 
     if (!apiKey && provider !== 'local') {
       showStatus('请先填写 API Key', 'error'); return;
@@ -309,8 +563,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const res = await chrome.runtime.sendMessage({
-        action: 'fetchModels',
-        config: { provider, apiKey, endpoint }
+        action: 'testProviderConnection',
+        config: { provider, apiKey, endpoint, model }
       });
       if (res?.success) showStatus(provider === 'local' ? 'Ollama 服务连接正常' : '连接测试成功：服务响应正常', 'success');
       else showStatus(`连接失败: ${res?.error || '未知错误'}`, 'error');
@@ -325,10 +579,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   testProviderBtn?.addEventListener('click', () => handleTestConnection(providerSelect.value, testProviderBtn));
   testLocalBtn?.addEventListener('click', () => handleTestConnection('local', testLocalBtn));
 
+  // 自定义供应商连接测试
+  const testCustomBtn = getById('testCustomBtn');
+  testCustomBtn?.addEventListener('click', () => {
+    handleTestConnection('custom', testCustomBtn, {
+      apiKey: customApiKeyInput.value.trim(),
+      endpoint: customEndpointInput.value.trim(),
+      model: getCustomModelValue()
+    });
+  });
+
+  // 自定义供应商测试结果显示
+  const customTestResult = getById('customTestResult');
+  // 复用 showStatus 的逻辑，但输出到 customTestResult 而非浮动层
+  function showCustomTestResult(msg, type) {
+    if (!customTestResult) return;
+    customTestResult.className = '';
+    customTestResult.textContent = msg;
+    if (type === 'success') {
+      customTestResult.style.cssText = 'margin-top:12px; padding:10px 16px; border-radius:10px; background:rgba(46,204,113,0.1); color:#27ae60; font-size:13px; font-weight:600;';
+    } else {
+      customTestResult.style.cssText = 'margin-top:12px; padding:10px 16px; border-radius:10px; background:rgba(231,76,60,0.1); color:#c0392b; font-size:13px; font-weight:600;';
+    }
+  }
+
   // ===== 刷新列表 (通用) =====
   async function handleFetchModels(provider, btnEl, targetSelect) {
     const apiKey = apiKeyInput.value.trim();
-    const endpoint = apiEndpointInput.value.trim() || DEFAULT_ENDPOINTS[provider];
+    const endpoint = apiEndpointInput.value.trim() || defaults.endpoints[provider];
 
     if (!apiKey && provider !== 'local') {
       showStatus('请先填写 API Key', 'error'); return;
@@ -344,7 +622,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         config: { provider, apiKey, endpoint }
       });
       if (res?.success && res.models) {
-        const finalModels = [...new Set([...(DEFAULT_MODELS[provider] || []), ...res.models])];
+        const finalModels = [...new Set([...(defaults.models[provider] || []), ...res.models])];
         targetSelect.innerHTML = '';
         finalModels.forEach(m => {
           const opt = document.createElement('option');
@@ -376,45 +654,238 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // 自定义供应商获取模型列表
+  const fetchCustomModelsBtn = getById('fetchCustomModelsBtn');
+  fetchCustomModelsBtn?.addEventListener('click', async () => {
+    const endpoint = customEndpointInput.value.trim();
+    const apiKey = customApiKeyInput.value.trim();
+
+    if (!endpoint) { showStatus('请先填写 API 端点地址', 'error'); return; }
+    if (!apiKey) { showStatus('请先填写 API Key', 'error'); return; }
+
+    fetchCustomModelsBtn.disabled = true;
+    const originalText = fetchCustomModelsBtn.textContent;
+    fetchCustomModelsBtn.textContent = '获取中...';
+
+    try {
+      const res = await chrome.runtime.sendMessage({
+        action: 'fetchModels',
+        config: { provider: 'custom', apiKey, endpoint }
+      });
+
+      if (res?.success && res.models && res.models.length > 0) {
+        // 清空下拉框并填入模型列表
+        customModelSelect.innerHTML = '';
+        res.models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m; opt.textContent = m;
+          customModelSelect.appendChild(opt);
+        });
+        // 添加手动输入选项
+        const manualOpt = document.createElement('option');
+        manualOpt.value = '__manual__'; manualOpt.textContent = '✏️ 手动输入...';
+        customModelSelect.appendChild(manualOpt);
+
+        customModelSelect.style.display = 'block';
+        customModelManual.style.display = 'none';
+        customModelSelect.value = res.models[0] || '';
+        showStatus(`获取到 ${res.models.length} 个模型，请从下拉列表选择`, 'success');
+      } else {
+        showStatus(res?.error || '未获取到可用模型', 'error');
+      }
+    } catch (err) {
+      showStatus('获取模型列表失败', 'error');
+    } finally {
+      fetchCustomModelsBtn.disabled = false;
+      fetchCustomModelsBtn.textContent = originalText;
+    }
+  });
+
+  // 选择"手动输入"时显示文本输入框
+  customModelSelect?.addEventListener('change', () => {
+    if (customModelSelect.value === '__manual__') {
+      customModelManual.style.display = 'block';
+      customModelManual.focus();
+    } else {
+      customModelManual.style.display = 'none';
+    }
+  });
+
   localModelSelect?.addEventListener('change', () => {
     localModelInput.value = localModelSelect.value;
   });
 
-  // ===== 保存设置 =====
+  // ===== 保存 ProviderProfile =====
+  const providerNames = {
+    qwen: '通义千问', openai: 'OpenAI', deepseek: 'DeepSeek',
+    anthropic: 'Anthropic', groq: 'Groq', moonshot: 'Moonshot',
+    siliconflow: 'SiliconFlow', local: 'Ollama', custom: '自定义'
+  };
+
+  const saveProviderBtn = getById('saveProviderBtn');
+  saveProviderBtn?.addEventListener('click', async () => {
+    const provider = providerSelect.value;
+    const isLocal = provider === 'local';
+    const isCustom = provider === 'custom';
+    const modelId = isLocal
+      ? localModelInput.value.trim()
+      : (isCustom ? getCustomModelValue() : (modelSelect.value || ''));
+
+    if (!modelId) {
+      showStatus(isLocal ? '请填写本地模型名称' : '请先选择一个模型', 'error');
+      return;
+    }
+
+    const profile = {
+      provider,
+      label: `${providerNames[provider] || provider} - ${modelId || 'default'}`,
+      apiKey: isLocal || isCustom ? '' : apiKeyInput.value.trim(),
+      apiEndpoint: isLocal || isCustom ? '' : apiEndpointInput.value.trim(),
+      model: isLocal ? '' : modelId,
+      localModel: isLocal ? modelId : '',
+      customProvider: isCustom
+        ? {
+            name: customNameInput.value.trim(),
+            endpoint: customEndpointInput.value.trim(),
+            apiKey: customApiKeyInput.value.trim(),
+            format: customFormatSelect.value,
+            model: modelId
+          }
+        : { name: '', endpoint: '', apiKey: '', format: 'openai', model: '' }
+    };
+
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'saveProfile', profile });
+      if (res?.success) {
+        config = await chrome.runtime.sendMessage({ action: 'getConfig' });
+        showStatus('档案已保存并启用', 'success');
+        loadModelList();
+      } else {
+        showStatus(`保存失败: ${res?.error || '未知错误'}`, 'error');
+      }
+    } catch (err) {
+      showStatus(`保存异常: ${err.message}`, 'error');
+    }
+  });
+
+  // ===== ProviderProfile 管理 =====
+
+  let modelRecords = []; // 当前所有 ProviderProfile
+
+  async function loadModelList() {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getProfiles' });
+      if (res?.success) {
+        modelRecords = res.profiles || [];
+        if (res.activeProfileId) config.activeProfileId = res.activeProfileId;
+      }
+    } catch (e) {
+      modelRecords = [];
+    }
+    renderModelList();
+  }
+
+  function renderModelList() {
+    const container = getById('modelList');
+    if (!container) return;
+
+    if (!modelRecords || modelRecords.length === 0) {
+      container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-sub); font-size: 13px;">暂无档案，请在上方配置并保存后在此管理。</div>';
+      return;
+    }
+
+    const currentId = config?.activeProfileId || '';
+
+    container.innerHTML = modelRecords.map((m, idx) => {
+      const isActive = m.id === currentId;
+      const providerLabel = providerNames[m.provider] || m.provider;
+      const modelLabel = m.model || m.localModel || '';
+      return `
+        <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:${isActive ? 'var(--accent-soft)' : 'var(--bg-input)'};border-radius:14px;border:1px solid ${isActive ? 'rgba(216,160,81,0.3)' : 'var(--border-color)'};margin-bottom:10px;transition:all 0.3s;">
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:14px;color:var(--text-title);">${m.label || m.id}</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">${providerLabel} · ${modelLabel}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${!isActive ? `<button class="btn-test" data-activate="${idx}" style="font-size:12px;padding:6px 14px;">启用</button>` : '<span style="font-size:12px;color:var(--accent);font-weight:700;padding:6px 14px;">✓ 当前使用</span>'}
+            <button class="btn-test" data-remove="${idx}" style="font-size:12px;padding:6px 14px;color:#c0392b;border-color:rgba(192,57,43,0.2);">移除</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('[data-activate]').forEach((btn) => {
+      btn.addEventListener('click', () => activateModel(parseInt(btn.dataset.activate, 10)));
+    });
+    container.querySelectorAll('[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => removeModel(parseInt(btn.dataset.remove, 10)));
+    });
+  }
+
+  async function activateModel(idx) {
+    const record = modelRecords[idx];
+    if (!record) return;
+
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'setActiveProfile', profileId: record.id });
+      if (res?.success) {
+        config = await chrome.runtime.sendMessage({ action: 'getConfig' });
+        applyProfileToForm(getActiveProfile(config));
+        updateProviderUI();
+        renderModelList();
+        showStatus(`已切换至 ${record.label || record.id}`, 'success');
+      } else {
+        showStatus(`切换失败: ${res?.error || '未知错误'}`, 'error');
+      }
+    } catch (err) {
+      showStatus(`切换失败: ${err.message}`, 'error');
+    }
+  }
+
+  async function removeModel(idx) {
+    const record = modelRecords[idx];
+    if (!record) return;
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'deleteProfile', profileId: record.id });
+      if (res?.success) {
+        config = await chrome.runtime.sendMessage({ action: 'getConfig' });
+        modelRecords.splice(idx, 1);
+        renderModelList();
+        showStatus(`已移除 ${record.label || record.id}`, 'success');
+      } else {
+        showStatus(`移除失败: ${res?.error || '未知错误'}`, 'error');
+      }
+    } catch (err) {
+      showStatus(`移除失败: ${err.message}`, 'error');
+    }
+  }
+
+  loadModelList();
+
+  // ===== 保存 ActiveConfig（与供应商无关的通用设置） =====
   saveBtn?.addEventListener('click', async () => {
     try {
       const getVal = (el) => el?.value || '';
       const getChecked = (el) => el?.checked || false;
 
-      const newConfig = {
-        provider: getVal(providerSelect) || 'qwen',
-        apiKey: getVal(apiKeyInput),
-        apiEndpoint: getVal(apiEndpointInput),
-        model: getVal(modelSelect),
-        localModel: getVal(localModelInput),
+      const activeConfig = {
         cacheEnabled: cacheEnabledInput ? getChecked(cacheEnabledInput) : true,
         maxCacheMB: parseInt(getVal(maxCacheMBInput) || '200', 10),
-        customProvider: {
-          name: getVal(customNameInput).trim(),
-          endpoint: getVal(customEndpointInput).trim(),
-          apiKey: getVal(customApiKeyInput).trim(),
-          format: getVal(customFormatSelect),
-          model: getVal(customModelInput).trim()
-        },
         sourceLang: getVal(sourceLangSelect) || 'auto',
         targetLang: getVal(targetLangSelect) || 'zh',
         translateStyle: document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal',
         triggerMode: document.querySelector('input[name="triggerMode"]:checked')?.value || 'auto',
         autoCopy: getChecked(autoCopyCheckbox),
         siteRule: getVal(siteRuleSelect) || 'all',
-        siteList: getVal(siteListTextarea).split('\n').map(s => s.trim()).filter(Boolean),
-        autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true
+        siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
+        autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
+        autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true
       };
 
-      const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: newConfig });
-      if (res?.success) { 
-        showStatus('设置已安全保存', 'success'); 
-        config = newConfig; 
+      const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
+      if (res?.success) {
+        showStatus('通用设置已保存', 'success');
+        config = { ...config, ...activeConfig };
       } else {
         showStatus(`保存失败: ${res?.error || '未知响应'}`, 'error');
       }

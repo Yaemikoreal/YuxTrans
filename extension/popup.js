@@ -1,206 +1,213 @@
 /**
- * Popup Script
- * 处理翻译请求、更新检查、UI交互
+ * Popup Script (Control Dashboard)
+ * 小巧的控制面板：整页翻译、流式开关、模型切换、连接状态、用量看板
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
   const getById = (id) => document.getElementById(id);
 
   // ===== 元素引用 =====
-  const inputText = getById('inputText');
-  const translateBtn = getById('translateBtn');
-  const resultArea = getById('resultArea');
-  const resultText = getById('resultText');
-  const copyBtn = getById('copyBtn');
-  const clearBtn = getById('clearBtn');
-  const statusText = getById('statusText');
-  const settingsBtn = getById('settingsBtn');
   const versionBadge = getById('versionBadge');
-  const updateToast = getById('updateToast');
-  
-  const currentSourceLang = getById('currentSourceLang');
-  const currentTargetLang = getById('currentTargetLang');
-  const switchLangBtn = getById('switchLangBtn');
+  const settingsBtn = getById('settingsBtn');
+  const connectionStatus = getById('connectionStatus');
+  const connectionText = getById('connectionText');
+  const modelSelect = getById('modelSelect');
+  const translatePageBtn = getById('translatePageBtn');
+  const streamToggle = getById('streamToggle');
+  const tokenStat = getById('tokenStat');
+  const cacheHitStat = getById('cacheHitStat');
+  const hotwordStat = getById('hotwordStat');
+  const toast = getById('toast');
 
-  // ===== 语言映射 =====
-  const langNames = {
-    'auto': '自动检测', 'zh': '中文', 'zh-TW': '繁体中文',
-    'en': '英文', 'ja': '日文', 'ko': '韩文',
-    'fr': '法文', 'de': '德文', 'es': '西班牙文',
-    'ru': '俄文', 'pt': '葡萄牙文', 'it': '意大利文',
-    'ar': '阿拉伯文', 'th': '泰文', 'vi': '越南文'
+  let config = {};
+  let modelRecords = [];
+  let statsInterval = null;
+
+  const providerNames = {
+    qwen: '通义千问',
+    openai: 'OpenAI',
+    deepseek: 'DeepSeek',
+    anthropic: 'Anthropic',
+    groq: 'Groq',
+    moonshot: 'Moonshot',
+    siliconflow: 'SiliconFlow',
+    local: 'Ollama',
+    custom: '自定义'
   };
 
-  function updateLangDisplay() {
-    currentSourceLang.textContent = langNames[config.sourceLang] || config.sourceLang;
-    currentTargetLang.textContent = langNames[config.targetLang] || config.targetLang;
-  }
-
-  if (versionBadge) {
+  // ===== 初始化 =====
+  try {
     const manifest = chrome.runtime.getManifest();
     versionBadge.textContent = `v${manifest.version}`;
-  }
+  } catch (e) {}
 
-  // ===== 加载配置 =====
-  let config = await chrome.runtime.sendMessage({ action: 'getConfig' });
-  updateLangDisplay();
-
-  // ===== 语言切换 =====
-  switchLangBtn.addEventListener('click', async () => {
-    let newSource = config.targetLang;
-    let newTarget = config.sourceLang;
-    
-    // 如果原先源语言是'自动检测'，则翻转后目标语言应该是对立的语言，而不是变为'auto'
-    if (newTarget === 'auto') {
-      newTarget = newSource.startsWith('zh') ? 'en' : 'zh';
-    }
-    
-    config.sourceLang = newSource;
-    config.targetLang = newTarget;
-    
-    updateLangDisplay();
-    await chrome.runtime.sendMessage({ action: 'setConfig', config });
-    showToast('语言方向已切换');
+  settingsBtn?.addEventListener('click', () => {
+    chrome.runtime.openOptionsPage();
   });
 
-  updateLangDisplay();
+  // ===== 加载配置与 ProviderProfile =====
+  async function loadData() {
+    try {
+      config = await chrome.runtime.sendMessage({ action: 'getConfig' }) || {};
+    } catch (e) {
+      config = {};
+    }
 
-  // ===== 翻译功能 (核心修复：增加 null 检查) =====
-  if (translateBtn) {
-    translateBtn.addEventListener('click', async () => {
-      const text = inputText ? inputText.value.trim() : '';
-      if (!text) {
-        showToast('请输入要翻译的文本', true);
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getProfiles' });
+      modelRecords = res?.success ? (res.profiles || []) : [];
+    } catch (e) {
+      modelRecords = [];
+    }
+  }
+
+  await loadData();
+
+  // ===== 模型切换下拉栏 =====
+  function renderModelSelect() {
+    modelSelect.innerHTML = '';
+
+    if (modelRecords.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '请先在设置页添加模型';
+      modelSelect.appendChild(opt);
+      modelSelect.disabled = true;
+      return;
+    }
+
+    modelSelect.disabled = false;
+    const currentId = config.activeProfileId || '';
+
+    modelRecords.forEach((record) => {
+      const opt = document.createElement('option');
+      opt.value = record.id;
+      const providerLabel = providerNames[record.provider] || record.provider;
+      const modelName = record.model || record.localModel || 'default';
+      opt.textContent = `${providerLabel} · ${modelName}`;
+      if (record.id === currentId) opt.selected = true;
+      modelSelect.appendChild(opt);
+    });
+  }
+
+  function getActiveProfile(cfg) {
+    if (!cfg?.profiles || !cfg.activeProfileId) return null;
+    return cfg.profiles.find((p) => p.id === cfg.activeProfileId) || null;
+  }
+
+  modelSelect?.addEventListener('change', async () => {
+    const selectedId = modelSelect.value;
+    const record = modelRecords.find((r) => r.id === selectedId);
+    if (!record) return;
+
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'setActiveProfile', profileId: record.id });
+      if (res?.success) {
+        config = await chrome.runtime.sendMessage({ action: 'getConfig' }) || {};
+        showToast(`已切换至 ${providerNames[record.provider] || record.provider}`);
+        await checkConnection();
+      } else {
+        showToast(res?.error || '切换失败', true);
+      }
+    } catch (e) {
+      showToast(`切换异常: ${e.message}`, true);
+    }
+  });
+
+  // ===== 连接状态检测 =====
+  async function checkConnection() {
+    setConnectionStatus('checking', '检测中');
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'checkConnection' });
+      if (res?.success) {
+        setConnectionStatus('ok', '可连接');
+      } else {
+        const msg = res?.error || '连接失败';
+        setConnectionStatus('error', msg.length > 8 ? '连接失败' : msg);
+      }
+    } catch (e) {
+      setConnectionStatus('error', '未响应');
+    }
+  }
+
+  function setConnectionStatus(type, text) {
+    connectionStatus.className = `status-pill ${type}`;
+    connectionText.textContent = text;
+  }
+
+  // ===== 整页翻译 =====
+  translatePageBtn?.addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        showToast('无法获取当前标签页', true);
         return;
       }
-
-      translateBtn.disabled = true;
-      translateBtn.textContent = '翻译中...';
-      
-      // 立即显示结果区以承接流式输出
-      if (resultText) resultText.textContent = '';
-      if (statusText) statusText.textContent = '连接中...';
-      if (resultArea) resultArea.style.display = 'block';
-
-      const startTime = Date.now();
-
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: 'translateStream',
-          text: text,
-          sourceLang: config.sourceLang || 'auto',
-          targetLang: config.targetLang || 'zh'
-        });
-
-        const elapsed = Date.now() - startTime;
-
-        if (response && response.success) {
-          if (resultText) resultText.textContent = response.text;
-
-          if (statusText) statusText.textContent = `✓ 翻译完成`;
-
-          // 自动复制
-          if (config.autoCopy) {
-            await copyToClipboard(response.text);
-            if (statusText) statusText.textContent = `✓ 已翻译并复制`;
-          }
-        } else {
-          if (resultArea) resultArea.style.display = 'none';
-          showToast(response?.error || '翻译失败', true);
-        }
-      } catch (error) {
-        showToast(`翻译出错: ${error.message}`, true);
-      } finally {
-        translateBtn.disabled = false;
-        translateBtn.textContent = '翻译';
-      }
-    });
-  }
-
-  // ===== 复制结果 =====
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const text = resultText ? resultText.textContent : '';
-      if (text) {
-        await copyToClipboard(text);
-        showToast('已复制到剪贴板');
-      }
-    });
-  }
-
-  // ===== 清空 =====
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (inputText) {
-        inputText.value = '';
-        inputText.focus();
-      }
-      if (resultText) resultText.textContent = '';
-      if (resultArea) resultArea.style.display = 'none';
-    });
-  }
-
-  // ===== 快捷键绑定 =====
-  inputText.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      translateBtn.click();
+      await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
+      window.close();
+    } catch (e) {
+      showToast('整页翻译触发失败，请刷新页面后重试', true);
     }
   });
 
-  // 移除反馈按钮监听（UI 已精简）
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => {
-      chrome.runtime.openOptionsPage();
-    });
-  }
-
-  // ===== 快捷键 =====
-  inputText.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      translateBtn.click();
+  // ===== 流式翻译开关 =====
+  streamToggle.checked = config.enableStreaming !== false;
+  streamToggle?.addEventListener('change', async () => {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'setConfig',
+        config: { enableStreaming: streamToggle.checked }
+      });
+      showToast(streamToggle.checked ? '流式翻译已开启' : '流式翻译已关闭');
+    } catch (e) {
+      showToast('设置保存失败', true);
     }
   });
+
+  // ===== 用量与缓存看板 =====
+  function formatCompact(n) {
+    if (n === undefined || n === null || Number.isNaN(n)) return '--';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+  }
+
+  async function updateStats() {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'getCacheStats' });
+      if (!res?.success) return;
+
+      const { usage, stats } = res;
+      tokenStat.textContent = formatCompact(usage?.totalTokens);
+
+      const total = usage?.totalCount || 0;
+      const hits = usage?.cacheHits || 0;
+      const rate = total > 0 ? Math.round((hits / total) * 100) : 0;
+      cacheHitStat.textContent = `${rate}%`;
+
+      hotwordStat.textContent = formatCompact(stats?.wordCount);
+    } catch (e) {
+      // 静默失败，避免破坏面板
+    }
+  }
 
   // ===== 工具函数 =====
-  async function copyToClipboard(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // 降级方案
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return true;
-    }
-  }
-
   function showToast(message, isError = false) {
-    updateToast.textContent = message;
-    updateToast.className = `update-toast show ${isError ? 'error' : ''}`;
-
+    toast.textContent = message;
+    toast.className = `toast${isError ? ' error' : ''} show`;
     setTimeout(() => {
-      updateToast.className = 'update-toast';
-    }, 3000);
+      toast.className = 'toast';
+    }, 2500);
   }
 
-  // ===== 监听事件传递 =====
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'configUpdated') {
-      config = request.config;
-    } else if (request.action === 'streamChunk') {
-      // 流式输出实时渲染
-      resultText.textContent = request.fullText;
-      statusText.textContent = '翻译中...';
-    }
-  });
+  // ===== 启动 =====
+  renderModelSelect();
+  await checkConnection();
+  await updateStats();
+  statsInterval = setInterval(updateStats, 4000);
 
-  // ===== 初始化焦点 =====
-  inputText.focus();
+  // 面板关闭时清理定时器
+  window.addEventListener('unload', () => {
+    if (statsInterval) clearInterval(statsInterval);
+  });
 });

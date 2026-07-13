@@ -233,12 +233,12 @@ engine:
   local_model: qwen2:7b
   local_timeout_ms: 5000
   local_temperature: 0.3
-  
+
   cloud_provider: qwen
   cloud_model: qwen-turbo
   cloud_timeout_ms: 3000
   cloud_temperature: 0.3
-  
+
   cache_enabled: true
   cache_ttl_days: 30
   cache_lru_size: 10000
@@ -247,14 +247,14 @@ performance:
   target_cache_hit_ms: 10.0
   target_local_response_ms: 500.0
   target_cloud_response_ms: 2000.0
-  
+
   max_retries: 3
   retry_delay_ms: 100
   retry_strategy: exponential
-  
+
   max_concurrent_requests: 10
   rate_limit_per_second: 10.0
-  
+
   bleu_threshold: 0.70
   success_rate_threshold: 0.95
 
@@ -263,10 +263,10 @@ ui:
   language: zh
   show_engine_indicator: true
   show_response_time: true
-  
+
   hotkey_translate: Ctrl+Shift+T
   hotkey_paste: Ctrl+Shift+P
-  
+
   window_width: 400
   window_height: 300
   window_opacity: 0.95

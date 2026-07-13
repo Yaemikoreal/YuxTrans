@@ -1,16 +1,16 @@
 """单元测试 - 翻译引擎基类"""
 
-import pytest
-import asyncio
 import time
+
+import pytest
 
 from yuxtrans.engine.base import (
     BaseTranslator,
+    EngineStatus,
+    EngineType,
+    TranslationError,
     TranslationRequest,
     TranslationResult,
-    TranslationError,
-    EngineType,
-    EngineStatus,
 )
 
 
@@ -58,7 +58,7 @@ async def test_translation_result_is_success():
         engine=EngineType.LOCAL,
         response_time_ms=100.0,
     )
-    assert success_result.is_success == True
+    assert success_result.is_success
 
     empty_result = TranslationResult(
         text="",
@@ -67,7 +67,7 @@ async def test_translation_result_is_success():
         engine=EngineType.LOCAL,
         response_time_ms=100.0,
     )
-    assert empty_result.is_success == False
+    assert not empty_result.is_success
 
 
 @pytest.mark.asyncio
@@ -99,7 +99,7 @@ async def test_translator_health_check():
     translator = MockTranslator()
 
     is_healthy = await translator.health_check()
-    assert is_healthy == True
+    assert is_healthy
 
 
 @pytest.mark.asyncio
@@ -120,7 +120,7 @@ async def test_translator_status():
     translator = MockTranslator()
 
     assert translator.status == EngineStatus.READY
-    assert translator.is_available == True
+    assert translator.is_available
 
 
 @pytest.mark.asyncio

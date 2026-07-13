@@ -1,13 +1,12 @@
 """单元测试 - 缓存层"""
 
-import pytest
-import asyncio
-import tempfile
 import os
-from pathlib import Path
+import tempfile
 
-from yuxtrans.cache.database import TranslationCache, CacheEntry
-from yuxtrans.engine.base import TranslationRequest, TranslationResult, EngineType
+import pytest
+
+from yuxtrans.cache.database import TranslationCache
+from yuxtrans.engine.base import EngineType, TranslationRequest, TranslationResult
 
 
 @pytest.fixture
@@ -54,7 +53,7 @@ async def test_cache_store_and_retrieve(cache):
     cached_result = await cache.translate(request)
 
     assert cached_result.text == "你好，世界！"
-    assert cached_result.cached == True
+    assert cached_result.cached
     assert cached_result.engine == EngineType.CACHE
     assert cached_result.response_time_ms < 10
 
@@ -114,7 +113,6 @@ async def test_cache_stats(cache):
 
 @pytest.mark.asyncio
 async def test_lru_cache_eviction():
-    lru_cache = TranslationCache.DEFAULT_LRU_SIZE
     cache = TranslationCache(lru_size=100, preload_popular=False)
 
     result = TranslationResult(
