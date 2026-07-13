@@ -439,13 +439,6 @@
   background: var(--yxt-accent-soft);
 }
 
-.yuxtrans-page-control.yuxtrans-minimized {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(12px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
 /* ===== 站点规则反馈提示 ===== */
 .yuxtrans-site-rule-toast {
   position: fixed;

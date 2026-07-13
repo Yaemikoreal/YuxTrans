@@ -15,9 +15,7 @@ class YuxTransContent {
       translatedNodes: [],
       streamingNodes: new Map() // requestId -> { nodeInfo, tempSpan }
     };
-    this.progressIndicator = null;
-    this.sideTab = null;
-    this.autoCloseTimer = null;
+    this.pageControl = null;
     this.config = {
       concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
       batchSize: 20,  // 批量大小（减少 API 调用次数）
@@ -491,7 +489,13 @@ class YuxTransContent {
           if (!parent) return NodeFilter.FILTER_REJECT;
 
           // 排除特定元素
-          if (parent.closest('script, style, noscript, iframe, canvas, svg, code, pre, .yuxtrans-progress, .yuxtrans-popup, .yuxtrans-page-control, .yuxtrans-side-tab, .yuxtrans-float-btn, .yuxtrans-site-rule-toast, [contenteditable="true"]')) {
+          const skipSelectors = [
+            'script', 'style', 'noscript', 'iframe', 'canvas', 'svg',
+            'code', 'pre', '[contenteditable="true"]',
+            '.yuxtrans-progress', '.yuxtrans-popup', '.yuxtrans-page-control',
+            '.yuxtrans-side-tab', '.yuxtrans-float-btn', '.yuxtrans-site-rule-toast'
+          ].join(', ');
+          if (parent.closest(skipSelectors)) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -501,7 +505,9 @@ class YuxTransContent {
           }
 
           // 排除已翻译节点（含双语模式）
-          if (parent.classList.contains('yuxtrans-translated') || parent.classList.contains('yuxtrans-translated-bilingual')) {
+          const isTranslated = parent.classList.contains('yuxtrans-translated');
+          const isBilingual = parent.classList.contains('yuxtrans-translated-bilingual');
+          if (isTranslated || isBilingual) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -844,7 +850,7 @@ class YuxTransContent {
     const belowFoldItems = dedupedItems.filter(item => !item.nodeInfo.isInViewport);
 
     const displayTotal = nodesInfo.length;
-    this.showProgressIndicator(displayTotal);
+    this.showPageControl(displayTotal);
     const startTime = Date.now();
     let completedUnits = 0;
 
@@ -852,7 +858,7 @@ class YuxTransContent {
       completedUnits += delta;
       const ratio = dedupedItems.length > 0 ? nodesInfo.length / dedupedItems.length : 1;
       const actualCompleted = Math.min(Math.round(completedUnits * ratio), nodesInfo.length);
-      this.updateProgressIndicator(actualCompleted, displayTotal, startTime);
+      this.updatePageControl(actualCompleted, displayTotal, startTime);
     };
 
     try {
@@ -935,7 +941,9 @@ class YuxTransContent {
       // 翻译完成
       this.pageTranslationState.isTranslated = true;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      this.showProgressComplete(successCount, nodesInfo.length, elapsed, duplicateCount, failCount);
+      this.showPageControlComplete(
+        successCount, nodesInfo.length, elapsed, duplicateCount, failCount
+      );
     } catch (error) {
       console.error('[YuxTrans] 整页翻译异常:', error);
     } finally {
@@ -944,65 +952,81 @@ class YuxTransContent {
     }
   }
 
-  showProgressIndicator(total) {
-    this.hideProgressIndicator(true);
+  /**
+   * 获取整页翻译控制条内的元素
+   */
+  pageControlElement(id) {
+    return this.pageControl ? this.pageControl.querySelector(`#${id}`) : null;
+  }
+
+  showPageControl(total) {
+    this.hidePageControl();
 
     const control = document.createElement('div');
     control.className = 'yuxtrans-page-control';
     control.id = 'yuxtrans-page-control';
     control.innerHTML = `
       <div class="yuxtrans-page-control-progress">
-        <div class="yuxtrans-page-control-progress-bar" id="yuxtrans-progress-bar" style="width: 0%"></div>
+        <div class="yuxtrans-page-control-progress-bar" id="yuxtrans-progress-bar"
+          style="width: 0%"></div>
       </div>
-      <span class="yuxtrans-page-control-text" id="yuxtrans-progress-text">0 / ${total}</span>
+      <span class="yuxtrans-page-control-text" id="yuxtrans-progress-text">
+        0 / ${total}
+      </span>
       <button class="yuxtrans-page-control-btn" id="yuxtrans-cancel-btn">取消</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn" style="display:none">双语</button>
-      <button class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn" style="display:none">恢复原文</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-close-btn" style="display:none">关闭</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn"
+        style="display:none">双语</button>
+      <button class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn"
+        style="display:none">恢复原文</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-close-btn"
+        style="display:none">关闭</button>
     `;
 
     document.body.appendChild(control);
-    this.progressIndicator = control;
+    this.pageControl = control;
+    this.pageControlListenersBound = false;
 
     // 取消按钮
     control.querySelector('#yuxtrans-cancel-btn').addEventListener('click', () => {
       this.pageTranslationState.isTranslating = false;
       this.restoreOriginalTexts();
-      this.hideProgressIndicator(true);
+      this.hidePageControl();
     });
   }
 
-  updateProgressIndicator(current, total, startTime) {
-    if (!this.progressIndicator) return;
+  updatePageControl(current, total, startTime) {
+    if (!this.pageControl) return;
 
     const percent = Math.round((current / total) * 100);
-
-    const bar = this.progressIndicator.querySelector('#yuxtrans-progress-bar');
-    const text = this.progressIndicator.querySelector('#yuxtrans-progress-text');
+    const bar = this.pageControlElement('yuxtrans-progress-bar');
+    const text = this.pageControlElement('yuxtrans-progress-text');
 
     if (bar) bar.style.width = `${percent}%`;
     if (text) text.textContent = `${current} / ${total} · ${percent}%`;
   }
 
-  showProgressComplete(successCount, totalCount, elapsed, duplicateCount = 0, failCount = 0) {
-    if (!this.progressIndicator) return;
+  showPageControlComplete(
+    successCount, totalCount, elapsed, duplicateCount = 0, failCount = 0
+  ) {
+    if (!this.pageControl) return;
 
     const hasFailures = failCount > 0;
     const isBilingual = this.config.bilingualMode !== false;
 
-    const textEl = this.progressIndicator.querySelector('#yuxtrans-progress-text');
+    const textEl = this.pageControlElement('yuxtrans-progress-text');
     if (textEl) {
-      textEl.textContent = `完成 ${successCount}/${totalCount}${hasFailures ? ` · 失败 ${failCount}` : ''}`;
+      const failureText = hasFailures ? ` · 失败 ${failCount}` : '';
+      textEl.textContent = `完成 ${successCount}/${totalCount}${failureText}`;
     }
 
-    const bar = this.progressIndicator.querySelector('#yuxtrans-progress-bar');
+    const bar = this.pageControlElement('yuxtrans-progress-bar');
     if (bar) bar.style.width = '100%';
 
     // 隐藏取消，显示恢复原文、双语切换、关闭
-    const cancelBtn = this.progressIndicator.querySelector('#yuxtrans-cancel-btn');
-    const restoreBtn = this.progressIndicator.querySelector('#yuxtrans-restore-btn');
-    const bilingualBtn = this.progressIndicator.querySelector('#yuxtrans-bilingual-btn');
-    const closeBtn = this.progressIndicator.querySelector('#yuxtrans-close-btn');
+    const cancelBtn = this.pageControlElement('yuxtrans-cancel-btn');
+    const restoreBtn = this.pageControlElement('yuxtrans-restore-btn');
+    const bilingualBtn = this.pageControlElement('yuxtrans-bilingual-btn');
+    const closeBtn = this.pageControlElement('yuxtrans-close-btn');
 
     if (cancelBtn) cancelBtn.style.display = 'none';
     if (restoreBtn) restoreBtn.style.display = 'inline-block';
@@ -1012,11 +1036,15 @@ class YuxTransContent {
     }
     if (closeBtn) closeBtn.style.display = 'inline-block';
 
+    // 防止重复绑定
+    if (this.pageControlListenersBound) return;
+    this.pageControlListenersBound = true;
+
     // 恢复原文按钮
     if (restoreBtn) {
       restoreBtn.addEventListener('click', () => {
         this.restoreOriginalTexts();
-        this.hideProgressIndicator(true);
+        this.hidePageControl();
       });
     }
 
@@ -1032,75 +1060,9 @@ class YuxTransContent {
     // 关闭按钮
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
-        this.hideProgressIndicator(true);
+        this.hidePageControl();
       });
     }
-  }
-
-  /**
-   * 设置点击外部区域自动最小化
-   */
-  setupClickOutsideHandler() {
-    // 移除之前的处理器
-    if (this.clickOutsideHandler) {
-      document.removeEventListener('click', this.clickOutsideHandler);
-    }
-
-    this.clickOutsideHandler = (e) => {
-      if (!this.progressIndicator) return;
-
-      // 检查点击是否在进度指示器内部
-      const isInside = this.progressIndicator.contains(e.target);
-      // 检查是否点击侧边挂耳（侧边挂耳点击会打开面板，不需要最小化）
-      const isSideTab = this.sideTab && this.sideTab.contains(e.target);
-
-      if (!isInside && !isSideTab && !this.progressIndicator.classList.contains('yuxtrans-minimized')) {
-        this.toggleProgressIndicator(false);
-      }
-    };
-
-    // 延迟添加监听器，避免当前点击事件立即触发
-    setTimeout(() => {
-      document.addEventListener('click', this.clickOutsideHandler);
-    }, 100);
-  }
-
-  /**
-   * 管理弹窗展示与挂耳状态的切换
-   */
-  toggleProgressIndicator(visible) {
-    if (!this.progressIndicator) return;
-    
-    if (visible) {
-      this.progressIndicator.classList.remove('yuxtrans-minimized');
-      if (this.sideTab) this.sideTab.classList.remove('show');
-    } else {
-      this.progressIndicator.classList.add('yuxtrans-minimized');
-      this.ensureSideTab();
-      if (this.sideTab) this.sideTab.classList.add('show');
-    }
-  }
-
-  /**
-   * 创建或显示侧边召回挂耳
-   */
-  ensureSideTab() {
-    if (this.sideTab) return;
-
-    const tab = document.createElement('div');
-    tab.className = 'yuxtrans-side-tab';
-    tab.innerHTML = '<span class="yuxtrans-side-tab-icon">文</span>';
-    tab.title = '打开翻译控制中心';
-    
-    tab.addEventListener('click', () => {
-      this.toggleProgressIndicator(true);
-    });
-
-    document.body.appendChild(tab);
-    this.sideTab = tab;
-    
-    // 给一点延迟让动画生效
-    setTimeout(() => tab.classList.add('show'), 10);
   }
 
   /**
@@ -1108,7 +1070,7 @@ class YuxTransContent {
    */
   toggleBilingualMode(isBilingual) {
     this.config.bilingualMode = isBilingual;
-    
+
     for (const [node, data] of this.pageTranslationState.originalTexts) {
       const parent = node.parentElement;
       if (!parent) continue;
@@ -1127,7 +1089,9 @@ class YuxTransContent {
         parent.classList.add('yuxtrans-translated-bilingual');
       } else {
         if (data.bilingualNode) {
-          if (data.bilingualNode.parentNode === parent) parent.removeChild(data.bilingualNode);
+          if (data.bilingualNode.parentNode === parent) {
+            parent.removeChild(data.bilingualNode);
+          }
           data.bilingualNode = null;
         }
         node.textContent = data.translated;
@@ -1153,7 +1117,7 @@ class YuxTransContent {
       const parent = node.parentElement;
       if (parent) {
         if (originalData.bilingualNode && originalData.bilingualNode.parentNode === parent) {
-          // 清理双语节点并恢复原文
+          // 清理双语节点
           parent.removeChild(originalData.bilingualNode);
         }
         // 无论是否双语，都恢复原文文本并清除翻译标记
@@ -1177,36 +1141,10 @@ class YuxTransContent {
     this.pageTranslationState.isTranslated = false;
   }
 
-  hideProgressIndicator(forceRemove = false) {
-    // 移除点击外部处理器
-    if (this.clickOutsideHandler) {
-      document.removeEventListener('click', this.clickOutsideHandler);
-      this.clickOutsideHandler = null;
-    }
-
-    // 清除自动关闭定时器
-    if (this.autoCloseTimer) {
-      clearTimeout(this.autoCloseTimer);
-      this.autoCloseTimer = null;
-    }
-
-    if (forceRemove) {
-      // 完全移除
-      if (this.progressIndicator) {
-        this.progressIndicator.remove();
-        this.progressIndicator = null;
-      }
-      if (this.sideTab) {
-        this.sideTab.remove();
-        this.sideTab = null;
-      }
-    } else {
-      // 最小化而不是移除
-      if (this.progressIndicator) {
-        this.progressIndicator.classList.add('yuxtrans-minimized');
-      }
-      this.ensureSideTab();
-      if (this.sideTab) this.sideTab.classList.add('show');
+  hidePageControl() {
+    if (this.pageControl) {
+      this.pageControl.remove();
+      this.pageControl = null;
     }
   }
 
