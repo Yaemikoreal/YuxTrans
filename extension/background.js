@@ -1919,11 +1919,25 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     ? (resolveSourceLanguage(texts[0] || '', sourceLang))
     : sourceLang;
 
+  // 若整批源语言与用户设置的目标语言相同（如中文页 target=zh），按原策略翻向对照语言
+  let batchTargetLang = targetLang;
+  if (sourceLang === 'auto' && batchSourceLang !== 'unknown' && batchSourceLang !== 'auto') {
+    const normalizedTarget = targetLang.startsWith('zh') ? 'zh' : targetLang;
+    if (batchSourceLang === normalizedTarget) {
+      const oppositeMap = {
+        zh: 'en', ja: 'zh', ko: 'zh', en: 'zh', ru: 'en', ar: 'en', th: 'en', vi: 'en'
+      };
+      batchTargetLang = oppositeMap[batchSourceLang] || 'en';
+    }
+  }
+
   // 1. 筛出未命中的项
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
-    // 仍按目标语言分组：混合语言页面中，少量不同语言文本的目标方向由 resolveTargetLanguage 兜底
-    const resolvedTargetLang = resolveTargetLanguage(text, sourceLang, targetLang);
+    // E: 复用 batchSourceLang / batchTargetLang，避免对每句都调用 detectLanguage。
+    // 假设同一批次内语言方向基本一致；混合语言页面中的少量异语言文本由模型 prompt
+    // 规则兜底（"已为目标语则返回不变"）。
+    const resolvedTargetLang = resolveTargetLanguage(text, batchSourceLang, batchTargetLang);
     const cacheKey = generateCacheKey(text, sourceLang, resolvedTargetLang);
     const cached = getFromCache(cacheKey);
     if (cached) {
