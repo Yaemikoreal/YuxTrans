@@ -994,6 +994,19 @@ class YuxTransContent {
       // 翻译完成
       this.pageTranslationState.isTranslated = true;
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      this.logPageMetrics({
+        url: location.href,
+        provider: this.config.provider,
+        model: this.config.model,
+        totalNodes: nodesInfo.length,
+        viewportNodes: viewportItems.length,
+        belowFoldNodes: belowFoldItems.length,
+        uniqueTexts: dedupedItems.length,
+        duplicateTexts: duplicateCount,
+        successCount,
+        failCount,
+        elapsedSeconds: parseFloat(elapsed)
+      });
       this.showPageControlComplete(
         successCount, nodesInfo.length, elapsed, duplicateCount, failCount
       );
@@ -1247,6 +1260,19 @@ class YuxTransContent {
     this.pageTranslationState.originalTexts.clear();
     this.pageTranslationState.translatedNodes = [];
     this.pageTranslationState.isTranslated = false;
+  }
+
+  /**
+   * 输出整页翻译结构化性能指标，便于真实浏览器环境验证优化效果。
+   * 数据会同时打印到内容脚本控制台，用户可复制粘贴给开发侧分析。
+   */
+  logPageMetrics(metrics) {
+    const report = {
+      event: 'YuxTrans.pageTranslation.complete',
+      timestamp: new Date().toISOString(),
+      ...metrics
+    };
+    console.log('[YuxTrans] 整页翻译完成:', report);
   }
 
   hidePageControl() {
