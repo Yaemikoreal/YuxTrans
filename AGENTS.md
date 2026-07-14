@@ -30,7 +30,7 @@ E:/Pythonproject/YuxTrans
 │   ├── manifest.json
 │   ├── background.js            # Service Worker（核心）
 │   ├── content.js               # 内容脚本（划词 + 整页翻译）
-│   ├── content.css              # 现代简约风格样式
+│   ├── content.css              # 书房衬纸风格样式（详见 docs/UI_DESIGN_SYSTEM.md）
 │   ├── popup.html / popup.js    # 弹窗界面
 │   └── options.html / options.js# 设置页面
 ├── tests/                       # 根目录测试（pytest 实际运行的测试集）
@@ -123,7 +123,7 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 | `content.js` | 内容脚本：划词翻译浮窗、整页翻译（保持样式）、批量翻译、可视区域优先、彩虹进度条 |
 | `popup.js` | 弹窗快捷翻译 |
 | `options.js` | 设置页面：供应商 / 模型 / 语言 / 缓存 / 快捷键 |
-| `content.css` | 现代简约风格样式 |
+| `content.css` | 书房衬纸风格样式（详见 docs/UI_DESIGN_SYSTEM.md） |
 
 ### 4.3 关键技术设计
 
@@ -231,6 +231,7 @@ ruff check --fix yuxtrans/          # 自动修复部分问题
 - **错误处理**：统一使用 `TranslationError`，包含 `engine` 与 `original_error`。
 - **常量与配置**：扩展将常量集中放在文件顶部（`API_ENDPOINTS`、`DEFAULT_MODELS`、`STYLE_PROMPTS` 等）。
 - **日志**：扩展使用 `console.log / console.warn` 并带 `[YuxTrans]` 前缀。
+- **扩展视觉系统**：统一遵循 `docs/UI_DESIGN_SYSTEM.md` 定义的「书房衬纸」风格。核心文件为 `extension/design-tokens.css`，所有新增样式需优先使用 `--yxt-*` 变量；禁止引入纯黑/纯白、高饱和色、大圆角胶囊、iOS 开关、旋转 Spinner 等与该气质冲突的元素。
 
 ## 8. 配置说明
 

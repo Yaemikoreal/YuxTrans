@@ -28,6 +28,18 @@
 
   <button class="action-btn" id="translatePageBtn">翻译整页</button>
 
+  <div class="mode-row">
+    <div>
+      <div class="mode-label">翻译模式</div>
+      <div class="mode-hint">整页翻译显示方式</div>
+    </div>
+    <div class="mode-toggle" id="modeToggle" role="group" aria-label="翻译模式">
+      <button class="mode-toggle-btn" data-mode="mono" id="modeMonoBtn" type="button">仅译文</button>
+      <button class="mode-toggle-btn" data-mode="bilingual" id="modeBilingualBtn" type="button">双语</button>
+      <span class="mode-toggle-indicator"></span>
+    </div>
+  </div>
+
   <div class="stats-row">
     <div class="stat-item">
       <div class="stat-value" id="tokenStat">-- / --</div>

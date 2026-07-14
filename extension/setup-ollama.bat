@@ -17,7 +17,13 @@ if errorlevel 1 (
     echo  [×] 未检测到 Ollama
     echo.
     echo  请先安装 Ollama：
-    echo    下载地址: https://ollama.com/download
+    echo    PowerShell 一键安装: irm https://ollama.com/install.ps1 ^| iex
+    echo    下载地址:              https://ollama.com/download
+    echo.
+    echo  注意：
+    echo    - 国内网络下载 Ollama 及模型可能较慢，可尝试网络加速或镜像。
+    echo    - 本地模型性能受 CPU/GPU/内存限制，低配机器可能出现卡顿。
+    echo    - 若本地运行不畅，可在扩展设置中切换为云端供应商作为备用。
     echo.
     echo  安装完成后重新运行此脚本。
     echo.

@@ -133,9 +133,14 @@ def _configure_local(config: Dict[str, Any]) -> Dict[str, Any]:
     else:
         print("  [×] Ollama 未安装")
         print("\n安装指引:")
-        print("  Windows: https://ollama.ai/download/windows")
-        print("  Mac:     https://ollama.ai/download/mac")
-        print("  Linux:   curl -fsSL https://ollama.ai/install.sh | sh")
+        print("  Windows: irm https://ollama.com/install.ps1 | iex")
+        print("  Mac:     curl -fsSL https://ollama.com/install.sh | sh")
+        print("  Linux:   curl -fsSL https://ollama.com/install.sh | sh")
+        print("  下载页:  https://ollama.com/download")
+        print("\n注意:")
+        print("  - 国内网络下载 Ollama 及模型可能较慢，可尝试网络加速或镜像。")
+        print("  - 本地模型性能受 CPU/GPU/内存限制，低配机器可能出现卡顿。")
+        print("  - 若本地运行不畅，可配置云端供应商作为备用方案。")
         print("\n安装后运行: ollama pull qwen2:7b")
         config["translation"]["model"] = "qwen2:7b"
 

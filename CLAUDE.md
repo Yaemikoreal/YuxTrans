@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 YuxTrans 是一个 AI 翻译工具，核心目标是「响应速度是生命，翻译准度是底线」。项目采用三层架构：缓存 → 本地模型 → 云端API，自动故障转移。
 
 这是一个复合项目：
-- **Python 包** (`yuxtrans/yuxtrans/`) — 核心翻译引擎、缓存系统、桌面客户端
+- **Python 包** (`yuxtrans/`) — 核心翻译引擎、缓存系统、桌面客户端
 - **浏览器扩展** (`extension/`) — Chrome/Edge 划词翻译插件 (Manifest V3)，**独立运行不依赖 Python 后端**
 
 ## 常用命令
@@ -42,6 +42,9 @@ yuxtrans                                 # 安装后运行（entry point）
 
 # 打包浏览器扩展
 # 直接加载 extension/ 目录到 Chrome/Edge 即可（开发者模式）
+
+# 扩展单元测试
+node --test extension/tests/
 ```
 
 ## 核心架构
@@ -55,11 +58,11 @@ yuxtrans                                 # 安装后运行（entry point）
 ```
 
 **关键文件**：
-- `yuxtrans/yuxtrans/engine/base.py` — 翻译引擎抽象基类，定义 `translate()` 和 `translate_stream()` 接口
-- `yuxtrans/yuxtrans/engine/router.py` — 智能路由器，实现 `translate_fast()` 和 `translate_quality()` 两种模式
-- `yuxtrans/yuxtrans/engine/local.py` — Ollama 本地模型（默认 qwen2:7b）
-- `yuxtrans/yuxtrans/engine/cloud.py` — 云端API（支持 qwen/openai/deepseek/anthropic/groq/moonshot/siliconflow/custom）
-- `yuxtrans/yuxtrans/cache/database.py` — SQLite持久化 + LRU内存缓存
+- `yuxtrans/engine/base.py` — 翻译引擎抽象基类，定义 `translate()` 和 `translate_stream()` 接口
+- `yuxtrans/engine/router.py` — 智能路由器，实现 `translate_fast()` 和 `translate_quality()` 两种模式
+- `yuxtrans/engine/local.py` — Ollama 本地模型（默认 qwen2:7b）
+- `yuxtrans/engine/cloud.py` — 云端API（支持 qwen/openai/deepseek/anthropic/groq/moonshot/siliconflow/custom）
+- `yuxtrans/cache/database.py` — SQLite持久化 + LRU内存缓存
 
 ### 浏览器扩展内部架构（extension/）
 
@@ -79,7 +82,10 @@ yuxtrans                                 # 安装后运行（entry point）
 | `content.js` | 内容脚本，划词翻译浮窗、整页翻译（节点样式保持）、进度指示器、批量翻译（可视区域优先） |
 | `popup.js` | 弹窗界面，快捷翻译 |
 | `options.js` | 设置页面，供应商/模型/快捷键/缓存管理等 |
-| `content.css` | 现代简约风格的浮窗和页面翻译样式 |
+| `common.js` | 跨页面共享常量（PROVIDER_NAMES 等），在 popup/options 之前加载 |
+| `content.css` | 翻译浮窗与页面覆盖样式 |
+| `popup.css` | 弹窗样式（从 popup.html 独立分离） |
+| `design-tokens.css` | v2.0 书房衬纸设计系统 — 统一 Popup/Options/Content 三端的 `--yxt-*` CSS 变量 |
 
 ### 关键技术设计
 
@@ -149,6 +155,10 @@ yuxtrans                                 # 安装后运行（entry point）
 - background.js: 扩展管理页点击「Service Worker」查看日志
 - content.js: 在网页上 F12 打开开发者工具查看控制台
 - popup.js/options.js: 在弹窗/设置页右键检查查看日志
+
+# 扩展单元测试（Node 内置 test runner，无需额外依赖）
+node --test extension/tests/           # 运行 background 核心逻辑测试
+node --test --test-reporter spec extension/tests/  # 带详细输出
 ```
 
 **快捷键**：
@@ -181,7 +191,7 @@ yuxtrans                                 # 安装后运行（entry point）
 
 ## 扩展新云端供应商
 
-在 Python `CloudTranslator` (`yuxtrans/yuxtrans/engine/cloud.py`) 中添加：
+在 Python `CloudTranslator` (`yuxtrans/engine/cloud.py`) 中添加：
 1. `API_ENDPOINTS` — API 端点 URL
 2. `PROVIDER_FORMATS` — 格式类型（"openai"/"anthropic"/"qwen"）
 3. `_default_model()` — 默认模型名称
@@ -193,32 +203,35 @@ yuxtrans                                 # 安装后运行（entry point）
 
 ```
 项目根目录 E:\Pythonproject\YuxTrans
-├── yuxtrans/                        # Python 包目录
-│   ├── yuxtrans/                    # 核心包（源码）
-│   │   ├── engine/                  # 翻译引擎（核心）
-│   │   ├── cache/                   # 缓存层（SQLite + LRU）
-│   │   ├── desktop/                 # 桌面客户端（PyQt6）
-│   │   ├── metrics/                 # 性能监控与质量评估
-│   │   └── utils/                   # 工具函数
-│   ├── tests/                       # 单元测试
-│   ├── docs/                        # 文档
-│   ├── benchmark/                   # 性能测试用例
-│   ├── examples/                    # 示例脚本
-│   └── pyproject.toml               # 项目配置
+├── yuxtrans/                        # Python 包（唯一生效的源码）
+│   ├── engine/                      # 翻译引擎（核心）
+│   ├── cache/                       # 缓存层（SQLite + LRU）
+│   ├── desktop/                     # 桌面客户端（PyQt6，暂停开发）
+│   ├── metrics/                     # 性能监控与质量评估
+│   └── utils/                       # 工具函数
+├── tests/                           # Python 单元测试（pytest）
+├── benchmark/                       # 性能测试用例
+├── examples/                        # 示例脚本
 │
 ├── extension/                       # 浏览器插件（Manifest V3）
 │   ├── manifest.json                # 扩展配置
 │   ├── background.js                # Service Worker（核心）
 │   ├── content.js                   # 内容脚本（划词+整页翻译）
-│   ├── content.css                  # 全局翻译样式
+│   ├── content.css                  # 翻译浮窗与页面覆盖样式
+│   ├── design-tokens.css            # v2.0 书房衬纸设计系统（CSS 变量）
+│   ├── common.js                    # 共享常量（PROVIDER_NAMES 等）
 │   ├── popup.html / popup.js        # 弹窗界面
+│   ├── popup.css                    # 弹窗专属样式（从 popup.html 独立）
 │   ├── options.html / options.js    # 设置页面（12供应商+自定义）
+│   ├── options.css                  # 设置页专属样式
+│   ├── _locales/                    # i18n（zh_CN / en）
+│   ├── tests/                       # Node 内置测试（background 核心逻辑）
 │   └── icons/                       # 图标资源
 │
 ├── logo/                            # 项目 logo
-├── README.md                        # 项目文档
-├── CHANGELOG.md                     # 变更日志
+├── docs/                            # 文档（含 UI_DESIGN_SYSTEM.md）
+├── README.md / CHANGELOG.md         # 项目文档
 └── COMPLETED.md / PROGRESS.md       # 开发进度跟踪
 ```
 
-详情见 `yuxtrans/yuxtrans/` 下各子模块的源文件注释和 `yuxtrans/docs/PROVIDERS.md`。
+详情见 `yuxtrans/` 下各子模块的源文件注释和 `docs/PROVIDERS.md`。

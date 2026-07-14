@@ -118,8 +118,10 @@ class YuxTransContent {
         if (selection) {
           this.translateText(selection);
         }
+        sendResponse({ success: true });
       } else if (request.action === 'translatePage') {
         this.translatePage();
+        sendResponse({ success: true });
       } else if (request.action === 'streamChunk') {
         // 流式输出：逐字更新弹窗或整页段落
         this.handleStreamChunk(request.chunk, request.fullText, request.requestId);
@@ -324,7 +326,8 @@ class YuxTransContent {
           text,
           sourceLang,
           targetLang,
-          context: this.getPageContext(),
+          // 整页翻译的段落流式请求不再携带页面标题等上下文，避免模型把任意片段偏向页面标题。
+          context: null,
           requestId
         },
         (response) => {
@@ -493,7 +496,9 @@ class YuxTransContent {
             'script', 'style', 'noscript', 'iframe', 'canvas', 'svg',
             'code', 'pre', '[contenteditable="true"]',
             '.yuxtrans-progress', '.yuxtrans-popup', '.yuxtrans-page-control',
-            '.yuxtrans-side-tab', '.yuxtrans-float-btn', '.yuxtrans-site-rule-toast'
+            '.yuxtrans-side-tab', '.yuxtrans-float-btn', '.yuxtrans-site-rule-toast',
+            '.yuxtrans-translated', '.yuxtrans-translated-bilingual',
+            '.yuxtrans-bilingual-text', '.yuxtrans-streaming-text'
           ].join(', ');
           if (parent.closest(skipSelectors)) {
             return NodeFilter.FILTER_REJECT;
@@ -522,6 +527,15 @@ class YuxTransContent {
             return NodeFilter.FILTER_REJECT;
           }
           if (/^(https?:\/\/|www\.|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/.test(text)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          // 跳过 GitHub 等页面的元数据片段：commit SHA、@mention、#tag、仓库路径、文件名
+          if (/^\s*[@#][\w-]+/.test(text)) return NodeFilter.FILTER_REJECT;
+          if (/^\s*[a-f0-9]{7,40}(\.{3})?\s*$/i.test(text)) return NodeFilter.FILTER_REJECT;
+          if (/^\s*\w+\/\w+/.test(text)) return NodeFilter.FILTER_REJECT;
+          if (/^\s*[0-9]+\s*$/.test(text)) return NodeFilter.FILTER_REJECT;
+          if (/(?:^|[^\p{L}\d_])\.[a-z0-9]{1,6}$/i.test(text) && !text.includes(' ')) {
             return NodeFilter.FILTER_REJECT;
           }
 
@@ -653,7 +667,8 @@ class YuxTransContent {
                 texts: texts,
                 sourceLang: this.config.sourceLang || 'auto',
                 targetLang: this.config.targetLang || 'zh',
-                context: this.getPageContext()
+                // 整页批量翻译不携带页面标题，避免模型把所有片段译成同一个标题。
+                context: null
               },
               (res) => {
                 clearTimeout(timer);
@@ -711,8 +726,13 @@ class YuxTransContent {
    */
   applyTranslation(nodeInfo, translatedText) {
     const { node } = nodeInfo;
-    const parent = node.parentElement;
 
+    // 防止对同一节点重复应用（例如批量回调与最终循环重叠）
+    if (this.pageTranslationState.originalTexts.has(node)) {
+      return false;
+    }
+
+    const parent = node.parentElement;
     if (!parent) return false;
 
     // 保存原文、样式和双语节点引用
@@ -799,18 +819,30 @@ class YuxTransContent {
    * 整页翻译主函数
    */
   async translatePage() {
-    // 站点规则控制
-    if (!this.isSiteAllowed()) return;
+    // 同步锁：防止快速重复触发（如双击、消息重入）导致套娃翻译
+    if (this._pageTranslateLocked) return;
+    this._pageTranslateLocked = true;
+
+    try {
+      // 每次触发都重新拉取配置，确保模式开关实时生效
+      await this.loadConfig();
+
+      // 站点规则控制
+      if (!this.isSiteAllowed()) return;
 
     // 防止重入：如果正在翻译中，再次触发则恢复原文
     if (this.pageTranslationState.isTranslating) {
-      if (this.pageTranslationState.isTranslated) this.restoreOriginalTexts();
+      if (this.pageTranslationState.isTranslated) {
+        this.restoreOriginalTexts();
+        this.setPageControlRestoredState();
+      }
       return;
     }
 
     // 如果已翻译，恢复原文
     if (this.pageTranslationState.isTranslated) {
       this.restoreOriginalTexts();
+      this.setPageControlRestoredState();
       return;
     }
 
@@ -826,6 +858,9 @@ class YuxTransContent {
     this.pageTranslationState.isTranslating = true;
     this.pageTranslationState.originalTexts.clear();
     this.pageTranslationState.streamingNodes.clear();
+
+    // 禁用控制条上的翻译/重新翻译按钮，防止任务进行中重复点击
+    this.setPageControlTranslateDisabled(true);
 
     // ===== 文本去重优化 =====
     const uniqueTexts = new Map(); // text -> { indices: [], translation: null, error: null }
@@ -918,19 +953,22 @@ class YuxTransContent {
         });
       }
 
-      // 3. 应用翻译结果（包括重复文本，跳过已随 batch 渲染的）
+      // 3. 应用翻译结果（包括重复文本；applyTranslation 内部已做去重）
       let successCount = 0;
       let failCount = 0;
       for (let i = 0; i < nodesInfo.length; i++) {
         const nodeInfo = nodesInfo[i];
         const item = uniqueTexts.get(nodeInfo.text);
-        if (item.translation && !appliedTexts.has(nodeInfo.text)) {
-          if (this.applyTranslation(nodeInfo, item.translation)) {
-            successCount++;
+        if (item.translation) {
+          // 每个节点都尝试应用译文，确保重复文本节点也纳入 originalTexts，
+          // 从而支持双语/仅译文切换时同步更新所有出现位置
+          const applied = this.applyTranslation(nodeInfo, item.translation);
+          if (applied || this.pageTranslationState.originalTexts.has(nodeInfo.node)) {
+            if (!appliedTexts.has(nodeInfo.text)) {
+              successCount++;
+              appliedTexts.add(nodeInfo.text);
+            }
           }
-        } else if (item.translation && appliedTexts.has(nodeInfo.text)) {
-          // 该文本已在 batch 回调中应用过，重复节点直接计入成功
-          successCount++;
         } else if (item.error) {
           // 失败项可视化标记
           this.markFailedNode(nodeInfo, item.error);
@@ -949,14 +987,39 @@ class YuxTransContent {
     } finally {
       this.pageTranslationState.isTranslating = false;
       this.pageTranslationState.streamingNodes.clear();
+      // 任务结束（成功/失败/取消）后重新启用翻译按钮
+      this.setPageControlTranslateDisabled(false);
     }
+  } finally {
+    this._pageTranslateLocked = false;
+  }
+}
+
+/**
+ * 获取整页翻译控制条内的元素
+ */
+  pageControlElement(id) {
+    return this.pageControl ? this.pageControl.querySelector(`#${id}`) : null;
   }
 
   /**
-   * 获取整页翻译控制条内的元素
+   * 禁用/启用控制条上的「翻译整页/重新翻译」按钮
+   * 任务进行期间防止用户重复点击导致套娃翻译
    */
-  pageControlElement(id) {
-    return this.pageControl ? this.pageControl.querySelector(`#${id}`) : null;
+  setPageControlTranslateDisabled(disabled) {
+    if (!this.pageControl) return;
+    const restoreBtn = this.pageControlElement('yuxtrans-restore-btn');
+    if (!restoreBtn) return;
+    restoreBtn.disabled = disabled;
+    if (disabled) {
+      if (restoreBtn.textContent === '翻译整页') {
+        restoreBtn.textContent = '翻译中...';
+      }
+    } else {
+      if (restoreBtn.textContent === '翻译中...') {
+        restoreBtn.textContent = '翻译整页';
+      }
+    }
   }
 
   showPageControl(total) {
@@ -1043,8 +1106,14 @@ class YuxTransContent {
     // 恢复原文按钮
     if (restoreBtn) {
       restoreBtn.addEventListener('click', () => {
-        this.restoreOriginalTexts();
-        this.hidePageControl();
+        if (this.pageTranslationState.isTranslated) {
+          this.restoreOriginalTexts();
+          // 不隐藏控制条，切换到可重新翻译状态
+          this.setPageControlRestoredState();
+        } else {
+          // 已恢复状态下再次点击，触发重新翻译
+          this.translatePage();
+        }
       });
     }
 
@@ -1063,6 +1132,30 @@ class YuxTransContent {
         this.hidePageControl();
       });
     }
+  }
+
+  /**
+   * 将控制条切换到「已恢复原文 / 可重新翻译」状态
+   */
+  setPageControlRestoredState() {
+    if (!this.pageControl) return;
+
+    const textEl = this.pageControlElement('yuxtrans-progress-text');
+    const bar = this.pageControlElement('yuxtrans-progress-bar');
+    const bilingualBtn = this.pageControlElement('yuxtrans-bilingual-btn');
+    const restoreBtn = this.pageControlElement('yuxtrans-restore-btn');
+    const closeBtn = this.pageControlElement('yuxtrans-close-btn');
+
+    if (textEl) textEl.textContent = '已恢复原文';
+    if (bar) bar.style.width = '0%';
+    if (bilingualBtn) bilingualBtn.style.display = 'none';
+    if (closeBtn) closeBtn.style.display = 'inline-block';
+    if (restoreBtn) {
+      restoreBtn.textContent = '翻译整页';
+      restoreBtn.classList.remove('primary');
+    }
+    // 如果此时仍有任务在跑，保持按钮禁用；否则确保可点击
+    this.setPageControlTranslateDisabled(this.pageTranslationState.isTranslating);
   }
 
   /**

@@ -81,6 +81,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cacheHitRateEl = getById('cacheHitRate');
   let cacheStatsInterval;
 
+  // 8. 诊断数据
+  const metricsTotalEl = getById('metricsTotal');
+  const metricsSuccessRateEl = getById('metricsSuccessRate');
+  const metricsCacheRateEl = getById('metricsCacheRate');
+  const metricsAvgLatencyEl = getById('metricsAvgLatency');
+  const metricsProviderTableEl = getById('metricsProviderTable');
+  const metricsSwInitCountEl = getById('metricsSwInitCount');
+  const metricsSwInitAvgEl = getById('metricsSwInitAvg');
+  const metricsRecentErrorsEl = getById('metricsRecentErrors');
+  const refreshMetricsBtn = getById('refreshMetricsBtn');
+
+  // 9. 请求日志
+  const requestLogsContainer = getById('requestLogsContainer');
+  const refreshRequestLogsBtn = getById('refreshRequestLogsBtn');
+
   // 7. 辅助
   const saveBtn = getById('saveBtn');
   const clearCacheBtn = getById('clearCacheBtn');
@@ -394,7 +409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!ollamaRunning) {
       statusIcon.className = 'ollama-status-dot error';
-      statusText.innerHTML = 'Ollama 服务未运行。请安装并启动 Ollama，或运行 <code>setup-ollama.bat</code> 一键配置。';
+      statusText.innerHTML = 'Ollama 服务未运行。Windows 可在 PowerShell 执行 <code>irm https://ollama.com/install.ps1 | iex</code> 安装，或运行 <code>setup-ollama.bat</code> 一键配置。国内下载可能较慢；低配机器本地运行可能卡顿，可在设置中启用云端供应商作为备用。';
       if (statusAction) {
         statusAction.style.display = 'block';
         if (downloadBtn) downloadBtn.style.display = 'none';
@@ -402,7 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           copyBtn.style.display = 'inline-block';
           copyBtn.textContent = '复制安装命令';
           copyBtn.onclick = () => {
-            navigator.clipboard.writeText('ollama serve');
+            navigator.clipboard.writeText('irm https://ollama.com/install.ps1 | iex');
             copyBtn.textContent = '已复制 ✓';
             setTimeout(() => { copyBtn.textContent = '复制安装命令'; }, 2000);
           };
@@ -1042,4 +1057,190 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // ===== 诊断数据渲染 =====
+  function loadMetrics() {
+    if (metricsRecentErrorsEl) {
+      metricsRecentErrorsEl.innerHTML = '<p class="hint">加载中...</p>';
+    }
+    chrome.runtime.sendMessage({ action: 'getMetrics', limit: 1000, days: 7 }, (res) => {
+      if (chrome.runtime.lastError) {
+        console.error('[YuxTrans] 加载诊断数据失败:', chrome.runtime.lastError);
+        if (metricsRecentErrorsEl) {
+          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${chrome.runtime.lastError.message}</p>`;
+        }
+        return;
+      }
+      if (!res?.success) {
+        console.error('[YuxTrans] 诊断数据返回失败:', res?.error);
+        if (metricsRecentErrorsEl) {
+          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${res?.error || '未知错误'}</p>`;
+        }
+        return;
+      }
+      renderMetrics(res);
+    });
+  }
+
+  function renderMetrics(data) {
+    const { summary, byProvider, metrics } = data;
+    if (metricsTotalEl) metricsTotalEl.textContent = summary?.total || 0;
+    if (metricsSuccessRateEl) {
+      const rate = summary?.total > 0 ? Math.round((summary.success / summary.total) * 100) : 0;
+      metricsSuccessRateEl.textContent = `${rate}%`;
+    }
+    if (metricsCacheRateEl) {
+      const rate = summary?.total > 0 ? Math.round((summary.cacheHits / summary.total) * 100) : 0;
+      metricsCacheRateEl.textContent = `${rate}%`;
+    }
+    if (metricsAvgLatencyEl) {
+      metricsAvgLatencyEl.textContent = `${summary?.avgLatency || 0}ms`;
+    }
+
+    // SW 启动统计
+    const swInitMetrics = (metrics || []).filter(m => m.action === 'swInit');
+    if (metricsSwInitCountEl) metricsSwInitCountEl.textContent = swInitMetrics.length;
+    if (metricsSwInitAvgEl) {
+      const avg = swInitMetrics.length > 0
+        ? Math.round(swInitMetrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / swInitMetrics.length)
+        : 0;
+      metricsSwInitAvgEl.textContent = `${avg}ms`;
+    }
+
+    // 供应商分布表
+    if (metricsProviderTableEl) {
+      const tbody = metricsProviderTableEl.querySelector('tbody');
+      if (tbody) {
+        const rows = Object.entries(byProvider || {})
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([provider, item]) => {
+            const label = PROVIDER_NAMES[provider] || provider;
+            return `
+              <tr>
+                <td>${label}</td>
+                <td>${item.count}</td>
+                <td>${item.success}</td>
+                <td>${item.failure}</td>
+                <td>${item.cacheHits}</td>
+                <td>${item.avgLatency}ms</td>
+              </tr>
+            `;
+          }).join('');
+        tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:var(--yxt-text-tertiary);">暂无数据</td></tr>';
+      }
+    }
+
+    // 最近失败
+    if (metricsRecentErrorsEl) {
+      const failures = (metrics || [])
+        .filter(m => !m.success)
+        .slice(0, 10);
+      if (failures.length === 0) {
+        metricsRecentErrorsEl.innerHTML = '<p class="hint">暂无失败记录</p>';
+      } else {
+        metricsRecentErrorsEl.innerHTML = failures.map(m => {
+          const time = new Date(m.timestamp).toLocaleString('zh-CN');
+          const actionLabel = { translate: '翻译', translateStream: '流式', translateBatch: '批量', swInit: 'SW 启动' }[m.action] || m.action;
+          const providerLabel = PROVIDER_NAMES[m.provider] || m.provider || 'unknown';
+          return `
+            <div class="metrics-error-item">
+              <div class="error-time">${time}</div>
+              <div>
+                <span class="error-action">${actionLabel} · ${providerLabel}</span>
+                <span class="error-type">${m.errorType || 'unknown'}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  }
+
+  // ===== 请求日志渲染 =====
+  function loadRequestLogs() {
+    if (requestLogsContainer) {
+      requestLogsContainer.innerHTML = '<p class="hint">加载中...</p>';
+    }
+    chrome.runtime.sendMessage({ action: 'getRequestLogs', limit: 50 }, (res) => {
+      if (chrome.runtime.lastError) {
+        console.error('[YuxTrans] 加载请求日志失败:', chrome.runtime.lastError);
+        if (requestLogsContainer) {
+          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${chrome.runtime.lastError.message}</p>`;
+        }
+        return;
+      }
+      if (!res?.success) {
+        if (requestLogsContainer) {
+          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${res?.error || '未知错误'}</p>`;
+        }
+        return;
+      }
+      renderRequestLogs(res.logs || []);
+    });
+  }
+
+  function renderRequestLogs(logs) {
+    if (!requestLogsContainer) return;
+    if (logs.length === 0) {
+      requestLogsContainer.innerHTML = '<p class="hint">暂无请求日志</p>';
+      return;
+    }
+
+    requestLogsContainer.innerHTML = logs.map(log => {
+      const time = new Date(log.timestamp).toLocaleString('zh-CN');
+      const actionLabel = { translate: '单句', translateStream: '流式', translateBatch: '批量' }[log.action] || log.action;
+      const providerLabel = PROVIDER_NAMES[log.provider] || log.provider || 'unknown';
+      const statusClass = log.success ? 'success' : 'error';
+      const statusText = log.success ? '成功' : '失败';
+      const errorBlock = log.error
+        ? `<div class="log-label">错误</div><div class="log-block">${escapeHtml(log.error)}</div>`
+        : '';
+      const outputBlock = log.response
+        ? `<div class="log-label">响应</div><div class="log-block">${escapeHtml(log.response)}</div>`
+        : (log.outputSample
+          ? `<div class="log-label">输出样例</div><div class="log-block">${escapeHtml(log.outputSample)}</div>`
+          : '');
+      const parseErrorBlock = log.parseError
+        ? `<div class="log-label">解析异常</div><div class="log-block">${escapeHtml(log.parseError)}</div>`
+        : '';
+
+      return `
+        <div class="request-log-item">
+          <div class="log-header">
+            <span class="log-meta">${time} · ${actionLabel} · ${providerLabel}${log.model ? ' · ' + log.model : ''} · ${log.latencyMs || 0}ms</span>
+            <span class="log-status ${statusClass}">${statusText}</span>
+          </div>
+          <div class="log-label">Prompt</div>
+          <div class="log-block">${escapeHtml(log.prompt || '')}</div>
+          ${log.inputSample ? `<div class="log-label">输入样例</div><div class="log-block">${escapeHtml(log.inputSample)}</div>` : ''}
+          ${outputBlock}
+          ${parseErrorBlock}
+          ${errorBlock}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escapeHtml(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  refreshMetricsBtn?.addEventListener('click', loadMetrics);
+  refreshRequestLogsBtn?.addEventListener('click', loadRequestLogs);
+
+  // 切换到诊断标签页时刷新数据
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (tab.dataset.tab === 'diagnostics') {
+        loadMetrics();
+        loadRequestLogs();
+      }
+    });
+  });
 });

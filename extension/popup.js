@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modelSelect = getById('modelSelect');
   const translatePageBtn = getById('translatePageBtn');
   const streamToggle = getById('streamToggle');
+  const modeToggle = getById('modeToggle');
+  const modeMonoBtn = getById('modeMonoBtn');
+  const modeBilingualBtn = getById('modeBilingualBtn');
   const tokenStat = getById('tokenStat');
   const cacheHitStat = getById('cacheHitStat');
   const hotwordStat = getById('hotwordStat');
@@ -30,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {}
 
   settingsBtn?.addEventListener('click', () => {
-    chrome.runtime.openOptionsPage();
+    chrome.runtime.openOptionsPage().catch(() => {});
   });
 
   // ===== 加载配置与 ProviderProfile =====
@@ -152,6 +155,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // ===== 翻译模式切换（仅译文 / 双语） =====
+  function renderModeToggle() {
+    const isBilingual = config.bilingualMode !== false;
+    modeToggle?.setAttribute('data-active', isBilingual ? 'bilingual' : 'mono');
+    modeMonoBtn?.classList.toggle('active', !isBilingual);
+    modeBilingualBtn?.classList.toggle('active', isBilingual);
+  }
+
+  async function setBilingualMode(isBilingual) {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'setConfig',
+        config: { bilingualMode: isBilingual }
+      });
+      config.bilingualMode = isBilingual;
+      renderModeToggle();
+      showToast(isBilingual ? '已切换为双语模式' : '已切换为仅译文模式');
+    } catch (e) {
+      showToast('模式保存失败', true);
+    }
+  }
+
+  modeMonoBtn?.addEventListener('click', () => setBilingualMode(false));
+  modeBilingualBtn?.addEventListener('click', () => setBilingualMode(true));
+
   // ===== 用量与缓存看板 =====
   function formatCompact(n) {
     if (n === undefined || n === null || Number.isNaN(n)) return '--';
@@ -192,6 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== 启动 =====
   renderModelSelect();
+  renderModeToggle();
   await checkConnection();
   await updateStats();
   statsInterval = setInterval(updateStats, 4000);

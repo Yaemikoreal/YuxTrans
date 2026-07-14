@@ -1,68 +1,137 @@
 /**
  * YuxTrans Design Tokens
- * 现代、简约、克制的视觉系统
+ * 书房衬纸版 UI 系统 —— v2.0
  * 统一 Popup / Options / Content Script 三端样式
+ *
+ * 核心气质：阅读优先，翻译隐身。
+ * 色彩从 Logo 墨韵色延伸，拒绝纯黑纯白与高饱和科技色。
  */
 
 :root {
-  /* ===== 颜色系统 ===== */
+  /* ===== 品牌色：从 Logo 延伸的纸墨体系 ===== */
 
-  /* 背景 */
-  --yxt-bg: #ffffff;
-  --yxt-bg-elevated: #ffffff;
-  --yxt-bg-secondary: #f9fafb;
-  --yxt-bg-tertiary: #f3f4f6;
-  --yxt-bg-hover: rgba(0, 0, 0, 0.03);
-  --yxt-bg-active: rgba(0, 0, 0, 0.05);
+  /* 墨韵：温润炭黑 —— 主文本、图标、关键边框 */
+  --yxt-ink: #2C2825;
+  --yxt-ink-80: rgba(44, 40, 37, 0.8);
+  --yxt-ink-60: rgba(44, 40, 37, 0.6);
+  --yxt-ink-40: rgba(44, 40, 37, 0.4);
+  --yxt-ink-25: rgba(44, 40, 37, 0.25);
+  --yxt-ink-15: rgba(44, 40, 37, 0.15);
+  --yxt-ink-08: rgba(44, 40, 37, 0.08);
+  --yxt-ink-06: rgba(44, 40, 37, 0.06);
+  --yxt-ink-04: rgba(44, 40, 37, 0.04);
 
-  /* 文字 */
-  --yxt-text: #111827;
-  --yxt-text-secondary: #6b7280;
-  --yxt-text-tertiary: #9ca3af;
-  --yxt-text-on-accent: #ffffff;
+  /* 书页：暖纸白 —— 面板底色、浮层背景 */
+  --yxt-paper: #F5F1EA;
+  --yxt-paper-98: rgba(245, 241, 234, 0.98);
+  --yxt-paper-95: rgba(245, 241, 234, 0.95);
+  --yxt-paper-92: rgba(245, 241, 234, 0.92);
+  --yxt-paper-50: rgba(245, 241, 234, 0.5);
+  --yxt-paper-warm: #EDE8DF;
+  --yxt-paper-stack: #E8E3DA;
+  --yxt-paper-open: #FAF8F3;
 
-  /* 强调色：克制的靛蓝 */
-  --yxt-accent: #4f46e5;
-  --yxt-accent-hover: #4338ca;
-  --yxt-accent-active: #3730a3;
-  --yxt-accent-soft: rgba(79, 70, 229, 0.08);
-  --yxt-accent-soft-hover: rgba(79, 70, 229, 0.12);
+  /* 批注：温和灰褐 —— 次要文本、禁用态、分割线、占位符 */
+  --yxt-annotation: #9E968A;
+  --yxt-annotation-70: rgba(158, 150, 138, 0.7);
+  --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+  --yxt-annotation-30: rgba(158, 150, 138, 0.3);
 
-  /* 边框与分隔 */
-  --yxt-border: #e5e7eb;
-  --yxt-border-strong: #d1d5db;
-  --yxt-divider: rgba(0, 0, 0, 0.06);
+  /* 暮瞳：淡薰衣草灰 —— 悬停光晕、当前句高亮边缘、选中态微光 */
+  --yxt-dusk: #B8A5C4;
+  --yxt-dusk-40: rgba(184, 165, 196, 0.4);
+  --yxt-dusk-25: rgba(184, 165, 196, 0.25);
+  --yxt-dusk-20: rgba(184, 165, 196, 0.2);
+  --yxt-dusk-12: rgba(184, 165, 196, 0.12);
+  --yxt-dusk-08: rgba(184, 165, 196, 0.08);
 
-  /* 阴影：极轻、克制 */
-  --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
-  --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  /* 留白：透明 —— 呼吸间隙 */
+  --yxt-void: transparent;
 
-  /* 状态色：低饱和度、功能性 */
-  --yxt-success: #10b981;
-  --yxt-success-soft: rgba(16, 185, 129, 0.08);
-  --yxt-warning: #f59e0b;
-  --yxt-warning-soft: rgba(245, 158, 11, 0.08);
-  --yxt-error: #ef4444;
-  --yxt-error-soft: rgba(239, 68, 68, 0.08);
+  /* ===== 背景语义变量 ===== */
+  --yxt-bg: var(--yxt-paper);
+  --yxt-bg-elevated: var(--yxt-paper-98);
+  --yxt-bg-glass: var(--yxt-paper-92);
+  --yxt-bg-secondary: var(--yxt-paper-open);
+  --yxt-bg-tertiary: var(--yxt-paper-warm);
+  --yxt-bg-hover: var(--yxt-ink-04);
+  --yxt-bg-active: var(--yxt-ink-06);
+
+  /* ===== 文字语义变量 ===== */
+  --yxt-text: var(--yxt-ink);
+  --yxt-text-secondary: var(--yxt-annotation);
+  --yxt-text-tertiary: var(--yxt-annotation-70);
+  --yxt-text-on-accent: var(--yxt-paper);
+
+  /* ===== 强调色：以暮瞳为微光，墨韵为主体 ===== */
+  --yxt-accent: var(--yxt-ink);
+  --yxt-accent-hover: var(--yxt-ink-80);
+  --yxt-accent-active: var(--yxt-ink-60);
+  --yxt-accent-soft: var(--yxt-dusk-08);
+  --yxt-accent-soft-hover: var(--yxt-dusk-12);
+
+  /* ===== 边框与分隔 ===== */
+  --yxt-border: var(--yxt-ink-08);
+  --yxt-border-strong: var(--yxt-ink-15);
+  --yxt-divider: var(--yxt-ink-06);
+  --yxt-border-dusk: var(--yxt-dusk-40);
+  --yxt-border-annotation: var(--yxt-annotation-30);
+
+  /* ===== 阴影：墨韵色低透明度，模拟纸张叠压 ===== */
+  --yxt-shadow-sm: 0 1px 2px var(--yxt-ink-04);
+  --yxt-shadow-md: 0 2px 8px var(--yxt-ink-06);
+  --yxt-shadow-lg: 0 12px 32px var(--yxt-ink-08), 0 2px 8px var(--yxt-ink-04);
+  --yxt-shadow-xl: 0 20px 40px var(--yxt-ink-08), 0 8px 16px var(--yxt-ink-06);
+  --yxt-shadow-glow: 0 0 0 2px var(--yxt-dusk-25);
+
+  /* ===== 状态色：低饱和功能性色彩 ===== */
+  --yxt-success: #7A9E8A;
+  --yxt-success-soft: rgba(122, 158, 138, 0.12);
+  --yxt-warning: #B89A6E;
+  --yxt-warning-soft: rgba(184, 154, 110, 0.12);
+  --yxt-error: #B87878;
+  --yxt-error-soft: rgba(184, 120, 120, 0.12);
 
   /* ===== 字体系统 ===== */
-  --yxt-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* 西文衬线 + 中文宋体/书宋，用于正文与阅读文本 */
+  --yxt-font-serif:
+    'Source Serif 4', 'Literata', 'Merriweather',
+    'Source Han Serif SC', 'Noto Serif SC',
+    'FangSong', 'STSong', 'SimSun', serif;
 
-  --yxt-text-xs: 10px;
+  /* 无衬线仅用于标签、元信息，字重不得低于 400 */
+  --yxt-font-sans:
+    'Inter', 'Suisse Intl', -apple-system, BlinkMacSystemFont,
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* 中文楷体/文楷，用于设置页大标题、引用等人文场景 */
+  --yxt-font-cjk:
+    'Source Han Serif SC', 'FZShuSong-Z01S', 'LXGW WenKai',
+    'STKaiti', 'KaiTi', 'FangSong', serif;
+
+  /* 默认以衬线字体为主，呼应纸质阅读 */
+  --yxt-font: var(--yxt-font-serif);
+
+  /* ===== 字号系统 ===== */
+  --yxt-text-2xs: 10px;
+  --yxt-text-xs: 11px;
   --yxt-text-sm: 12px;
   --yxt-text-md: 13px;
   --yxt-text-base: 14px;
   --yxt-text-lg: 15px;
-  --yxt-text-xl: 18px;
+  --yxt-text-xl: 16px;
+  --yxt-text-2xl: 18px;
+  --yxt-text-3xl: 20px;
 
+  /* ===== 字重系统 ===== */
   --yxt-font-normal: 400;
   --yxt-font-medium: 500;
   --yxt-font-semibold: 600;
-  --yxt-font-bold: 700;
 
-  /* ===== 间距系统 ===== */
+  /* 本系统克制使用字重，避免过粗 */
+  --yxt-font-bold: 500;
+
+  /* ===== 间距系统（8px 温和倍数，允许 4px 微调） ===== */
   --yxt-space-1: 4px;
   --yxt-space-2: 8px;
   --yxt-space-3: 12px;
@@ -70,55 +139,98 @@
   --yxt-space-5: 20px;
   --yxt-space-6: 24px;
   --yxt-space-8: 32px;
+  --yxt-space-10: 40px;
 
-  /* ===== 尺寸系统 ===== */
-  --yxt-radius-sm: 6px;
-  --yxt-radius-md: 8px;
-  --yxt-radius-lg: 10px;
-  --yxt-radius-xl: 12px;
+  /* ===== 圆角系统（克制小圆角） ===== */
+  --yxt-radius-sm: 2px;
+  --yxt-radius-md: 4px;
+  --yxt-radius-lg: 6px;
+  --yxt-radius-xl: 8px;
   --yxt-radius-full: 9999px;
 
-  /* ===== 动效系统 ===== */
-  --yxt-transition-fast: 0.12s ease;
-  --yxt-transition-normal: 0.2s ease;
-  --yxt-transition-slow: 0.3s ease;
+  /* ===== 动效系统（翻书页般的重量感） ===== */
+  --yxt-ease-paper: cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  --yxt-ease-out: ease-out;
+  --yxt-ease-in: ease-in;
+
+  --yxt-transition-fast: 150ms var(--yxt-ease-paper);
+  --yxt-transition-normal: 200ms var(--yxt-ease-paper);
+  --yxt-transition-slow: 300ms var(--yxt-ease-paper);
+
+  /* ===== 毛玻璃 ===== */
+  --yxt-backdrop: blur(12px);
 }
 
-/* ===== Dark Mode ===== */
+/* ===== 深色模式：黄昏书房 ===== */
 @media (prefers-color-scheme: dark) {
   :root {
-    --yxt-bg: #111827;
-    --yxt-bg-elevated: #1f2937;
-    --yxt-bg-secondary: #1f2937;
-    --yxt-bg-tertiary: #374151;
-    --yxt-bg-hover: rgba(255, 255, 255, 0.04);
-    --yxt-bg-active: rgba(255, 255, 255, 0.07);
+    /* 黄昏书房底色 */
+    --yxt-ink: #D4CFC7;
+    --yxt-ink-80: rgba(212, 207, 199, 0.8);
+    --yxt-ink-60: rgba(212, 207, 199, 0.6);
+    --yxt-ink-40: rgba(212, 207, 199, 0.4);
+    --yxt-ink-25: rgba(212, 207, 199, 0.25);
+    --yxt-ink-15: rgba(212, 207, 199, 0.15);
+    --yxt-ink-08: rgba(212, 207, 199, 0.08);
+    --yxt-ink-06: rgba(212, 207, 199, 0.06);
+    --yxt-ink-04: rgba(212, 207, 199, 0.04);
 
-    --yxt-text: #f9fafb;
-    --yxt-text-secondary: #9ca3af;
-    --yxt-text-tertiary: #6b7280;
-    --yxt-text-on-accent: #ffffff;
+    --yxt-paper: #1A1816;
+    --yxt-paper-98: rgba(26, 24, 22, 0.98);
+    --yxt-paper-95: rgba(26, 24, 22, 0.95);
+    --yxt-paper-92: rgba(26, 24, 22, 0.92);
+    --yxt-paper-50: rgba(26, 24, 22, 0.5);
+    --yxt-paper-warm: #2A2622;
+    --yxt-paper-stack: #35302A;
+    --yxt-paper-open: #22201C;
 
-    --yxt-accent: #6366f1;
-    --yxt-accent-hover: #818cf8;
-    --yxt-accent-active: #a5b4fc;
-    --yxt-accent-soft: rgba(99, 102, 241, 0.14);
-    --yxt-accent-soft-hover: rgba(99, 102, 241, 0.2);
+    --yxt-annotation: #9E968A;
+    --yxt-annotation-70: rgba(158, 150, 138, 0.7);
+    --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+    --yxt-annotation-30: rgba(158, 150, 138, 0.3);
 
-    --yxt-border: #374151;
-    --yxt-border-strong: #4b5563;
-    --yxt-divider: rgba(255, 255, 255, 0.08);
+    /* 暮瞳在暗处化作更明显微光 */
+    --yxt-dusk: #B8A5C4;
+    --yxt-dusk-40: rgba(184, 165, 196, 0.5);
+    --yxt-dusk-25: rgba(184, 165, 196, 0.35);
+    --yxt-dusk-20: rgba(184, 165, 196, 0.3);
+    --yxt-dusk-12: rgba(184, 165, 196, 0.2);
+    --yxt-dusk-08: rgba(184, 165, 196, 0.14);
 
-    --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --yxt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
-    --yxt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
-    --yxt-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 10px 10px -5px rgba(0, 0, 0, 0.35);
+    /* 背景语义 */
+    --yxt-bg: var(--yxt-paper);
+    --yxt-bg-elevated: var(--yxt-paper-98);
+    --yxt-bg-glass: var(--yxt-paper-92);
+    --yxt-bg-secondary: var(--yxt-paper-open);
+    --yxt-bg-tertiary: var(--yxt-paper-warm);
+    --yxt-bg-hover: var(--yxt-ink-04);
+    --yxt-bg-active: var(--yxt-ink-06);
 
-    --yxt-success: #34d399;
-    --yxt-success-soft: rgba(52, 211, 153, 0.12);
-    --yxt-warning: #fbbf24;
-    --yxt-warning-soft: rgba(251, 191, 36, 0.12);
-    --yxt-error: #f87171;
-    --yxt-error-soft: rgba(248, 113, 113, 0.12);
+    /* 文字 */
+    --yxt-text: var(--yxt-ink);
+    --yxt-text-secondary: var(--yxt-annotation);
+    --yxt-text-tertiary: var(--yxt-annotation-70);
+    --yxt-text-on-accent: var(--yxt-paper);
+
+    /* 强调色 */
+    --yxt-accent: var(--yxt-ink);
+    --yxt-accent-hover: var(--yxt-ink-80);
+    --yxt-accent-active: var(--yxt-ink-60);
+    --yxt-accent-soft: var(--yxt-dusk-08);
+    --yxt-accent-soft-hover: var(--yxt-dusk-12);
+
+    /* 状态色在暗处略微提亮 */
+    --yxt-success: #8AAF9B;
+    --yxt-success-soft: rgba(138, 175, 155, 0.16);
+    --yxt-warning: #C9AE80;
+    --yxt-warning-soft: rgba(201, 174, 128, 0.16);
+    --yxt-error: #C98F8F;
+    --yxt-error-soft: rgba(201, 143, 143, 0.16);
+
+    /* 阴影在暗处更沉 */
+    --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --yxt-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --yxt-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --yxt-shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.35);
   }
 }

@@ -97,6 +97,32 @@ let rateLimitState = {
 
 const RATE_LIMIT_STATE_KEY = 'rateLimitState';
 
+// ===== 最近请求日志（内存环形容器，用于前端诊断）=====
+const MAX_REQUEST_LOGS = 50;
+let requestLogs = [];
+
+function logRequest(entry) {
+  requestLogs.unshift({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+    ...entry
+  });
+  if (requestLogs.length > MAX_REQUEST_LOGS) {
+    requestLogs = requestLogs.slice(0, MAX_REQUEST_LOGS);
+  }
+}
+
+function getRequestLogs(limit = MAX_REQUEST_LOGS) {
+  return requestLogs.slice(0, Math.max(1, Math.min(limit, MAX_REQUEST_LOGS)));
+}
+
+function truncateForLog(value, maxLen = 2000) {
+  if (value === undefined || value === null) return '';
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + `…(${str.length - maxLen} more chars)`;
+}
+
 /**
  * 从 storage 恢复速率限制状态（应对 Service Worker 休眠重启）
  */
@@ -232,175 +258,9 @@ async function applyRateDelay() {
 }
 
 // ===== 热点词库（安装时预加载） =====
-const BUILTIN_CACHE = {
-  // --- 基础对话与指令 ---
-  'auto:zh:Hello': '你好', 'auto:zh:hello': '你好',
-  'auto:zh:World': '世界', 'auto:zh:world': '世界',
-  'auto:zh:Thank you': '谢谢', 'auto:zh:thank you': '谢谢',
-  'auto:zh:Thanks': '谢谢', 'auto:zh:thanks': '谢谢',
-  'auto:zh:Welcome': '欢迎', 'auto:zh:welcome': '欢迎',
-  'auto:zh:Sorry': '抱歉', 'auto:zh:sorry': '抱歉',
-  'auto:zh:Yes': '是', 'auto:zh:No': '否',
-  'auto:zh:OK': '好的', 'auto:zh:ok': '好的',
-  'auto:zh:Good': '好', 'auto:zh:Bad': '坏',
-  'auto:zh:Error': '错误', 'auto:zh:Success': '成功',
-  'auto:zh:Loading': '加载中', 'auto:zh:Search': '搜索',
-  'auto:zh:Submit': '提交', 'auto:zh:Cancel': '取消',
-  'auto:zh:Confirm': '确认', 'auto:zh:Delete': '删除',
-  'auto:zh:Edit': '编辑', 'auto:zh:Save': '保存',
-  'auto:zh:Close': '关闭', 'auto:zh:Open': '打开',
-  'auto:zh:Back': '返回', 'auto:zh:Next': '下一步',
-  'auto:zh:Previous': '上一步', 'auto:zh:Home': '首页',
-  'auto:zh:Settings': '设置', 'auto:zh:Help': '帮助',
-  'auto:zh:About': '关于', 'auto:zh:Login': '登录',
-  'auto:zh:Logout': '登出', 'auto:zh:Sign in': '登录',
-  'auto:zh:Sign up': '注册', 'auto:zh:Sign out': '登出',
-  'auto:zh:Username': '用户名', 'auto:zh:Password': '密码',
-  'auto:zh:Email': '邮箱', 'auto:zh:Name': '名称',
-  'auto:zh:Phone': '电话', 'auto:zh:Address': '地址',
-  'auto:zh:Description': '描述', 'auto:zh:Title': '标题',
-  'auto:zh:Content': '内容', 'auto:zh:Comment': '评论',
-  'auto:zh:Reply': '回复', 'auto:zh:Share': '分享',
-  'auto:zh:Like': '喜欢', 'auto:zh:Download': '下载',
-  'auto:zh:Upload': '上传',
-  'auto:zh:Result': '结果', 'auto:zh:Status': '状态',
-  'auto:zh:Date': '日期', 'auto:zh:Time': '时间',
-  'auto:zh:Today': '今天', 'auto:zh:Tomorrow': '明天',
-  'auto:zh:Yesterday': '昨天', 'auto:zh:Week': '周',
-  'auto:zh:Month': '月', 'auto:zh:Year': '年',
-  'auto:zh:All': '全部', 'auto:zh:None': '无',
-  'auto:zh:More': '更多', 'auto:zh:Less': '更少',
-  'auto:zh:Show': '显示', 'auto:zh:Hide': '隐藏',
-  'auto:zh:Enable': '启用', 'auto:zh:Disable': '禁用',
-  'auto:zh:On': '开', 'auto:zh:Off': '关',
-  'auto:zh:True': '真', 'auto:zh:False': '假',
-  'auto:zh:New': '新建', 'auto:zh:Old': '旧的',
-  'auto:zh:Add': '添加', 'auto:zh:Remove': '移除',
-  'auto:zh:Clear': '清除', 'auto:zh:Reset': '重置',
-  'auto:zh:Filter': '筛选', 'auto:zh:Sort': '排序',
-  'auto:zh:Refresh': '刷新', 'auto:zh:Retry': '重试',
-  'auto:zh:Continue': '继续', 'auto:zh:Stop': '停止',
-  'auto:zh:Pause': '暂停', 'auto:zh:Resume': '恢复',
-  'auto:zh:Send': '发送', 'auto:zh:Receive': '接收',
-  'auto:zh:Connect': '连接', 'auto:zh:Disconnect': '断开',
-  'auto:zh:Online': '在线', 'auto:zh:Offline': '离线',
-  'auto:zh:Free': '免费', 'auto:zh:Premium': '高级',
-  'auto:zh:Price': '价格', 'auto:zh:Total': '总计',
-  'auto:zh:Language': '语言', 'auto:zh:Translate': '翻译',
-  'auto:zh:Translation': '翻译', 'auto:zh:Original': '原文',
-  'auto:zh:Preview': '预览', 'auto:zh:Publish': '发布',
-  'auto:zh:Draft': '草稿', 'auto:zh:Archive': '归档',
-  'auto:zh:Notification': '通知', 'auto:zh:Message': '消息',
-  'auto:zh:Warning': '警告', 'auto:zh:Info': '信息',
-  'auto:zh:Dashboard': '仪表盘', 'auto:zh:Profile': '个人资料',
-  'auto:zh:Account': '账户', 'auto:zh:Privacy': '隐私',
-  'auto:zh:Security': '安全', 'auto:zh:Terms': '条款',
-  'auto:zh:Version': '版本', 'auto:zh:License': '许可证',
-  'auto:zh:Copyright': '版权', 'auto:zh:Contact': '联系',
-  'auto:zh:Feedback': '反馈', 'auto:zh:Report': '报告',
-  'auto:zh:Analytics': '分析', 'auto:zh:Performance': '性能',
-  'auto:zh:Overview': '概览', 'auto:zh:Summary': '摘要',
-  'auto:zh:Detail': '详情', 'auto:zh:Details': '详情',
-  'auto:zh:Feature': '功能', 'auto:zh:Features': '功能',
-  'auto:zh:Option': '选项', 'auto:zh:Options': '选项',
-  'auto:zh:Configuration': '配置', 'auto:zh:Preferences': '偏好',
-  'auto:zh:General': '通用', 'auto:zh:Advanced': '高级',
-  'auto:zh:Basic': '基础', 'auto:zh:Custom': '自定义',
-  'auto:zh:Default': '默认', 'auto:zh:Required': '必填',
-  'auto:zh:Optional': '可选', 'auto:zh:Recommended': '推荐',
-  'auto:zh:Popular': '热门', 'auto:zh:Recent': '最近',
-  'auto:zh:Trending': '趋势', 'auto:zh:Category': '分类',
-  'auto:zh:Tag': '标签', 'auto:zh:Tags': '标签',
-  'auto:zh:Label': '标签', 'auto:zh:Note': '备注',
-  'auto:zh:Notes': '备注', 'auto:zh:Example': '示例',
-  'auto:zh:Sample': '样本', 'auto:zh:Test': '测试',
-  'auto:zh:Debug': '调试', 'auto:zh:Log': '日志',
-  'auto:zh:History': '历史', 'auto:zh:Bookmark': '书签',
-  'auto:zh:Favorite': '收藏', 'auto:zh:Star': '星标',
-  // 常用短语
-  'auto:zh:Click here': '点击这里',
-  'auto:zh:Learn more': '了解更多',
-  'auto:zh:Read more': '阅读更多',
-  'auto:zh:See more': '查看更多',
-  'auto:zh:View all': '查看全部',
-  'auto:zh:Show more': '显示更多',
-  'auto:zh:Load more': '加载更多',
-  'auto:zh:Get started': '开始使用',
-  'auto:zh:Try again': '重试',
-  'auto:zh:Go back': '返回',
-  'auto:zh:Not found': '未找到',
-  'auto:zh:No results': '无结果',
-  'auto:zh:No data': '无数据',
-  'auto:zh:Coming soon': '即将推出',
-  'auto:zh:Under construction': '建设中',
-  'auto:zh:Terms of Service': '服务条款',
-  'auto:zh:Privacy Policy': '隐私政策',
-  'auto:zh:All rights reserved': '保留所有权利',
-  'auto:zh:Powered by': '技术支持',
-  'auto:zh:Made with': '使用创建',
-  // 英翻中 - 技术
-  'auto:zh:API': 'API',
-  'auto:zh:SDK': 'SDK',
-  'auto:zh:Bug': '缺陷',
-  'auto:zh:Deploy': '部署',
-  'auto:zh:Release': '发布',
-  'auto:zh:Repository': '仓库',
-  'auto:zh:Branch': '分支',
-  'auto:zh:Merge': '合并',
-  'auto:zh:Pull Request': '拉取请求',
-  'auto:zh:Issue': '问题',
-  'auto:zh:Commit': '提交',
-  // 中翻英
-  'auto:en:你好': 'Hello', 'auto:en:谢谢': 'Thank you',
-  'auto:en:欢迎': 'Welcome', 'auto:en:再见': 'Goodbye',
-  'auto:en:是': 'Yes', 'auto:en:否': 'No',
-  'auto:en:好的': 'OK', 'auto:en:搜索': 'Search',
-  'auto:en:设置': 'Settings', 'auto:en:帮助': 'Help',
-  'auto:en:登录': 'Login', 'auto:en:注册': 'Register',
-  'auto:en:确认': 'Confirm', 'auto:en:取消': 'Cancel',
-  'auto:en:删除': 'Delete', 'auto:en:编辑': 'Edit',
-  'auto:en:保存': 'Save', 'auto:en:提交': 'Submit',
-  'auto:en:翻译': 'Translate', 'auto:en:复制': 'Copy',
-  
-  // --- 深度开发与技术词汇 (面向开发者加速) ---
-  'auto:zh:Repository': '仓库', 'auto:zh:Commit': '提交',
-  'auto:zh:Branch': '分支', 'auto:zh:Merge': '合并',
-  'auto:zh:Pull request': '拉取请求', 'auto:zh:Issue': '工单/问题',
-  'auto:zh:Context': '上下文', 'auto:zh:Environment': '环境',
-  'auto:zh:Configuration': '配置', 'auto:zh:Deployment': '部署',
-  'auto:zh:Build': '构建', 'auto:zh:Production': '生产环境',
-  'auto:zh:Development': '开发环境', 'auto:zh:Interface': '接口/界面',
-  'auto:zh:Algorithm': '算法', 'auto:zh:Protocol': '协议',
-  'auto:zh:Function': '函数', 'auto:zh:Method': '方法',
-  'auto:zh:Property': '属性', 'auto:zh:Variable': '变量',
-  'auto:zh:Constant': '常量', 'auto:zh:Object': '对象',
-  'auto:zh:Array': '数组', 'auto:zh:String': '字符串',
-  'auto:zh:Boolean': '布尔值', 'auto:zh:Integer': '整数',
-  'auto:zh:Float': '浮点数', 'auto:zh:Double': '双精度',
-  'auto:zh:Character': '字符', 'auto:zh:Class': '类',
-  'auto:zh:Structure': '结构', 'auto:zh:Template': '模板',
-  'auto:zh:Abstract': '抽象', 'auto:zh:Static': '静态',
-  'auto:zh:Dynamic': '动态', 'auto:zh:Synchronous': '同步',
-  'auto:zh:Asynchronous': '异步', 'auto:zh:Callback': '回调',
-  'auto:zh:Promise': '期约', 'auto:zh:Stream': '流',
-  'auto:zh:Buffer': '缓冲区', 'auto:zh:Socket': '套接字',
-  'auto:zh:Session': '会话', 'auto:zh:Cookie': '缓存',
-  'auto:zh:Token': '令牌', 'auto:zh:Header': '头部',
-  'auto:zh:Payload': '负载', 'auto:zh:Status Code': '状态码',
-  'auto:zh:Endpoint': '端点', 'auto:zh:Authentication': '认证',
-  'auto:zh:Authorization': '授权', 'auto:zh:Encryption': '加密',
-  'auto:zh:Decryption': '解密', 'auto:zh:Signature': '签名',
-  'auto:zh:Certificate': '证书', 'auto:zh:Primary Key': '主键',
-  'auto:zh:Foreign Key': '外键', 'auto:zh:Index': '索引',
-  'auto:zh:Query': '查询', 'auto:zh:Transaction': '事务',
-  'auto:zh:Log': '日志', 'auto:zh:Dependency': '依赖',
-  'auto:zh:Plugin': '插件', 'auto:zh:Extension': '扩展',
-  'auto:zh:Component': '组件', 'auto:zh:Framework': '框架',
-  'auto:zh:Library': '库', 'auto:zh:Module': '模块',
-  'auto:zh:Package': '包', 'auto:zh:Namespace': '命名空间',
-  'auto:zh:Runtime': '运行时', 'auto:zh:Service': '服务',
-  'auto:zh:Middleware': '中间件', 'auto:zh:Pipeline': '流水线'
-};
+// 严格缓存策略下，短词/固定译法的内置热词属于「近似命中」，不再预加载。
+// 缓存只保留用户实际翻译过且通过校验的真实句子/段落。
+const BUILTIN_CACHE = {};
 
 // ===== 运行时状态 =====
 
@@ -436,12 +296,18 @@ let config = {
   enableStreaming: true
 };
 
-let cache = new Map();
-let cacheOrder = [];
+let cache = new Map();        // key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
+let cacheBytes = 0;           // 当前缓存字节数（UTF-16 估算）
 let cacheStats = { wordCount: 0, sizeBytes: 0 };
+let pendingCacheWrites = new Set(); // 待写入 IndexedDB 的键
+let pendingCacheDeletes = new Set(); // 待从 IndexedDB 删除的键
 let db = null;
 
-let usageStats = { totalCount: 0, cacheHits: 0, totalTokens: 0, sessionTokens: 0 };
+let usageStats = {
+  totalCount: 0, cacheHits: 0, totalTokens: 0, sessionTokens: 0,
+  blockedHits: 0, userReportedHits: 0, blockedByRule: {}
+};
+let usageStatsSaveTimer = null;
 
 // 连接状态轻量缓存，避免 popup 每次打开都发起真实 API 探测
 let connectionCache = { profileId: '', timestamp: 0, result: null };
@@ -450,8 +316,11 @@ const CONNECTION_CACHE_TTL = 15000;
 async function loadUsageStats() {
   const stored = await chrome.storage.local.get('usageStats');
   if (stored.usageStats) usageStats = stored.usageStats;
-  // 兼容旧格式：若缺少 totalTokens 字段则补零
+  // 兼容旧格式：补全可能缺失的字段
   if (typeof usageStats.totalTokens !== 'number') usageStats.totalTokens = 0;
+  if (typeof usageStats.blockedHits !== 'number') usageStats.blockedHits = 0;
+  if (typeof usageStats.userReportedHits !== 'number') usageStats.userReportedHits = 0;
+  if (!usageStats.blockedByRule || typeof usageStats.blockedByRule !== 'object') usageStats.blockedByRule = {};
   // 会话 token 数不持久化，每次启动/加载时重置
   usageStats.sessionTokens = 0;
 }
@@ -462,22 +331,37 @@ function estimateTokens(text) {
   return Math.ceil(text.length / 3);
 }
 
+function saveUsageStatsDeferred() {
+  if (usageStatsSaveTimer) clearTimeout(usageStatsSaveTimer);
+  usageStatsSaveTimer = setTimeout(() => {
+    const { sessionTokens, ...toSave } = usageStats;
+    chrome.storage.local.set({ usageStats: toSave }).catch(() => {});
+    usageStatsSaveTimer = null;
+  }, 1000);
+}
+
 function recordUsage(isCacheHit, count = 1, tokens = 0) {
   usageStats.totalCount += count;
   usageStats.totalTokens += tokens;
   usageStats.sessionTokens = (usageStats.sessionTokens || 0) + tokens;
   if (isCacheHit) usageStats.cacheHits += count;
-  // 简易防抖保存（sessionTokens 不持久化）
-  const { sessionTokens, ...toSave } = usageStats;
-  chrome.storage.local.set({ usageStats: toSave });
+  saveUsageStatsDeferred();
+}
+
+function recordCacheValidation(rule) {
+  usageStats.blockedHits = (usageStats.blockedHits || 0) + 1;
+  if (!usageStats.blockedByRule) usageStats.blockedByRule = {};
+  usageStats.blockedByRule[rule] = (usageStats.blockedByRule[rule] || 0) + 1;
+  saveUsageStatsDeferred();
 }
 
 // ===== IndexedDB（带重连机制） =====
 
 const DB_NAME = 'YuxTransDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const CACHE_STORE = 'translations';
 const MODELS_STORE = 'models';
+const METRICS_STORE = 'metrics';
 
 /**
  * 打开 IndexedDB，带连接有效性检查
@@ -509,6 +393,12 @@ async function openDatabase() {
       // 监听连接关闭事件，自动重置引用
       db.onclose = () => { db = null; };
       db.onerror = () => { db = null; };
+      // 其他上下文（如新的 Service Worker）请求更高版本时，关闭旧连接并重新打开
+      db.onversionchange = (event) => {
+        db.close();
+        db = null;
+        openDatabase().catch(() => {});
+      };
       resolve(db);
     };
 
@@ -521,6 +411,12 @@ async function openDatabase() {
       // v2: 新增模型管理 objectStore
       if (!database.objectStoreNames.contains(MODELS_STORE)) {
         database.createObjectStore(MODELS_STORE, { keyPath: 'id' });
+      }
+      // v3: 新增性能指标 objectStore
+      if (!database.objectStoreNames.contains(METRICS_STORE)) {
+        const metricsStore = database.createObjectStore(METRICS_STORE, { keyPath: 'id', autoIncrement: true });
+        metricsStore.createIndex('timestamp', 'timestamp', { unique: false });
+        metricsStore.createIndex('success', 'success', { unique: false });
       }
     };
   });
@@ -537,32 +433,42 @@ async function loadCacheFromDB() {
       request.onsuccess = () => {
         const items = request.result;
         cache.clear();
-        cacheOrder = [];
+        cacheBytes = 0;
+        pendingCacheWrites.clear();
+        pendingCacheDeletes.clear();
 
+        // 按时间戳从新到旧排序，使最近使用的项位于 Map 末尾
         items.sort((a, b) => b.timestamp - a.timestamp);
+        let invalidCount = 0;
         for (const item of items) {
+          const validation = validateCacheEntry(item.key, item.value);
+          if (!validation.valid) {
+            pendingCacheDeletes.add(item.key);
+            invalidCount++;
+            continue;
+          }
           cache.set(item.key, item.value);
-          cacheOrder.push(item.key);
+          cacheBytes += item.key.length * 2 + item.value.length * 2;
+        }
+        if (invalidCount > 0) {
+          console.log(`[YuxTrans] 加载缓存时跳过 ${invalidCount} 条无效/旧版本记录`);
         }
 
         // 应用缓存字节限额限制 (LRU: 物理空间驱动)
         const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
-        let currentBytes = 0;
-        
-        // 重新核算字节占用并裁剪
-        for (const key of cacheOrder) {
-          const value = cache.get(key);
-          currentBytes += key.length * 2 + value.length * 2;
-        }
-
-        while (currentBytes > maxBytes && cacheOrder.length > 0) {
-          const oldestKey = cacheOrder.shift();
+        while (cacheBytes > maxBytes && cache.size > 0) {
+          const oldestKey = cache.keys().next().value;
           const oldestVal = cache.get(oldestKey);
-          currentBytes -= oldestKey.length * 2 + oldestVal.length * 2;
           cache.delete(oldestKey);
+          cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+          pendingCacheDeletes.add(oldestKey);
         }
 
         updateCacheStats();
+        // 若启动加载时裁剪了缓存，立即同步删除到 DB
+        if (pendingCacheDeletes.size > 0) {
+          saveCacheToDB();
+        }
         resolve();
       };
 
@@ -579,39 +485,67 @@ async function loadCacheFromDB() {
 // 批处理写入控制
 let pendingCacheSave = false;
 let cacheSaveTimer = null;
+let isFlushingCache = false;
 
-async function saveCacheToDB() {
-  if (pendingCacheSave) return;
+async function flushCacheToDB() {
+  if (isFlushingCache) return;
+  isFlushingCache = true;
+
+  if (cacheSaveTimer) {
+    clearTimeout(cacheSaveTimer);
+    cacheSaveTimer = null;
+  }
+
+  const writes = new Set(pendingCacheWrites);
+  const deletes = new Set(pendingCacheDeletes);
+  pendingCacheWrites.clear();
+  pendingCacheDeletes.clear();
+
+  try {
+    if (writes.size === 0 && deletes.size === 0) return;
+
+    const database = await openDatabase();
+    const transaction = database.transaction(CACHE_STORE, 'readwrite');
+    const store = transaction.objectStore(CACHE_STORE);
+    const timestamp = Date.now();
+
+    // 1. 删除被淘汰的键
+    for (const key of deletes) {
+      store.delete(key);
+    }
+
+    // 2. 仅写入变更的键，避免全量重写
+    for (const key of writes) {
+      const value = cache.get(key);
+      if (value !== undefined) {
+        store.put({ key, value, timestamp });
+      }
+    }
+
+    await new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (error) {
+    console.error('[YuxTrans] IndexedDB 写入失败:', error);
+    // 出错时把变更重新放回待写入队列，下次再试
+    for (const key of writes) pendingCacheWrites.add(key);
+    for (const key of deletes) pendingCacheDeletes.add(key);
+  } finally {
+    isFlushingCache = false;
+    pendingCacheSave = false;
+  }
+}
+
+function saveCacheToDB() {
+  if (pendingCacheSave || isFlushingCache) return;
   pendingCacheSave = true;
 
   if (cacheSaveTimer) clearTimeout(cacheSaveTimer);
-
-  cacheSaveTimer = setTimeout(async () => {
-    try {
-      const database = await openDatabase();
-      const transaction = database.transaction(CACHE_STORE, 'readwrite');
-      const store = transaction.objectStore(CACHE_STORE);
-
-      store.clear();
-      const timestamp = Date.now();
-      for (const [key, value] of cache) {
-        store.put({ key, value, timestamp });
-      }
-
-      transaction.oncomplete = () => {
-        pendingCacheSave = false;
-        cacheSaveTimer = null;
-      };
-      transaction.onerror = () => {
-        console.error('[YuxTrans] 保存缓存到 IndexedDB 失败');
-        pendingCacheSave = false;
-        cacheSaveTimer = null;
-      };
-    } catch (error) {
-      console.error('[YuxTrans] IndexedDB 写入失败:', error);
-      pendingCacheSave = false;
+  cacheSaveTimer = setTimeout(() => {
+    flushCacheToDB().then(() => {
       cacheSaveTimer = null;
-    }
+    });
   }, 500);
 }
 
@@ -697,22 +631,24 @@ async function removeProviderRecord(recordId) {
 }
 
 function updateCacheStats() {
-  let totalBytes = 0;
-  for (const [key, value] of cache) {
-    totalBytes += key.length * 2 + value.length * 2; // UTF-16 估算
-  }
-  cacheStats = { wordCount: cache.size, sizeBytes: totalBytes };
+  cacheStats = { wordCount: cache.size, sizeBytes: cacheBytes };
 }
 
 // ===== 缓存操作 =====
 
 function getFromCache(key) {
   if (!config.cacheEnabled) return null;
-  if (cache.has(key)) {
-    const value = cache.get(key);
-    // LRU: 移到最近位置
-    cacheOrder = cacheOrder.filter(k => k !== key);
-    cacheOrder.push(key);
+  const value = cache.get(key);
+  if (value !== undefined) {
+    const validation = validateCacheEntry(key, value);
+    if (!validation.valid) {
+      recordCacheValidation(validation.rule);
+      evictCacheEntry(key);
+      return null;
+    }
+    // LRU: 移到最近位置（Map 插入顺序）
+    cache.delete(key);
+    cache.set(key, value);
     return value;
   }
   return null;
@@ -720,26 +656,39 @@ function getFromCache(key) {
 
 async function setToCache(key, value) {
   if (!config.cacheEnabled) return;
-  
+
+  const validation = validateCacheEntry(key, value);
+  if (!validation.valid) return;
+
   const entryBytes = key.length * 2 + value.length * 2;
   const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
 
-  // 1. 存入新项
-  cache.set(key, value);
-  cacheOrder.push(key);
-  
-  // 2. 动态统计与裁剪
-  let currentBytes = 0;
-  for (const k of cacheOrder) {
-    const v = cache.get(k);
-    currentBytes += k.length * 2 + v.length * 2;
+  // 若 key 已存在，先扣除旧字节并删除旧位置
+  if (cache.has(key)) {
+    const oldValue = cache.get(key);
+    cacheBytes -= key.length * 2 + oldValue.length * 2;
+    cache.delete(key);
   }
 
-  while (currentBytes > maxBytes && cacheOrder.length > 0) {
-    const oldestKey = cacheOrder.shift();
+  // 存入新项
+  cache.set(key, value);
+  cacheBytes += entryBytes;
+  pendingCacheWrites.add(key);
+  pendingCacheDeletes.delete(key);
+
+  // 累计到一定数量立即刷新，避免 Service Worker 被终止时丢失过多未落盘缓存
+  if (pendingCacheWrites.size >= 50) {
+    await flushCacheToDB();
+  }
+
+  // 按 LRU 裁剪最旧的项
+  while (cacheBytes > maxBytes && cache.size > 0) {
+    const oldestKey = cache.keys().next().value;
     const oldestVal = cache.get(oldestKey);
-    currentBytes -= oldestKey.length * 2 + oldestVal.length * 2;
     cache.delete(oldestKey);
+    cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+    pendingCacheDeletes.add(oldestKey);
+    pendingCacheWrites.delete(oldestKey);
   }
 
   updateCacheStats();
@@ -748,21 +697,358 @@ async function setToCache(key, value) {
 
 function normalizeCacheKeyText(text) {
   if (!text) return '';
+  // 严格策略：只保留与语义无关的最小化归一化，避免不同文本因标点/引号/全角折叠成同一个键。
+  // 移除非可见字符和折叠连续空白即可；引号、破折号、省略号、全角半角差异视为不同文本。
   return text
     .normalize('NFC')                       // Unicode 组合字符归一化
     .replace(/[\u200B-\u200F\uFEFF]/g, '')   // 去除零宽字符
-    .replace(/[\u2018\u2019\u2032]/g, "'")  // 左/右单引号、撇号统一为 '
-    .replace(/[\u201C\u201D\u2033]/g, '"')  // 左/右双引号统一为 "
-    .replace(/[\u2013\u2014]/g, '-')         // en/em dash 统一为 -
-    .replace(/\u2026/g, '...')               // 省略号统一为 ...
-    .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)) // 全角 ASCII 转半角
     .replace(/\s+/g, ' ')                   // 折叠连续空白
     .trim();
 }
 
+// ===== 缓存命中校验器 =====
+// 目标：把明显不合理的缓存命中拦截在返回给用户之前，同时避免误伤正常翻译。
+
+const REFUSAL_PATTERNS = [
+  "I'm sorry", 'as an AI', 'cannot translate', "can't translate", 'unable to',
+  'error', '429', 'rate limit', '<!DOCTYPE', '<html'
+];
+
+const PROPER_NOUN_WHITELIST = new Set([
+  'github', 'google', 'openai', 'api', 'oauth', 'sdk', 'url', 'html', 'css', 'json',
+  'javascript', 'python', 'java', 'react', 'vue', 'docker', 'kubernetes', 'sql', 'git',
+  'npm', 'node', 'linux', 'windows', 'macos', 'ios', 'android', 'chatgpt', 'claude',
+  'github actions', 'visual studio code', 'vs code'
+]);
+
+const MIN_CACHE_SOURCE_LENGTH = 12;   // 低于此长度的源文存在较大歧义，不缓存/不命中
+const SHORT_SOURCE_THRESHOLD = 10;
+const RULE3_SAMPLE_THRESHOLD = 200;
+const RULE3_SAMPLE_SIZE = 100;
+const RULE3_MIN_TARGET_SCRIPT_RATIO = 0.5;
+
+const CJK_LANGS = new Set(['zh', 'ja', 'ko']);
+const LATIN_LANGS = new Set(['en', 'vi', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl']);
+
+function parseCacheKey(key) {
+  // key 格式：version:sourceLang:targetLang:style:text，text 本身可能包含冒号
+  const parts = key.split(':');
+  return {
+    version: parts[0] || '',
+    sourceLang: parts[1] || 'auto',
+    targetLang: parts[2] || 'zh',
+    style: parts[3] || 'normal',
+    text: parts.slice(4).join(':')
+  };
+}
+
+function getCacheKeyTextPart(key) {
+  return parseCacheKey(key).text;
+}
+
+function getLangFamily(lang) {
+  if (CJK_LANGS.has(lang)) return 'cjk';
+  if (LATIN_LANGS.has(lang)) return 'latin';
+  return 'other';
+}
+
+function getRatioThreshold(sourceLang, targetLang) {
+  const sourceFamily = getLangFamily(sourceLang);
+  const targetFamily = getLangFamily(targetLang);
+  if (sourceFamily === 'cjk' && targetFamily === 'latin') return 5;
+  if (sourceFamily === 'latin' && targetFamily === 'cjk') return 2;
+  if (sourceFamily === targetFamily) return 3;
+  return 3;
+}
+
+function getTargetScriptRegex(targetLang) {
+  switch (targetLang) {
+    case 'zh': return SCRIPT_RANGES.han;
+    case 'ja':
+      return new RegExp(`${SCRIPT_RANGES.han.source.slice(1, -1)}${SCRIPT_RANGES.hiragana.source.slice(1, -1)}${SCRIPT_RANGES.katakana.source.slice(1, -1)}`, 'u');
+    case 'ko': return SCRIPT_RANGES.hangul;
+    case 'en':
+    case 'vi':
+      return SCRIPT_RANGES.latin;
+    case 'ru': return SCRIPT_RANGES.cyrillic;
+    case 'ar': return SCRIPT_RANGES.arabic;
+    case 'th': return SCRIPT_RANGES.thai;
+    default: return null;
+  }
+}
+
+function getTargetScriptRatio(text, targetLang) {
+  const regex = getTargetScriptRegex(targetLang);
+  if (!regex) return 1;
+  let meaningful = 0;
+  let matched = 0;
+  for (const char of text) {
+    if (/[\p{L}\p{N}]/u.test(char)) {
+      meaningful++;
+      if (regex.test(char)) matched++;
+    }
+  }
+  return meaningful === 0 ? 1 : matched / meaningful;
+}
+
+function getSampleText(text, sampleSize) {
+  if (text.length <= sampleSize * 3) return text;
+  const half = Math.floor(text.length / 2);
+  return (
+    text.slice(0, sampleSize) +
+    text.slice(half - Math.floor(sampleSize / 2), half + Math.ceil(sampleSize / 2)) +
+    text.slice(-sampleSize)
+  );
+}
+
+function isCjkToCjk(sourceLang, targetLang) {
+  return CJK_LANGS.has(sourceLang) && CJK_LANGS.has(targetLang);
+}
+
+function isProperNoun(text) {
+  const normalized = normalizeCacheKeyText(text).toLowerCase();
+  if (PROPER_NOUN_WHITELIST.has(normalized)) return true;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+  // 单个大写/首字母大写单词，如 OpenAI、TensorFlow
+  if (words.length === 1) {
+    const original = text.trim();
+    return /^[A-Z][a-zA-Z0-9]*$/.test(original) || /^[A-Z0-9]+$/.test(original);
+  }
+  // 多词且每个单词首字母大写，视为专有名词
+  return words.every((w, i) => /^[A-Z0-9]/.test(text.trim().split(/\s+/)[i] || ''));
+}
+
+function hasEntityDrift(source, target) {
+  // URL / 域名 / 邮箱
+  if (/https?:\/\/|www\.|[^\s]+@[^\s]+\.[^\s]+|\.(com|org|net|cn|io|dev|co)\b/i.test(target)) {
+    return true;
+  }
+  // user/repo 路径模式
+  if (/\b[^\s/]+\/[^\s/]+\b/.test(target)) return true;
+  // 原文没有的 CamelCase / PascalCase 命名实体
+  const sourceTokens = new Set(source.toLowerCase().split(/\W+/).filter(Boolean));
+  const targetTokens = target.match(/[A-Z][a-z]+[A-Z][a-zA-Z0-9]+/g) || [];
+  for (const token of targetTokens) {
+    if (!sourceTokens.has(token.toLowerCase())) return true;
+  }
+  return false;
+}
+
+function validateCacheEntry(key, value) {
+  const parsed = parseCacheKey(key);
+  // 版本不匹配：旧版缓存键直接视为无效
+  if (parsed.version !== CACHE_KEY_VERSION) {
+    return { valid: false, rule: 'version_mismatch' };
+  }
+  const sourceLang = parsed.sourceLang;
+  const targetLang = parsed.targetLang;
+  const normalizedSource = normalizeCacheKeyText(parsed.text);
+  const normalizedValue = normalizeCacheKeyText(value);
+
+  // 严格准入：过短源文语义歧义大，不进入缓存
+  if (normalizedSource.length < MIN_CACHE_SOURCE_LENGTH) {
+    return { valid: false, rule: 'too_short' };
+  }
+
+  // 规则 0：API 拒绝 / 错误 / 非翻译内容
+  const lowerValue = normalizedValue.toLowerCase();
+  for (const pattern of REFUSAL_PATTERNS) {
+    if (lowerValue.includes(pattern.toLowerCase())) {
+      return { valid: false, rule: 'refusal' };
+    }
+  }
+
+  const actualSourceLang = detectLanguage(normalizedSource) || sourceLang;
+
+  // 规则 1：短源文长度/比例（语言对敏感）
+  if (normalizedSource.length > 0 && normalizedSource.length <= SHORT_SOURCE_THRESHOLD) {
+    const ratio = normalizedValue.length / normalizedSource.length;
+    const threshold = getRatioThreshold(actualSourceLang, targetLang);
+    if (ratio > threshold) {
+      return { valid: false, rule: 'length_ratio' };
+    }
+  }
+
+  // 规则 2：跨语种回显原文
+  if (actualSourceLang !== targetLang &&
+      normalizedSource === normalizedValue &&
+      !isProperNoun(normalizedSource)) {
+    return { valid: false, rule: 'echo' };
+  }
+
+  // 规则 3：目标语合法性
+  if (isCjkToCjk(actualSourceLang, targetLang)) {
+    if (/[a-zA-Z]/.test(normalizedValue)) {
+      return { valid: false, rule: 'cjk_latin_drift' };
+    }
+  } else {
+    const sample = normalizedValue.length > RULE3_SAMPLE_THRESHOLD
+      ? getSampleText(normalizedValue, RULE3_SAMPLE_SIZE)
+      : normalizedValue;
+    if (getTargetScriptRatio(sample, targetLang) < RULE3_MIN_TARGET_SCRIPT_RATIO) {
+      return { valid: false, rule: 'target_script' };
+    }
+    if (actualSourceLang !== targetLang) {
+      const detectedValueLang = detectLanguage(sample);
+      if (detectedValueLang === actualSourceLang && detectedValueLang !== 'unknown') {
+        return { valid: false, rule: 'source_language_echo' };
+      }
+    }
+  }
+
+  // 规则 4：短源文实体漂移
+  if (normalizedSource.length <= SHORT_SOURCE_THRESHOLD && hasEntityDrift(normalizedSource, normalizedValue)) {
+    return { valid: false, rule: 'entity_drift' };
+  }
+
+  return { valid: true, rule: null };
+}
+
+function evictCacheEntry(key) {
+  if (!cache.has(key)) return;
+  const value = cache.get(key);
+  cacheBytes -= key.length * 2 + value.length * 2;
+  cache.delete(key);
+  pendingCacheDeletes.add(key);
+  pendingCacheWrites.delete(key);
+  updateCacheStats();
+}
+
+async function cleanupInvalidCacheEntries() {
+  if (!config.cacheEnabled) return;
+  const invalidKeys = [];
+  for (const [key, value] of cache.entries()) {
+    const result = validateCacheEntry(key, value);
+    if (!result.valid) invalidKeys.push(key);
+  }
+  if (invalidKeys.length === 0) return;
+  for (const key of invalidKeys) {
+    evictCacheEntry(key);
+  }
+  await flushCacheToDB();
+  console.log(`[YuxTrans] 启动清理：移除 ${invalidKeys.length} 条无效缓存`);
+}
+
+// 缓存键版本，用于 prompt 策略或过滤规则发生重大变更时自动失效旧缓存
+const CACHE_KEY_VERSION = 'v2';
+
 function generateCacheKey(text, sourceLang, targetLang, style = null) {
   const resolvedStyle = style || config.translateStyle || 'normal';
-  return `${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
+  return `${CACHE_KEY_VERSION}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
+}
+
+// ===== 性能指标（轻量本地埋点）=====
+
+const METRICS_RETENTION_DAYS = 7;
+const METRICS_MAX_SUCCESS = 1000;
+const METRICS_MAX_FAILURE = 200;
+
+function generateMetricId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function classifyError(error) {
+  if (!error) return 'unknown';
+  const msg = (error.message || String(error)).toLowerCase();
+  if (msg.includes('timeout') || msg.includes('abort') || msg.includes('超时')) return 'timeout';
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('过于频繁')) return 'rate_limit';
+  if (msg.includes('401') || msg.includes('api key') || msg.includes('请先配置')) return 'auth';
+  if (msg.includes('network') || msg.includes('断开') || msg.includes('failed to fetch')) return 'network';
+  if (msg.includes('json') || msg.includes('parse') || msg.includes('解析')) return 'parse';
+  return 'api';
+}
+
+async function recordMetric(metric) {
+  try {
+    const database = await openDatabase();
+    if (!database.objectStoreNames.contains(METRICS_STORE)) return;
+
+    const transaction = database.transaction(METRICS_STORE, 'readwrite');
+    const store = transaction.objectStore(METRICS_STORE);
+    const request = store.put({
+      id: generateMetricId(),
+      timestamp: Date.now(),
+      ...metric
+    });
+
+    await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (e) {
+    // 埋点失败不应影响主流程
+  }
+}
+
+async function cleanupMetrics() {
+  try {
+    const database = await openDatabase();
+    if (!database.objectStoreNames.contains(METRICS_STORE)) return;
+
+    const transaction = database.transaction(METRICS_STORE, 'readwrite');
+    const store = transaction.objectStore(METRICS_STORE);
+    const index = store.index('timestamp');
+    const cutoff = Date.now() - METRICS_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const counts = { success: 0, failure: 0 };
+
+    // 从新到旧遍历，保留 newest N 条，删除超期/超量的旧数据
+    const request = index.openCursor(null, 'prev');
+    await new Promise((resolve, reject) => {
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        const value = cursor.value;
+        const isSuccess = value.success === true;
+        const key = isSuccess ? 'success' : 'failure';
+        counts[key]++;
+        const tooOld = value.timestamp < cutoff;
+        const tooMany = counts[key] > (isSuccess ? METRICS_MAX_SUCCESS : METRICS_MAX_FAILURE);
+        if (tooOld || tooMany) {
+          cursor.delete();
+        }
+        cursor.continue();
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    // 清理失败不应影响主流程
+  }
+}
+
+async function getMetrics(limit = 1000, days = METRICS_RETENTION_DAYS) {
+  try {
+    const database = await openDatabase();
+    if (!database.objectStoreNames.contains(METRICS_STORE)) return [];
+
+    const transaction = database.transaction(METRICS_STORE, 'readonly');
+    const store = transaction.objectStore(METRICS_STORE);
+    const index = store.index('timestamp');
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const range = IDBKeyRange.lowerBound(cutoff);
+    const request = index.openCursor(range, 'prev');
+
+    return await new Promise((resolve, reject) => {
+      const metrics = [];
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor && metrics.length < limit) {
+          metrics.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(metrics);
+        }
+      };
+      request.onerror = () => reject(request.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (e) {
+    return [];
+  }
 }
 
 // ===== ProviderProfile / ActiveConfig 解析 =====
@@ -901,20 +1187,6 @@ function buildTranslationPrompt(text, sourceLang, targetLang, context) {
   const sourceName = sourceLang === 'auto' ? null : (LANG_NAMES[sourceLang] || sourceLang);
   const styleHint = STYLE_PROMPTS[config.translateStyle] || '';
 
-  // 构建上下文提示
-  let contextHint = '';
-  if (context) {
-    if (context.pageTitle) {
-      contextHint += `\nPage context: "${context.pageTitle}"`;
-    }
-    if (context.pageUrl) {
-      try {
-        const domain = new URL(context.pageUrl).hostname;
-        contextHint += ` (${domain})`;
-      } catch (e) { /* ignore */ }
-    }
-  }
-
   let prompt = `You are a professional translator. Translate the following text`;
   if (sourceName) {
     prompt += ` from ${sourceName}`;
@@ -926,17 +1198,14 @@ function buildTranslationPrompt(text, sourceLang, targetLang, context) {
   }
 
   prompt += `
-Rules:
-- Provide ONLY the translation, no explanations or notes
-- Translate naturally, not word-by-word
-- Preserve proper nouns, brand names, URLs, and code unchanged
-- Keep numbers, punctuation marks, and formatting intact`;
+STRICT OUTPUT RULES:
+- Provide ONLY the translation of the text below. No explanations, notes, markdown, or code fences.
+- Translate naturally, not word-by-word.
+- Preserve proper nouns, brand names, URLs, and code unchanged.
+- Keep numbers, punctuation marks, and formatting intact.
+- If the text is already in the target language or contains only proper nouns/code/numbers, return it unchanged.`;
 
-  if (contextHint) {
-    prompt += `\n${contextHint}`;
-  }
-
-  prompt += `\n\n${text}`;
+  prompt += `\n\nText to translate:\n${text}`;
   return prompt;
 }
 
@@ -1094,6 +1363,7 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
 
   const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
   const { headers, body } = buildRequest(prompt, false, p);
+  const logStart = performance.now();
 
   // AbortController 超时控制
   const controller = new AbortController();
@@ -1125,13 +1395,36 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
     // 成功，更新状态
     updateRateLimitState(true);
 
+    logRequest({
+      action: 'translate',
+      provider: p.provider,
+      model: getModel(p),
+      sourceLang,
+      targetLang,
+      prompt: truncateForLog(prompt),
+      response: truncateForLog(translated),
+      latencyMs: Math.round(performance.now() - logStart),
+      success: true
+    });
+
     return translated.trim();
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('请求超时（15秒），请检查网络或更换模型');
-    }
-    throw error;
+    const finalError = error.name === 'AbortError'
+      ? new Error('请求超时（30秒），请检查网络或更换模型')
+      : error;
+    logRequest({
+      action: 'translate',
+      provider: p.provider,
+      model: getModel(p),
+      sourceLang,
+      targetLang,
+      prompt: truncateForLog(prompt),
+      error: truncateForLog(finalError.message),
+      latencyMs: Math.round(performance.now() - logStart),
+      success: false
+    });
+    throw finalError;
   }
 }
 
@@ -1407,6 +1700,7 @@ function buildFallbackProvider() {
 }
 
 async function translate(text, sourceLang = 'auto', targetLang = 'zh', context = null) {
+  const start = performance.now();
   targetLang = resolveTargetLanguage(text, sourceLang, targetLang);
   const resolvedSourceLang = resolveSourceLanguage(text, sourceLang);
 
@@ -1415,6 +1709,16 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
   const cached = getFromCache(cacheKey);
   if (cached) {
     recordUsage(true, 1);
+    recordMetric({
+      action: 'translate',
+      provider: 'cache',
+      cached: true,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: text?.length || 0,
+      tokens: 0,
+      success: true,
+      errorType: ''
+    });
     return { text: cached, cached: true, engine: 'cache' };
   }
 
@@ -1424,6 +1728,16 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
     const translated = await translateWithCloud(text, resolvedSourceLang, targetLang, context);
     await setToCache(cacheKey, translated);
     recordUsage(false, 1, tokens);
+    recordMetric({
+      action: 'translate',
+      provider: activeProvider,
+      cached: false,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: text?.length || 0,
+      tokens,
+      success: true,
+      errorType: ''
+    });
     return { text: translated, cached: false, engine: activeProvider };
   } catch (error) {
     // 自动故障转移
@@ -1435,6 +1749,16 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
           const translated = await translateWithCloud(text, resolvedSourceLang, targetLang, context, fallback);
           await setToCache(cacheKey, translated);
           recordUsage(false, 1, tokens);
+          recordMetric({
+            action: 'translate',
+            provider: fallback.provider,
+            cached: false,
+            latencyMs: Math.round(performance.now() - start),
+            textLength: text?.length || 0,
+            tokens,
+            success: true,
+            errorType: ''
+          });
           return { text: translated, cached: false, engine: fallback.provider };
         } catch (fallbackError) {
           console.error('[YuxTrans] 故障转移失败:', fallbackError);
@@ -1442,6 +1766,16 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
       }
     }
     console.error('[YuxTrans] 翻译错误:', error);
+    recordMetric({
+      action: 'translate',
+      provider: activeProvider,
+      cached: false,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: text?.length || 0,
+      tokens,
+      success: false,
+      errorType: classifyError(error)
+    });
     throw error;
   }
 }
@@ -1491,21 +1825,17 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
     prompt += `\nStyle: ${styleHint}`;
   }
 
-  prompt += `\nRULES:
-1. Return ONLY a valid JSON array of strings (same length ${groupTexts.length}, same order).
-2. Keep HTML tags, placeholders, formatting and line breaks intact.
-3. No explanations or markdown wrappers.`;
+  prompt += `\nSTRICT OUTPUT RULES:
+1. Return ONLY a valid JSON array of strings. The array length MUST be exactly ${groupTexts.length} and the order MUST match the input exactly.
+2. Translate each item independently. Do not summarize, infer, or reuse text from one item for another.
+3. Do NOT include any markdown, code fences, explanations, notes, or page-level context.
+4. If an item is already in the target language or contains only proper nouns/code/numbers, return it unchanged.
+5. Keep HTML tags, placeholders, formatting and line breaks intact.
+6. Violating any of these rules will cause the response to be rejected.`;
 
-  if (context && context.pageTitle) {
-    prompt += `\nPage context: "${context.pageTitle}"`;
-  }
-  if (context && context.pageUrl) {
-    try {
-      const domain = new URL(context.pageUrl).hostname;
-      prompt += ` (${domain})`;
-    } catch (e) { /* ignore invalid URL */ }
-  }
+  prompt += `\n\nExample:\nInput: ["Hello", "GitHub"]\nOutput: ["你好", "GitHub"]`;
 
+  // 批量翻译不注入任何页面上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
   prompt += `\n\nInput:\n${JSON.stringify(groupTexts)}`;
   return prompt;
 }
@@ -1515,6 +1845,7 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
  * 额外在 batch 内做文本去重：相同原文只请求一次，结果映射回所有出现位置
  */
 async function translateBatchInternal(texts, sourceLang, targetLang, context = null) {
+  const batchStart = performance.now();
   const finalResults = new Array(texts.length);
   const missItems = [];
 
@@ -1535,6 +1866,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
 
   // 2. 如果全命中缓存，直接返回
   if (missItems.length === 0) {
+    recordBatchMetric(batchStart, texts, finalResults);
     return finalResults;
   }
 
@@ -1577,11 +1909,12 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       let jsonParsed = false;
       let batchOutput = [];
       let parseError = null;
+      const batchLogStart = performance.now();
       await applyRateDelay();
       try {
         const { headers, body } = buildRequest(prompt, false, null, true);
         const endpoint = getEndpoint();
-        const timeout = config.provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
+        const timeout = resolveProviderConfig().provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -1610,7 +1943,18 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
           }
 
           if (Array.isArray(batchOutput) && batchOutput.length === groupTexts.length) {
-            jsonParsed = true;
+            // Sanity check：如果模型把多段不同原文都译成了同一个结果（常见为页面标题），
+            // 说明 prompt 上下文存在偏差，直接按解析失败处理并降级为单句补全。
+            const distinctOutputs = new Set(
+              batchOutput.map(t => typeof t === 'string' ? t.trim() : '').filter(Boolean)
+            );
+            if (uniqueItems.length > 2 && distinctOutputs.size <= 1) {
+              jsonParsed = false;
+              batchOutput = [];
+              parseError = '模型返回了重复译文，疑似上下文偏差';
+            } else {
+              jsonParsed = true;
+            }
           } else {
             parseError = `长度不匹配 (预期 ${groupTexts.length}, 实得 ${batchOutput.length})`;
           }
@@ -1623,6 +1967,20 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         parseError = e.message;
         console.warn('[YuxTrans] Batch translation for group ' + groupTargetLang + ' parse error:', e);
       }
+
+      logRequest({
+        action: 'translateBatch',
+        provider: resolveProviderConfig().provider,
+        model: getModel(),
+        sourceLang: groupSourceLang,
+        targetLang: groupTargetLang,
+        prompt: truncateForLog(prompt),
+        inputSample: truncateForLog(groupTexts),
+        outputSample: truncateForLog(batchOutput),
+        parseError: parseError || undefined,
+        latencyMs: Math.round(performance.now() - batchLogStart),
+        success: jsonParsed
+      });
 
       // 处理结果
       if (jsonParsed && batchOutput.length === groupTexts.length) {
@@ -1691,7 +2049,27 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     }
   }
 
+  recordBatchMetric(batchStart, texts, finalResults);
   return finalResults;
+}
+
+function recordBatchMetric(start, texts, finalResults) {
+  const latencyMs = Math.round(performance.now() - start);
+  const successCount = finalResults.filter(r => r?.success).length;
+  const failedCount = finalResults.length - successCount;
+  const cacheHitCount = finalResults.filter(r => r?.cached).length;
+  const allCached = texts.length > 0 && cacheHitCount === texts.length;
+  recordMetric({
+    action: 'translateBatch',
+    provider: allCached ? 'cache' : resolveProviderConfig().provider,
+    cached: allCached,
+    latencyMs,
+    textLength: texts.reduce((sum, t) => sum + (t?.length || 0), 0),
+    tokens: texts.reduce((sum, t) => sum + estimateTokens(t), 0),
+    success: failedCount === 0,
+    errorType: failedCount > 0 ? 'partial_failure' : '',
+    extra: { total: texts.length, success: successCount, failed: failedCount, cacheHits: cacheHitCount }
+  });
 }
 
 /**
@@ -1918,7 +2296,8 @@ async function preloadBuiltinCache() {
   for (const [key, value] of Object.entries(BUILTIN_CACHE)) {
     if (!cache.has(key)) {
       cache.set(key, value);
-      cacheOrder.push(key);
+      cacheBytes += key.length * 2 + value.length * 2;
+      pendingCacheWrites.add(key);
       loaded++;
     }
   }
@@ -1935,80 +2314,127 @@ let initialized = false;
 
 async function ensureInitialized() {
   if (!initialized) {
-    await loadConfig();
-    await loadUsageStats();
-    await loadRateLimitState();
-    initialized = true;
+    const initStart = performance.now();
+    let success = true;
+    let errorType = '';
+    try {
+      await loadConfig();
+      await loadUsageStats();
+      await loadRateLimitState();
+      initialized = true;
+      // 首次初始化成功后异步清理旧指标与无效缓存，不阻塞
+      cleanupMetrics();
+      cleanupInvalidCacheEntries().catch(() => {});
+    } catch (error) {
+      success = false;
+      errorType = classifyError(error);
+      throw error;
+    } finally {
+      recordMetric({
+        action: 'swInit',
+        provider: resolveProviderConfig()?.provider || 'unknown',
+        cached: false,
+        latencyMs: Math.round(performance.now() - initStart),
+        textLength: 0,
+        tokens: 0,
+        success,
+        errorType
+      });
+    }
   }
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  await loadConfig();
-  await loadUsageStats();
-  await loadRateLimitState();
-  initialized = true;
+  try {
+    await loadConfig();
+    await loadUsageStats();
+    await loadRateLimitState();
+    initialized = true;
 
-  // 预加载热点词库
-  await preloadBuiltinCache();
+    // 预加载热点词库
+    await preloadBuiltinCache();
 
-  // 创建一级菜单
-  chrome.contextMenus.create({
-    id: 'translate-selection',
-    title: '翻译选中内容',
-    contexts: ['selection']
-  });
+    // 清理已持久化的无效缓存条目
+    cleanupInvalidCacheEntries().catch(() => {});
 
-  chrome.contextMenus.create({
-    id: 'translate-page',
-    title: '翻译整页',
-    contexts: ['page']
-  });
-  
-  // 创建多语言翻译子菜单
-  chrome.contextMenus.create({
-    id: 'translate-to-sub',
-    title: '翻译选中内容至...',
-    contexts: ['selection']
-  });
-  
-  const langs = [
-    { id: 'en', title: '英文' }, { id: 'zh', title: '中文' }, 
-    { id: 'ja', title: '日文' }, { id: 'ko', title: '韩文' }
-  ];
-  
-  langs.forEach(lang => {
+    // 先移除旧菜单，避免重复创建导致异常
+    await new Promise(resolve => chrome.contextMenus.removeAll(resolve));
+
+    // 创建一级菜单
     chrome.contextMenus.create({
-      id: `translate-to-${lang.id}`,
-      title: lang.title,
-      parentId: 'translate-to-sub',
+      id: 'translate-selection',
+      title: '翻译选中内容',
       contexts: ['selection']
     });
-  });
+
+    chrome.contextMenus.create({
+      id: 'translate-page',
+      title: '翻译整页',
+      contexts: ['page']
+    });
+
+    // 创建多语言翻译子菜单
+    chrome.contextMenus.create({
+      id: 'translate-to-sub',
+      title: '翻译选中内容至...',
+      contexts: ['selection']
+    });
+
+    const langs = [
+      { id: 'en', title: '英文' }, { id: 'zh', title: '中文' },
+      { id: 'ja', title: '日文' }, { id: 'ko', title: '韩文' }
+    ];
+
+    langs.forEach(lang => {
+      chrome.contextMenus.create({
+        id: `translate-to-${lang.id}`,
+        title: lang.title,
+        parentId: 'translate-to-sub',
+        contexts: ['selection']
+      });
+    });
+  } catch (error) {
+    console.error('[YuxTrans] onInstalled 初始化失败:', error);
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  Promise.all([loadConfig(), loadUsageStats(), loadRateLimitState()]).then(() => { initialized = true; });
+  Promise.all([loadConfig(), loadUsageStats(), loadRateLimitState()]).then(() => {
+    initialized = true;
+    cleanupInvalidCacheEntries().catch(() => {});
+  });
+});
+
+// Service Worker 即将被终止时（包括扩展重载），立即把未落盘的缓存写入 IndexedDB
+chrome.runtime.onSuspend.addListener(() => {
+  flushCacheToDB().catch(() => {});
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!tab?.id) return;
   if (info.menuItemId === 'translate-selection') {
     chrome.tabs.sendMessage(tab.id, {
       action: 'translateSelection',
       text: info.selectionText
-    });
+    }).catch(() => { /* 内容脚本未注入或标签页已关闭 */ });
   } else if (info.menuItemId === 'translate-page') {
-    chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
+    chrome.tabs.sendMessage(tab.id, { action: 'translatePage' })
+      .catch(() => { /* 内容脚本未注入或标签页已关闭 */ });
   } else if (info.menuItemId.startsWith('translate-to-')) {
     const targetLang = info.menuItemId.replace('translate-to-', '');
     chrome.tabs.sendMessage(tab.id, {
       action: 'translateSelection',
       text: info.selectionText,
       targetLang: targetLang
-    });
+    }).catch(() => { /* 内容脚本未注入或标签页已关闭 */ });
   }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  const respondOnce = (payload) => {
+    try { sendResponse(payload); } catch (e) { /* 消息通道可能已关闭 */ }
+  };
+
   ensureInitialized().then(() => {
     const tabId = sender.tab?.id || null;
 
@@ -2020,9 +2446,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       translate(request.text, sourceLang, targetLang, context)
         .then(result => sendResponse({ success: true, ...result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'translateStream') {
+      const streamStart = performance.now();
       const sourceLang = request.sourceLang || config.sourceLang || 'auto';
       let targetLang = request.targetLang || config.targetLang || 'zh';
       targetLang = resolveTargetLanguage(request.text, sourceLang, targetLang);
@@ -2031,11 +2459,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const context = request.context || null;
       const cacheKey = generateCacheKey(request.text, sourceLang, targetLang);
       const streamTokens = estimateTokens(request.text);
+      const textLength = request.text?.length || 0;
 
       // 先查缓存
       const cached = getFromCache(cacheKey);
       if (cached) {
         recordUsage(true, 1);
+        recordMetric({
+          action: 'translateStream',
+          provider: 'cache',
+          cached: true,
+          latencyMs: Math.round(performance.now() - streamStart),
+          textLength,
+          tokens: 0,
+          success: true,
+          errorType: ''
+        });
         sendResponse({ success: true, text: cached, cached: true, engine: 'cache' });
         return;
       }
@@ -2044,6 +2483,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .then(async (fullText) => {
           await setToCache(cacheKey, fullText);
           recordUsage(false, 1, streamTokens);
+          recordMetric({
+            action: 'translateStream',
+            provider: resolveProviderConfig().provider,
+            cached: false,
+            latencyMs: Math.round(performance.now() - streamStart),
+            textLength,
+            tokens: streamTokens,
+            success: true,
+            errorType: ''
+          });
           sendResponse({ success: true, text: fullText, cached: false, engine: resolveProviderConfig().provider });
         })
         .catch(async (error) => {
@@ -2057,8 +2506,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               console.error('[YuxTrans] 流式故障转移失败:', fallbackError);
             }
           }
+          recordMetric({
+            action: 'translateStream',
+            provider: resolveProviderConfig().provider,
+            cached: false,
+            latencyMs: Math.round(performance.now() - streamStart),
+            textLength,
+            tokens: streamTokens,
+            success: false,
+            errorType: classifyError(error)
+          });
           sendResponse({ success: false, error: error.message });
         });
+      return;
     }
 
     else if (request.action === 'translateBatch') {
@@ -2071,6 +2531,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       translateBatchInternal(request.texts, sourceLang, targetLang, context)
         .then(results => sendResponse({ success: true, results }))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'getConfig') {
@@ -2085,24 +2546,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveConfig(request.config)
         .then(() => sendResponse({ success: true }))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'testConnection') {
       testConnection(request.config)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'fetchModels') {
       fetchModels(request.config)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'testProviderConnection') {
       testProviderConnection(request.config)
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
     }
 
     else if (request.action === 'checkConnection') {
@@ -2132,8 +2597,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     else if (request.action === 'clearCache') {
       cache.clear();
-      cacheOrder = [];
+      cacheBytes = 0;
       cacheStats = { wordCount: 0, sizeBytes: 0 };
+      pendingCacheWrites.clear();
+      pendingCacheDeletes.clear();
       pendingCacheSave = false;
       if (cacheSaveTimer) {
         clearTimeout(cacheSaveTimer);
@@ -2151,6 +2618,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     else if (request.action === 'getCacheStats') {
       updateCacheStats();
+      const cacheHits = usageStats.cacheHits || 0;
+      const blockedHits = usageStats.blockedHits || 0;
+      const userReportedHits = usageStats.userReportedHits || 0;
+      const totalCacheHits = cacheHits + blockedHits;
+      const badHitRate = totalCacheHits > 0
+        ? Math.round(((blockedHits + userReportedHits) / totalCacheHits) * 100)
+        : 0;
       sendResponse({
         success: true,
         stats: {
@@ -2159,8 +2633,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           sizeMB: Math.round(cacheStats.sizeBytes / 1024 / 1024 * 100) / 100,
           sizeGB: Math.round(cacheStats.sizeBytes / 1024 / 1024 / 1024 * 100) / 100
         },
-        usage: usageStats
+        usage: {
+          ...usageStats,
+          totalCacheHits,
+          badHitRate
+        }
       });
+    }
+
+    else if (request.action === 'getMetrics') {
+      const limit = request.limit || 1000;
+      const days = request.days || METRICS_RETENTION_DAYS;
+      getMetrics(limit, days)
+        .then(metrics => {
+          // 聚合摘要
+          const total = metrics.length;
+          const success = metrics.filter(m => m.success).length;
+          const failure = total - success;
+          const cacheHits = metrics.filter(m => m.cached).length;
+          const avgLatency = total > 0
+            ? Math.round(metrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / total)
+            : 0;
+          const byProvider = {};
+          metrics.forEach(m => {
+            const p = m.provider || 'unknown';
+            if (!byProvider[p]) byProvider[p] = { count: 0, success: 0, failure: 0, totalLatency: 0, cacheHits: 0 };
+            byProvider[p].count++;
+            if (m.success) byProvider[p].success++; else byProvider[p].failure++;
+            byProvider[p].totalLatency += m.latencyMs || 0;
+            if (m.cached) byProvider[p].cacheHits++;
+          });
+          Object.keys(byProvider).forEach(p => {
+            const item = byProvider[p];
+            item.avgLatency = item.count > 0 ? Math.round(item.totalLatency / item.count) : 0;
+            delete item.totalLatency;
+          });
+          sendResponse({
+            success: true,
+            summary: { total, success, failure, cacheHits, avgLatency },
+            byProvider,
+            metrics: metrics.slice(0, 200) // 返回最近 200 条明细给前端
+          });
+        })
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
+    }
+
+    else if (request.action === 'getRequestLogs') {
+      sendResponse({
+        success: true,
+        logs: getRequestLogs(request.limit)
+      });
+      return;
     }
 
     // ===== ProviderProfile 管理接口 =====
@@ -2180,6 +2704,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveConfig(config)
         .then(() => sendResponse({ success: true, activeProfileId: profileId }))
         .catch(e => sendResponse({ success: false, error: e.message }));
+      return;
     }
 
     else if (request.action === 'deleteProfile') {
@@ -2192,6 +2717,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       removeProviderRecord(profileId).then(() => {
         saveConfig(config).then(() => sendResponse({ success: true }));
       }).catch(e => sendResponse({ success: false, error: e.message }));
+      return;
     }
 
     else if (request.action === 'setActiveProfile') {
@@ -2205,22 +2731,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveConfig(config)
         .then(() => sendResponse({ success: true }))
         .catch(e => sendResponse({ success: false, error: e.message }));
+      return;
     }
 
     else {
       sendResponse({ success: false, error: `未知 action: ${request.action}` });
     }
+  }).catch(error => {
+    console.error('[YuxTrans] 消息处理初始化失败:', error);
+    respondOnce({ success: false, error: '扩展初始化失败，请刷新页面后重试' });
   });
   return true; // 保持消息通道打开
 });
 
 chrome.commands.onCommand.addListener((command) => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs[0]) return;
+    if (!tabs[0]?.id) return;
     if (command === 'translate-selection') {
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'translateSelection' });
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'translateSelection' })
+        .catch(() => { /* 内容脚本未注入或标签页已关闭 */ });
     } else if (command === 'translate-page') {
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'translatePage' });
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'translatePage' })
+        .catch(() => { /* 内容脚本未注入或标签页已关闭 */ });
     }
   });
 });
@@ -2239,19 +2771,19 @@ async function checkNewVersion() {
     const currentVersion = chrome.runtime.getManifest().version;
 
     if (isNewerVersion(latestVersion, currentVersion)) {
-      chrome.action.setBadgeText({ text: 'NEW' });
-      chrome.action.setBadgeBackgroundColor({ color: '#d85151' });
-      chrome.storage.local.set({ 
+      chrome.action.setBadgeText({ text: 'NEW' }).catch(() => {});
+      chrome.action.setBadgeBackgroundColor({ color: '#d85151' }).catch(() => {});
+      chrome.storage.local.set({
         updateAvailable: {
           version: latestVersion,
           url: data.html_url,
           zipUrl: data.zipball_url,
           body: data.body
         }
-      });
+      }).catch(() => {});
     } else {
-      chrome.action.setBadgeText({ text: '' });
-      chrome.storage.local.remove('updateAvailable');
+      chrome.action.setBadgeText({ text: '' }).catch(() => {});
+      chrome.storage.local.remove('updateAvailable').catch(() => {});
     }
   } catch (error) {
     console.error('[YuxTrans] 检查更新失败:', error);
@@ -2272,6 +2804,15 @@ function isNewerVersion(latest, current) {
 ensureInitialized().then(() => {
   checkNewVersion(); // 启动后立即检查一次
   setInterval(checkNewVersion, CHECK_UPDATE_INTERVAL);
+});
+
+// 捕获未处理的异常与 Promise 拒绝，避免 Service Worker 进入坏状态
+self.addEventListener('error', (event) => {
+  console.error('[YuxTrans] Service Worker error:', event.message, event.filename, event.lineno);
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[YuxTrans] Unhandled rejection:', event.reason);
 });
 
 // 为 Node 测试导出核心函数（Service Worker 中 module 未定义，不会执行）

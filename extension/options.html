@@ -16,6 +16,7 @@
       <nav class="tabs">
         <button class="tab active" data-tab="profiles">供应商档案</button>
         <button class="tab" data-tab="general">通用设置</button>
+        <button class="tab" data-tab="diagnostics">诊断数据</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -151,7 +152,7 @@
               <option value="">点击下方刷新获取模型...</option>
             </select>
             <input type="text" id="localModel" placeholder="qwen3.5:0.8b">
-            <p class="hint">推荐模型: <strong>qwen3.5:0.8b</strong>（轻量离线翻译）。请确保 Ollama 已启动，或运行 <code>extension/setup-ollama.bat</code> 一键配置。</p>
+            <p class="hint yxt-note">推荐模型: <strong>qwen3.5:0.8b</strong>（轻量离线翻译）。Windows 可在 PowerShell 执行 <code>irm https://ollama.com/install.ps1 | iex</code> 安装 Ollama，或运行 <code>extension/setup-ollama.bat</code> 一键配置。注意：国内下载可能较慢；本地模型性能受机器配置限制，若运行不畅请在「通用设置」中开启「自动切换备选」并配置云端供应商。</p>
             <div class="button-group">
               <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
               <button class="btn-test" id="testLocalBtn">连接测试</button>
@@ -383,6 +384,88 @@
             <button class="btn-secondary" id="clearCacheBtn">清除本地数据</button>
             <button class="btn-primary" id="saveBtn">保存通用设置</button>
           </div>
+        </div>
+      </div>
+
+      <!-- 3. 诊断数据 -->
+      <div class="tab-content" id="tab-diagnostics">
+        <div class="section">
+          <h2 class="section-title">性能诊断</h2>
+          <p class="hint" style="margin-bottom: var(--yxt-space-4);">本地匿名埋点：不记录原文、URL 或 API Key。保留最近 7 天或最多 1000 条成功 + 200 条失败记录。</p>
+
+          <div class="stats-grid" id="metricsSummary">
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsTotal">0</div>
+              <div class="stat-card-label">记录请求数</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsSuccessRate">0%</div>
+              <div class="stat-card-label">成功率</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsCacheRate">0%</div>
+              <div class="stat-card-label">缓存命中</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsAvgLatency">0ms</div>
+              <div class="stat-card-label">平均延迟</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2 class="section-title">供应商分布</h2>
+          <div class="table-container">
+            <table class="metrics-table" id="metricsProviderTable">
+              <thead>
+                <tr>
+                  <th>供应商</th>
+                  <th>次数</th>
+                  <th>成功</th>
+                  <th>失败</th>
+                  <th>缓存命中</th>
+                  <th>平均延迟</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2 class="section-title">SW 启动耗时</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsSwInitCount">0</div>
+              <div class="stat-card-label">启动次数</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsSwInitAvg">0ms</div>
+              <div class="stat-card-label">平均初始化耗时</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2 class="section-title">最近失败</h2>
+          <div id="metricsRecentErrors" class="metrics-error-list">
+            <p class="hint">暂无失败记录</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title-row">
+            <h2 class="section-title">最近请求日志</h2>
+            <button class="btn-secondary" id="refreshRequestLogsBtn">刷新日志</button>
+          </div>
+          <p class="hint" style="margin-bottom: var(--yxt-space-4);">内存中保留最近 50 条请求，用于排查 prompt/response 问题。不记录 API Key。</p>
+          <div id="requestLogsContainer" class="request-logs-list">
+            <p class="hint">暂无请求日志</p>
+          </div>
+        </div>
+
+        <div class="button-group-right">
+          <button class="btn-secondary" id="refreshMetricsBtn">刷新数据</button>
         </div>
       </div>
 
