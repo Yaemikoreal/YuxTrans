@@ -10,13 +10,13 @@ require('./mock-chrome.js');
 const bg = require('../background.js');
 
 test('generateCacheKey 拼接规则', () => {
-  assert.strictEqual(bg.generateCacheKey('Hello', 'auto', 'zh'), 'auto:zh:normal:Hello');
-  assert.strictEqual(bg.generateCacheKey('a:b', 'en', 'zh-TW'), 'en:zh-TW:normal:a:b');
+  assert.strictEqual(bg.generateCacheKey('Hello', 'auto', 'zh'), 'v2:auto:zh:normal:Hello');
+  assert.strictEqual(bg.generateCacheKey('a:b', 'en', 'zh-TW'), 'v2:en:zh-TW:normal:a:b');
 });
 
 test('normalizeCacheKeyText 去除噪声并折叠空白', () => {
-  assert.strictEqual(bg.generateCacheKey('  Hello   world  ', 'auto', 'zh'), 'auto:zh:normal:Hello world');
-  assert.strictEqual(bg.generateCacheKey('Hello\u200Bworld', 'auto', 'zh'), 'auto:zh:normal:Helloworld');
+  assert.strictEqual(bg.generateCacheKey('  Hello   world  ', 'auto', 'zh'), 'v2:auto:zh:normal:Hello world');
+  assert.strictEqual(bg.generateCacheKey('Hello\u200Bworld', 'auto', 'zh'), 'v2:auto:zh:normal:Helloworld');
   assert.strictEqual(
     bg.generateCacheKey('Hello \u200B world', 'auto', 'zh'),
     bg.generateCacheKey('Hello world', 'auto', 'zh')
@@ -31,22 +31,16 @@ test('generateCacheKey 按翻译风格隔离缓存', () => {
   );
 });
 
-test('generateCacheKey 统一标点、全半角与 Unicode 组合变体', () => {
-  assert.strictEqual(
-    bg.generateCacheKey('“Hello”', 'auto', 'zh'),
-    bg.generateCacheKey('"Hello"', 'auto', 'zh')
-  );
-  assert.strictEqual(
-    bg.generateCacheKey('Hello—world…', 'auto', 'zh'),
-    bg.generateCacheKey('Hello-world...', 'auto', 'zh')
-  );
-  assert.strictEqual(
-    bg.generateCacheKey('Ｈｅｌｌｏ', 'auto', 'zh'),
-    bg.generateCacheKey('Hello', 'auto', 'zh')
-  );
+test('generateCacheKey Unicode 组合变体归一化', () => {
+  // NFC 归一化：组合字符与预组合字符视为相同
   assert.strictEqual(
     bg.generateCacheKey('Café', 'auto', 'zh'),
     bg.generateCacheKey('Cafe\u0301', 'auto', 'zh')
+  );
+  // 严格策略下，引号、破折号、全半角差异视为不同文本
+  assert.notStrictEqual(
+    bg.generateCacheKey('“Hello”', 'auto', 'zh'),
+    bg.generateCacheKey('"Hello"', 'auto', 'zh')
   );
 });
 
@@ -165,16 +159,40 @@ test('splitIntoCharBatches 按字符数切分子批次', () => {
   assert.strictEqual(single[0].length, 1);
 });
 
-test('buildBatchPrompt 包含必要格式要求与上下文', () => {
+test('getBatchConfig 按 provider/model 返回动态 batch 参数', () => {
+  assert.deepStrictEqual(
+    bg.getBatchConfig({ provider: 'deepseek', model: 'deepseek-v4-flash', apiKey: '', customProvider: {} }),
+    { maxBatchChars: 16000, batchSize: 100 }
+  );
+  assert.deepStrictEqual(
+    bg.getBatchConfig({ provider: 'deepseek', model: 'deepseek-chat', apiKey: '', customProvider: {} }),
+    { maxBatchChars: 10000, batchSize: 60 }
+  );
+  assert.deepStrictEqual(
+    bg.getBatchConfig({ provider: 'qwen', model: 'qwen-turbo', apiKey: '', customProvider: {} }),
+    { maxBatchChars: 8000, batchSize: 50 }
+  );
+  assert.deepStrictEqual(
+    bg.getBatchConfig({ provider: 'local', localModel: 'qwen2:7b', customProvider: {} }),
+    { maxBatchChars: 4000, batchSize: 20 }
+  );
+  assert.deepStrictEqual(
+    bg.getBatchConfig({ provider: 'local', localModel: 'qwen2:14b', customProvider: {} }),
+    { maxBatchChars: 6000, batchSize: 40 }
+  );
+});
+
+test('buildBatchPrompt 包含必要格式要求但不注入页面上下文', () => {
   const prompt = bg.buildBatchPrompt(['Hello', 'World'], 'en', 'zh', { pageTitle: 'Test Page', pageUrl: 'https://example.com/path' });
   assert.ok(prompt.includes('JSON array of strings'));
   assert.ok(prompt.includes('Hello'));
   assert.ok(prompt.includes('World'));
   assert.ok(prompt.includes('Simplified Chinese'));
-  assert.ok(prompt.includes('Test Page'));
-  assert.ok(prompt.includes('example.com'));
-  assert.ok(prompt.includes('same length 2'));
+  assert.ok(prompt.includes('exactly 2'));
   assert.ok(prompt.includes('HTML tags'));
+  // 批量翻译不注入页面上下文，避免模型把任意片段偏向页面标题
+  assert.ok(!prompt.includes('Test Page'));
+  assert.ok(!prompt.includes('example.com'));
 });
 
 test('makeProfileId 生成稳定 ID', () => {

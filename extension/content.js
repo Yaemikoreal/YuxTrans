@@ -54,6 +54,10 @@ class YuxTransContent {
         if (response.bilingualMode !== undefined) {
           this.config.bilingualMode = response.bilingualMode;
         }
+        if (response.batchConfig) {
+          this.config.maxBatchChars = response.batchConfig.maxBatchChars;
+          this.config.batchSize = response.batchConfig.batchSize;
+        }
       }
     } catch (e) {
       // 使用默认配置
@@ -614,13 +618,15 @@ class YuxTransContent {
    * @param {Function|null} onProgress - 进度回调 (completed, total)
    * @param {Function|null} onBatchResult - 每个 batch 完成时的回调 (indices, nodes, results)
    */
-  async translateBatchParallel(items, onProgress, onBatchResult = null) {
+  async translateBatchParallel(items, onProgress, onBatchResult = null, options = {}) {
     const isLocal = this.config.provider === 'local';
     const { concurrency: configConcurrency } = this.config || { concurrency: 10 };
 
     // 动态调整：本地模型强制串行且减小分片，云端模型维持高并发
-    const concurrency = isLocal ? 1 : configConcurrency;
-    const BATCH_SIZE = isLocal ? 5 : (this.config.batchSize || 20);
+    const concurrency = isLocal ? 1 : (options.concurrency || configConcurrency);
+    const BATCH_SIZE = isLocal
+      ? 5
+      : (options.batchSize || this.config.batchSize || 20);
     
     const results = new Array(items.length);
     let completed = 0;
@@ -897,30 +903,39 @@ class YuxTransContent {
     };
 
     try {
-      // 1. 首屏段落级流式翻译（低延迟感知）
+      // A: 首屏 mini-batch 翻译（用 0.5-0.9s 首字延迟换取总吞吐大幅提升）
       const isLocal = this.config.provider === 'local';
-      const streamConcurrency = isLocal ? 3 : 12;
-      const streamQueue = [...viewportItems];
+      const viewportBatchSize = isLocal ? 3 : 10;
+      const viewportConcurrency = isLocal ? 2 : 4;
 
-      const streamWorker = async () => {
-        while (streamQueue.length > 0 && this.pageTranslationState.isTranslating) {
-          const item = streamQueue.shift();
-          const requestId = `page-node-${item.originalIndex}`;
-          const result = await this.translateStreamForNode(item.nodeInfo, requestId);
-          if (result && result.success) {
-            uniqueTexts.get(item.text).translation = result.translated;
-          } else if (result) {
-            uniqueTexts.get(item.text).error = result.error || '翻译失败';
+      if (viewportItems.length > 0 && this.pageTranslationState.isTranslating) {
+        let lastViewportCompleted = 0;
+        await this.translateBatchParallel(
+          viewportItems,
+          (completed, total) => {
+            reportProgress(completed - lastViewportCompleted);
+            lastViewportCompleted = completed;
+          },
+          (indices, nodes, results) => {
+            // 每个 mini-batch 完成立即渲染，保证首屏感知
+            results.forEach((res, localIdx) => {
+              const item = nodes[localIdx];
+              if (res && res.success) {
+                uniqueTexts.get(item.text).translation = res.text;
+                this.applyTranslation(item.nodeInfo, res.text);
+              }
+            });
+          },
+          { batchSize: viewportBatchSize, concurrency: viewportConcurrency }
+        );
+        // 记录失败项
+        viewportItems.forEach((item) => {
+          const resultItem = uniqueTexts.get(item.text);
+          if (!resultItem.translation && !resultItem.error) {
+            resultItem.error = '翻译失败';
           }
-          reportProgress(1);
-        }
-      };
-
-      const streamWorkers = [];
-      for (let i = 0; i < Math.min(streamConcurrency, viewportItems.length); i++) {
-        streamWorkers.push(streamWorker());
+        });
       }
-      await Promise.all(streamWorkers);
 
       // 2. 后续区域批量翻译（随到随渲染）
       const appliedTexts = new Set();

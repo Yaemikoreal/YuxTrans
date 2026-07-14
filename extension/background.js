@@ -70,7 +70,38 @@ const LOCAL_TIMEOUT_MS = 120000;
 const REQUEST_TIMEOUT_MS = 30000;
 
 // 批量翻译单批最大字符数（避免超出模型上下文或导致响应过长）
+// 注：实际运行时通过 getBatchConfig() 按 provider/model 动态获取
 const MAX_BATCH_CHARS = 4000;
+const DEFAULT_BATCH_SIZE = 20;
+
+// 按 provider + model 返回批量参数 { maxBatchChars, batchSize }
+function getBatchConfig(providerOverride = null) {
+  const p = resolveProviderConfig(providerOverride);
+  const provider = p.provider;
+  const model = (getModel(p) || '').toLowerCase();
+
+  if (provider === 'local') {
+    const localModel = (p.localModel || '').toLowerCase();
+    const isSmall = /:\s*(7b|8b|0\.5b|1b|1\.8b|3b|4b)/.test(localModel);
+    return isSmall
+      ? { maxBatchChars: 4000, batchSize: 20 }
+      : { maxBatchChars: 6000, batchSize: 40 };
+  }
+
+  if (provider === 'deepseek' || model.includes('deepseek')) {
+    if (model.includes('v4-flash')) {
+      return { maxBatchChars: 16000, batchSize: 100 };
+    }
+    return { maxBatchChars: 10000, batchSize: 60 };
+  }
+
+  if (provider === 'qwen' || provider === 'openai' || provider === 'groq' ||
+      provider === 'moonshot' || provider === 'siliconflow' || provider === 'anthropic') {
+    return { maxBatchChars: 8000, batchSize: 50 };
+  }
+
+  return { maxBatchChars: 8000, batchSize: 50 };
+}
 
 // 速率限制配置
 const RATE_LIMIT_CONFIG = {
@@ -303,6 +334,11 @@ let pendingCacheWrites = new Set(); // 待写入 IndexedDB 的键
 let pendingCacheDeletes = new Set(); // 待从 IndexedDB 删除的键
 let db = null;
 
+// 缓存落盘控制：减少 IndexedDB 事务频率，同时避免 Service Worker 终止前大量丢失
+const CACHE_FLUSH_MAX_PENDING = 100; // 累计多少条待写入后强制 flush
+const CACHE_FLUSH_DELAY_MS = 3000;   // 定时 flush 间隔
+let flushTimer = null;               // 定时 flush 句柄
+
 let usageStats = {
   totalCount: 0, cacheHits: 0, totalTokens: 0, sessionTokens: 0,
   blockedHits: 0, userReportedHits: 0, blockedByRule: {}
@@ -495,6 +531,10 @@ async function flushCacheToDB() {
     clearTimeout(cacheSaveTimer);
     cacheSaveTimer = null;
   }
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
 
   const writes = new Set(pendingCacheWrites);
   const deletes = new Set(pendingCacheDeletes);
@@ -639,19 +679,23 @@ function updateCacheStats() {
 function getFromCache(key) {
   if (!config.cacheEnabled) return null;
   const value = cache.get(key);
-  if (value !== undefined) {
-    const validation = validateCacheEntry(key, value);
-    if (!validation.valid) {
-      recordCacheValidation(validation.rule);
-      evictCacheEntry(key);
-      return null;
-    }
-    // LRU: 移到最近位置（Map 插入顺序）
-    cache.delete(key);
-    cache.set(key, value);
-    return value;
+  if (value === undefined) return null;
+
+  // C: 热路径轻量化 —— 仅做版本号与非空检查，完整校验保留给写入时与后台清理
+  const parsed = parseCacheKey(key);
+  if (parsed.version !== CACHE_KEY_VERSION) {
+    evictCacheEntry(key);
+    return null;
   }
-  return null;
+  if (!value || (typeof value === 'string' && !value.trim())) {
+    evictCacheEntry(key);
+    return null;
+  }
+
+  // LRU: 移到最近位置（Map 插入顺序）
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
 }
 
 async function setToCache(key, value) {
@@ -676,10 +720,8 @@ async function setToCache(key, value) {
   pendingCacheWrites.add(key);
   pendingCacheDeletes.delete(key);
 
-  // 累计到一定数量立即刷新，避免 Service Worker 被终止时丢失过多未落盘缓存
-  if (pendingCacheWrites.size >= 50) {
-    await flushCacheToDB();
-  }
+  // D: 改为批量 flush，减少 IndexedDB 事务频率
+  scheduleCacheFlush();
 
   // 按 LRU 裁剪最旧的项
   while (cacheBytes > maxBytes && cache.size > 0) {
@@ -692,7 +734,30 @@ async function setToCache(key, value) {
   }
 
   updateCacheStats();
-  await saveCacheToDB();
+}
+
+/**
+ * 调度缓存落盘：优先聚合写入，减少 IndexedDB 事务竞争。
+ * 阈值 100 条 / 3 秒，兼顾落盘及时性与 I/O 效率。
+ */
+function scheduleCacheFlush() {
+  if (isFlushingCache) return;
+
+  if (pendingCacheWrites.size >= CACHE_FLUSH_MAX_PENDING) {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    flushCacheToDB();
+    return;
+  }
+
+  if (!flushTimer) {
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushCacheToDB();
+    }, CACHE_FLUSH_DELAY_MS);
+  }
 }
 
 function normalizeCacheKeyText(text) {
@@ -1849,18 +1914,23 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
   const finalResults = new Array(texts.length);
   const missItems = [];
 
-  // 1. 筛出未命中的项 - 每个文本单独 resolve 源/目标语言
+  // E: 语言检测去重 —— 以首条文本代表整批语言方向，避免对每句都调用 detectLanguage
+  const batchSourceLang = sourceLang === 'auto'
+    ? (resolveSourceLanguage(texts[0] || '', sourceLang))
+    : sourceLang;
+
+  // 1. 筛出未命中的项
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
+    // 仍按目标语言分组：混合语言页面中，少量不同语言文本的目标方向由 resolveTargetLanguage 兜底
     const resolvedTargetLang = resolveTargetLanguage(text, sourceLang, targetLang);
-    const resolvedSourceLang = resolveSourceLanguage(text, sourceLang);
     const cacheKey = generateCacheKey(text, sourceLang, resolvedTargetLang);
     const cached = getFromCache(cacheKey);
     if (cached) {
       finalResults[i] = { text: cached, cached: true, engine: 'cache', success: true };
       recordUsage(true, 1);
     } else {
-      missItems.push({ text, resolvedTargetLang, resolvedSourceLang, tokens: estimateTokens(text), originalIndex: i });
+      missItems.push({ text, resolvedTargetLang, resolvedSourceLang: batchSourceLang, tokens: estimateTokens(text), originalIndex: i });
     }
   }
 
@@ -1879,10 +1949,13 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     langGroups.set(groupKey, group);
   });
 
+  // B: 按当前 provider/model 动态获取 batch 上限
+  const { maxBatchChars } = getBatchConfig();
+
   // 4. 为每个语言组按字符数切分子批次，再分别调用批处理
   for (const [groupKey, groupItems] of langGroups) {
     const [groupSourceLang, groupTargetLang] = groupKey.split(':');
-    const subBatches = splitIntoCharBatches(groupItems, MAX_BATCH_CHARS);
+    const subBatches = splitIntoCharBatches(groupItems, maxBatchChars);
 
     for (const batchItems of subBatches) {
       // 4.1 同一批次内去重：相同原文只发送一次
@@ -2406,9 +2479,11 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // Service Worker 即将被终止时（包括扩展重载），立即把未落盘的缓存写入 IndexedDB
-chrome.runtime.onSuspend.addListener(() => {
-  flushCacheToDB().catch(() => {});
-});
+if (chrome.runtime && chrome.runtime.onSuspend) {
+  chrome.runtime.onSuspend.addListener(() => {
+    flushCacheToDB().catch(() => {});
+  });
+}
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) return;
@@ -2535,7 +2610,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     else if (request.action === 'getConfig') {
-      sendResponse(config);
+      sendResponse({ ...config, batchConfig: getBatchConfig() });
     }
 
     else if (request.action === 'getProviderDefaults') {
@@ -2807,13 +2882,15 @@ ensureInitialized().then(() => {
 });
 
 // 捕获未处理的异常与 Promise 拒绝，避免 Service Worker 进入坏状态
-self.addEventListener('error', (event) => {
-  console.error('[YuxTrans] Service Worker error:', event.message, event.filename, event.lineno);
-});
+if (typeof self !== 'undefined') {
+  self.addEventListener('error', (event) => {
+    console.error('[YuxTrans] Service Worker error:', event.message, event.filename, event.lineno);
+  });
 
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[YuxTrans] Unhandled rejection:', event.reason);
-});
+  self.addEventListener('unhandledrejection', (event) => {
+    console.error('[YuxTrans] Unhandled rejection:', event.reason);
+  });
+}
 
 // 为 Node 测试导出核心函数（Service Worker 中 module 未定义，不会执行）
 if (typeof module !== 'undefined' && module.exports) {
@@ -2823,6 +2900,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getApiKey,
     getModel,
     getFormat,
+    getBatchConfig,
     buildRequest,
     supportsJsonMode,
     generateCacheKey,
