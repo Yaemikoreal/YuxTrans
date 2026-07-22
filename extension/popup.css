@@ -40,8 +40,18 @@ code {
 
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--yxt-space-2);
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--yxt-radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--yxt-border);
+  box-shadow: var(--yxt-shadow-sm);
 }
 
 .brand h1 {
@@ -50,6 +60,7 @@ code {
   font-weight: var(--yxt-font-medium);
   letter-spacing: -0.01em;
   color: var(--yxt-text);
+  line-height: 1.1;
 }
 
 .version {
@@ -57,6 +68,12 @@ code {
   font-size: var(--yxt-text-2xs);
   font-weight: var(--yxt-font-normal);
   color: var(--yxt-text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.popup-footer-meta {
+  margin-top: var(--yxt-space-3);
+  text-align: right;
 }
 
 .icon-btn {
@@ -145,10 +162,10 @@ code {
   color: var(--yxt-text-tertiary);
 }
 
-/* ===== Main action ===== */
+/* ===== Main action（与 options 主按钮同一纸质语言） ===== */
 .action-btn {
   width: 100%;
-  padding: 11px;
+  padding: 10px 12px;
   background: var(--yxt-paper);
   color: var(--yxt-ink);
   border: 1px solid var(--yxt-ink-15);
@@ -157,7 +174,7 @@ code {
   font-size: var(--yxt-text-base);
   font-weight: var(--yxt-font-medium);
   cursor: pointer;
-  transition: all var(--yxt-transition-fast);
+  transition: background var(--yxt-transition-fast), border-color var(--yxt-transition-fast);
   margin-bottom: var(--yxt-space-4);
 }
 
@@ -170,14 +187,57 @@ code {
   background: var(--yxt-paper-stack);
 }
 
-/* ===== Stats row ===== */
+.action-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--yxt-shadow-glow);
+}
+
+/* ===== Stats：默认折叠，降低仪表盘感 ===== */
+.stats-details {
+  margin-top: var(--yxt-space-4);
+  border-top: 1px solid var(--yxt-divider);
+  padding-top: var(--yxt-space-2);
+}
+
+.stats-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yxt-space-2);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-secondary);
+  padding: var(--yxt-space-1) 0;
+  user-select: none;
+}
+
+.stats-summary::-webkit-details-marker {
+  display: none;
+}
+
+.stats-summary::before {
+  content: '▸';
+  color: var(--yxt-text-tertiary);
+  font-size: 10px;
+  margin-right: 2px;
+}
+
+.stats-details[open] .stats-summary::before {
+  content: '▾';
+}
+
+.stats-summary-meta {
+  color: var(--yxt-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--yxt-text-2xs);
+}
+
 .stats-row {
   display: flex;
   justify-content: space-around;
-  padding: var(--yxt-space-4) 0;
-  border-top: 1px solid var(--yxt-divider);
-  border-bottom: 1px solid var(--yxt-divider);
-  margin-bottom: var(--yxt-space-4);
+  padding: var(--yxt-space-3) 0 var(--yxt-space-1);
 }
 
 .stat-item {
@@ -187,9 +247,9 @@ code {
 
 .stat-value {
   font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-xl);
+  font-size: var(--yxt-text-md);
   font-weight: var(--yxt-font-medium);
-  color: var(--yxt-text);
+  color: var(--yxt-text-secondary);
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
@@ -208,6 +268,7 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 0;
 }
 
 .toggle-label {
@@ -295,56 +356,59 @@ code {
   transform: translateX(100%);
 }
 
-/* 活字印刷风格开关 */
-.switch {
+/* 铅字嵌入式开关（非 iOS 胶囊） */
+.paper-toggle {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.paper-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.paper-toggle-track {
+  display: block;
   width: 28px;
   height: 16px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--yxt-bg-tertiary);
+  box-sizing: border-box;
+  background: var(--yxt-paper);
   border: 1px solid var(--yxt-ink-15);
-  transition: var(--yxt-transition-normal);
   border-radius: var(--yxt-radius-md);
+  position: relative;
+  transition: background var(--yxt-transition-fast), border-color var(--yxt-transition-fast);
 }
 
-.slider:before {
+.paper-toggle-thumb {
   position: absolute;
-  content: "";
-  height: 10px;
-  width: 10px;
-  left: 2px;
-  bottom: 2px;
-  background-color: var(--yxt-ink);
-  transition: var(--yxt-transition-normal);
-  border-radius: 50%;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--yxt-radius-sm);
+  background: var(--yxt-ink);
+  transition: transform var(--yxt-transition-fast), background var(--yxt-transition-fast);
 }
 
-input:checked + .slider {
-  background-color: var(--yxt-dusk-20);
+.paper-toggle input:checked + .paper-toggle-track {
+  background: var(--yxt-dusk-20);
   border-color: var(--yxt-dusk-40);
 }
 
-input:checked + .slider:before {
+.paper-toggle input:checked + .paper-toggle-track .paper-toggle-thumb {
   transform: translateX(12px);
+  background: var(--yxt-ink);
 }
 
-input:focus + .slider {
-  box-shadow: 0 0 0 2px var(--yxt-dusk-12);
+.paper-toggle input:focus-visible + .paper-toggle-track {
+  box-shadow: var(--yxt-shadow-glow);
 }
 
 /* ===== Toast ===== */

@@ -10,10 +10,10 @@
 <body>
   <div class="header">
     <div class="brand">
+      <img class="brand-logo" src="icons/icon48.png" width="28" height="28" alt="" aria-hidden="true">
       <h1>YuxTrans</h1>
-      <span class="version" id="versionBadge"></span>
     </div>
-    <button class="icon-btn" id="settingsBtn">设置</button>
+    <button class="icon-btn" id="settingsBtn" type="button">设置</button>
   </div>
 
   <div class="control-row">
@@ -21,17 +21,17 @@
       <span class="status-dot"></span>
       <span id="connectionText">检测中</span>
     </span>
-    <select class="model-select" id="modelSelect">
+    <select class="model-select" id="modelSelect" aria-label="当前翻译服务">
       <option value="">加载中...</option>
     </select>
   </div>
 
-  <button class="action-btn" id="translatePageBtn">翻译整页</button>
+  <button class="action-btn" id="translatePageBtn" type="button">翻译整页</button>
 
   <div class="mode-row">
     <div>
       <div class="mode-label">翻译模式</div>
-      <div class="mode-hint">整页翻译显示方式</div>
+      <div class="mode-hint">整页显示方式</div>
     </div>
     <div class="mode-toggle" id="modeToggle" role="group" aria-label="翻译模式">
       <button class="mode-toggle-btn" data-mode="mono" id="modeMonoBtn" type="button">仅译文</button>
@@ -40,30 +40,42 @@
     </div>
   </div>
 
-  <div class="stats-row">
-    <div class="stat-item">
-      <div class="stat-value" id="tokenStat">-- / --</div>
-      <div class="stat-label">会话 / 累计 Tokens</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value" id="cacheHitStat">--</div>
-      <div class="stat-label">缓存命中</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-value" id="cacheEntryStat">--</div>
-      <div class="stat-label">缓存条目</div>
-    </div>
-  </div>
-
   <div class="toggle-row">
     <div>
       <div class="toggle-label">流式翻译</div>
-      <div class="toggle-hint">默认使用流式输出</div>
+      <div class="toggle-hint">逐字输出译文</div>
     </div>
-    <label class="switch">
+    <label class="paper-toggle" title="流式翻译">
       <input type="checkbox" id="streamToggle">
-      <span class="slider"></span>
+      <span class="paper-toggle-track" aria-hidden="true">
+        <span class="paper-toggle-thumb"></span>
+      </span>
     </label>
+  </div>
+
+  <details class="stats-details" id="statsDetails">
+    <summary class="stats-summary">
+      <span>用量与缓存</span>
+      <span class="stats-summary-meta" id="statsSummaryMeta">—</span>
+    </summary>
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="stat-value" id="tokenStat">-- / --</div>
+        <div class="stat-label">会话 / 累计 Tokens</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="cacheHitStat">--</div>
+        <div class="stat-label">缓存命中</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="cacheEntryStat">--</div>
+        <div class="stat-label">缓存条目</div>
+      </div>
+    </div>
+  </details>
+
+  <div class="popup-footer-meta">
+    <span class="version" id="versionBadge"></span>
   </div>
 
   <div id="toast" class="toast"></div>

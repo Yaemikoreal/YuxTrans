@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tokenStat = getById('tokenStat');
   const cacheHitStat = getById('cacheHitStat');
   const cacheEntryStat = getById('cacheEntryStat');
+  const statsSummaryMeta = getById('statsSummaryMeta');
   const toast = getById('toast');
 
   let config = {};
@@ -219,6 +220,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       cacheHitStat.textContent = `${rate}%`;
 
       if (cacheEntryStat) cacheEntryStat.textContent = formatCompact(stats?.wordCount);
+      // 折叠摘要：命中率 · 条目数（不抢主路径）
+      if (statsSummaryMeta) {
+        statsSummaryMeta.textContent = `命中 ${rate}% · ${formatCompact(stats?.wordCount)} 条`;
+      }
     } catch (e) {
       // 静默失败，避免破坏面板
     }
