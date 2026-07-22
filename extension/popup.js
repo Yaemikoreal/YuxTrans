@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modeBilingualBtn = getById('modeBilingualBtn');
   const tokenStat = getById('tokenStat');
   const cacheHitStat = getById('cacheHitStat');
-  const hotwordStat = getById('hotwordStat');
+  const cacheEntryStat = getById('cacheEntryStat');
   const toast = getById('toast');
 
   let config = {};
@@ -126,8 +126,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     connectionText.textContent = text;
   }
 
-  // ===== 整页翻译 =====
+  // ===== 整页翻译 / 空档案 CTA =====
+  function updatePrimaryAction() {
+    if (!translatePageBtn) return;
+    if (!modelRecords.length) {
+      translatePageBtn.textContent = '去配置翻译服务';
+      translatePageBtn.dataset.mode = 'configure';
+    } else {
+      translatePageBtn.textContent = '翻译整页';
+      translatePageBtn.dataset.mode = 'translate';
+    }
+  }
+
   translatePageBtn?.addEventListener('click', async () => {
+    if (translatePageBtn.dataset.mode === 'configure' || modelRecords.length === 0) {
+      chrome.runtime.openOptionsPage().catch(() => {});
+      return;
+    }
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) {
@@ -203,7 +218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rate = total > 0 ? Math.round((hits / total) * 100) : 0;
       cacheHitStat.textContent = `${rate}%`;
 
-      hotwordStat.textContent = formatCompact(stats?.wordCount);
+      if (cacheEntryStat) cacheEntryStat.textContent = formatCompact(stats?.wordCount);
     } catch (e) {
       // 静默失败，避免破坏面板
     }
@@ -220,8 +235,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== 启动 =====
   renderModelSelect();
+  updatePrimaryAction();
   renderModeToggle();
-  await checkConnection();
+  if (modelRecords.length === 0) {
+    setConnectionStatus('error', '未配置');
+  } else {
+    await checkConnection();
+  }
   await updateStats();
   statsInterval = setInterval(updateStats, 4000);
 

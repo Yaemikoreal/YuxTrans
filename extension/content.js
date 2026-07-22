@@ -4,16 +4,22 @@
  * 支持并行翻译、样式保持、可视区域优先
  */
 
+/* global YuxTransHelpers */
+
 class YuxTransContent {
   constructor() {
     this.popup = null;
     this.isTranslating = false;
+    this.helpers = (typeof YuxTransHelpers !== 'undefined' && YuxTransHelpers) || {};
     this.pageTranslationState = {
       isTranslated: false,
       isTranslating: false,
       originalTexts: new Map(), // node -> { text, styles }
       translatedNodes: [],
-      streamingNodes: new Map() // requestId -> { nodeInfo, tempSpan }
+      streamingNodes: new Map(), // requestId -> { nodeInfo, tempSpan }
+      failedItems: [], // 失败节点，供重试
+      cacheHits: 0,
+      apiCount: 0
     };
     this.pageControl = null;
     this.config = {
@@ -24,7 +30,12 @@ class YuxTransContent {
       sourceLang: 'auto',
       targetLang: 'zh',
       siteRule: 'all',
-      siteList: []
+      siteList: [],
+      triggerMode: 'auto',
+      enableStreaming: true,
+      bilingualMode: true,
+      offlineMode: false,
+      siteModePrefs: {}
     };
     this.init();
   }
@@ -51,7 +62,19 @@ class YuxTransContent {
         this.config.siteRule = response.siteRule || 'all';
         this.config.siteList = response.siteList || [];
         this.config.autoCopy = response.autoCopy || false;
-        if (response.bilingualMode !== undefined) {
+        this.config.triggerMode = response.triggerMode || 'auto';
+        this.config.enableStreaming = response.enableStreaming !== false;
+        this.config.offlineMode = !!response.offlineMode;
+        this.config.siteModePrefs = response.siteModePrefs || {};
+        // 站点级双语偏好覆盖全局
+        const host = (location.hostname || '').toLowerCase();
+        if (this.helpers.resolveSiteBilingualMode) {
+          this.config.bilingualMode = this.helpers.resolveSiteBilingualMode(
+            host,
+            this.config.siteModePrefs,
+            response.bilingualMode !== false
+          );
+        } else if (response.bilingualMode !== undefined) {
           this.config.bilingualMode = response.bilingualMode;
         }
         if (response.batchConfig) {
@@ -200,6 +223,21 @@ class YuxTransContent {
         return;
       }
 
+      // 按设置的触发模式：auto 直接译 / icon 浮钮 / contextMenu 仅右键
+      const mode = this.helpers.resolveTriggerAction
+        ? this.helpers.resolveTriggerAction(this.config.triggerMode)
+        : (this.config.triggerMode || 'auto');
+
+      if (mode === 'contextMenu') {
+        this.hideFloatButton();
+        return;
+      }
+      if (mode === 'auto') {
+        this.hideFloatButton();
+        this.translateText(selection, e.clientX, e.clientY);
+        return;
+      }
+      // icon
       this.showFloatButton(e.clientX, e.clientY, selection);
     }, 10);
   }
@@ -262,11 +300,13 @@ class YuxTransContent {
     const sourceLang = this.config.sourceLang || 'auto';
     const targetLang = this.config.targetLang || 'zh';
     const context = this.getPageContext();
+    const action = this.helpers.resolveTranslateAction
+      ? this.helpers.resolveTranslateAction(this.config.enableStreaming)
+      : (this.config.enableStreaming === false ? 'translate' : 'translateStream');
 
-    // 使用流式输出：逐字显示翻译结果
     chrome.runtime.sendMessage(
       {
-        action: 'translateStream',
+        action,
         text,
         sourceLang,
         targetLang,
@@ -279,14 +319,18 @@ class YuxTransContent {
         const isLocal = (this.config.provider === 'local');
 
         if (response && response.success) {
-          this.updatePopup(response.text, response.cached, response.engine);
+          this.updatePopup(response.text, response.cached, response.engine, text);
         } else {
-          const errorMsg = response?.error || '未知错误';
-          // 只有非本地模型才提示配置 API Key。本地模型通常是服务未开启或模型名填错。
-          if (!isLocal && (errorMsg.includes('API Key') || errorMsg.includes('请先配置'))) {
-            this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n点击右上角设置图标进行配置', false, 'warning');
+          const userError = response?.userError;
+          const errorMsg = userError
+            ? (this.helpers.formatUserErrorText
+              ? this.helpers.formatUserErrorText(userError)
+              : `${userError.userMessage}\n\n${userError.actionHint || ''}`)
+            : (response?.error || '未知错误');
+          if (!isLocal && (errorMsg.includes('API Key') || errorMsg.includes('请先配置') || userError?.code === 'AUTH')) {
+            this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n打开扩展设置 → 供应商档案 完成配置', false, 'warning');
           } else {
-            this.updatePopup(`翻译失败: ${errorMsg}${isLocal ? '\n\n请检查 Ollama 服务是否启动。' : ''}`, false, 'error');
+            this.updatePopup(errorMsg, false, 'error');
           }
         }
       }
@@ -379,6 +423,7 @@ class YuxTransContent {
       <div class="yuxtrans-popup-footer">
         <span class="yuxtrans-status"><span class="yuxtrans-status-badge">准备</span></span>
         <div class="yuxtrans-popup-actions">
+          <button class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" style="display:none" title="标记差译并清除缓存">差译</button>
           <button class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn">复制</button>
         </div>
       </div>
@@ -386,6 +431,7 @@ class YuxTransContent {
 
     document.body.appendChild(popup);
     this.popup = popup;
+    this.popup.dataset.sourceText = sourceText;
 
     // 实际尺寸出来后，再定位并限制在可视区域
     requestAnimationFrame(() => {
@@ -411,25 +457,66 @@ class YuxTransContent {
     popup.querySelector('.yuxtrans-copy-btn').addEventListener('click', () => {
       this.copyPopupTranslation();
     });
+
+    popup.querySelector('.yuxtrans-bad-btn').addEventListener('click', () => {
+      this.reportBadPopupTranslation();
+    });
   }
 
-  updatePopup(translatedText, cached, engine) {
+  updatePopup(translatedText, cached, engine, sourceText) {
     if (!this.popup) return;
 
     const targetEl = this.popup.querySelector('.yuxtrans-target');
     targetEl.textContent = translatedText;
 
     const statusEl = this.popup.querySelector('.yuxtrans-status');
+    const isError = engine === 'error' || engine === 'warning';
     const badgeClass = this._getStatusBadgeClass(cached, engine);
-    const statusText = cached ? '缓存命中' : (engine === 'local' ? '本地模型' : (engine === 'cache' ? '缓存' : engine));
+    let statusText = '完成';
+    if (isError) statusText = engine === 'warning' ? '需配置' : '失败';
+    else if (cached || engine === 'cache' || engine === 'glossary') {
+      statusText = engine === 'glossary' ? '术语表' : '缓存命中';
+    } else if (engine === 'local') statusText = '本地模型';
+    else if (engine) statusText = String(engine);
     statusEl.innerHTML = `<span class="yuxtrans-status-badge ${badgeClass}">${this.escapeHtml(String(statusText))}</span>`;
 
     // 保存当前译文，供复制使用
     this.popup.dataset.translation = translatedText;
+    if (sourceText) this.popup.dataset.sourceText = sourceText;
+
+    const badBtn = this.popup.querySelector('.yuxtrans-bad-btn');
+    if (badBtn) {
+      badBtn.style.display = isError ? 'none' : 'inline-block';
+    }
 
     // 自动复制（如果用户开启）
-    if (this.config.autoCopy) {
+    if (!isError && this.config.autoCopy) {
       this.copyPopupTranslation();
+    }
+  }
+
+  /**
+   * 标记差译：剔除对应缓存条目
+   */
+  async reportBadPopupTranslation() {
+    if (!this.popup) return;
+    const text = this.popup.dataset.sourceText || this.popup.querySelector('.yuxtrans-source')?.textContent || '';
+    if (!text) return;
+    try {
+      const res = await chrome.runtime.sendMessage({
+        action: 'reportBadTranslation',
+        text,
+        sourceLang: this.config.sourceLang || 'auto',
+        targetLang: this.config.targetLang || 'zh'
+      });
+      const statusEl = this.popup.querySelector('.yuxtrans-status');
+      if (statusEl) {
+        statusEl.innerHTML = res?.removed
+          ? '<span class="yuxtrans-status-badge cache">已清除缓存</span>'
+          : '<span class="yuxtrans-status-badge warning">无缓存条目</span>';
+      }
+    } catch (e) {
+      console.warn('[YuxTrans] 报告差译失败:', e);
     }
   }
 
@@ -864,6 +951,9 @@ class YuxTransContent {
     this.pageTranslationState.isTranslating = true;
     this.pageTranslationState.originalTexts.clear();
     this.pageTranslationState.streamingNodes.clear();
+    this.pageTranslationState.failedItems = [];
+    this.pageTranslationState.cacheHits = 0;
+    this.pageTranslationState.apiCount = 0;
 
     // 禁用控制条上的翻译/重新翻译按钮，防止任务进行中重复点击
     this.setPageControlTranslateDisabled(true);
@@ -922,6 +1012,8 @@ class YuxTransContent {
               const item = nodes[localIdx];
               if (res && res.success) {
                 uniqueTexts.get(item.text).translation = res.text;
+                if (res.cached) this.pageTranslationState.cacheHits++;
+                else this.pageTranslationState.apiCount++;
                 this.applyTranslation(item.nodeInfo, res.text);
               }
             });
@@ -954,6 +1046,8 @@ class YuxTransContent {
               if (res && res.success) {
                 uniqueTexts.get(item.text).translation = res.text;
                 appliedTexts.add(item.text);
+                if (res.cached) this.pageTranslationState.cacheHits++;
+                else this.pageTranslationState.apiCount++;
                 this.applyTranslation(item.nodeInfo, res.text);
               }
             });
@@ -987,6 +1081,7 @@ class YuxTransContent {
         } else if (item.error) {
           // 失败项可视化标记
           this.markFailedNode(nodeInfo, item.error);
+          this.pageTranslationState.failedItems.push({ nodeInfo, text: nodeInfo.text, error: item.error });
           failCount++;
         }
       }
@@ -1005,6 +1100,8 @@ class YuxTransContent {
         duplicateTexts: duplicateCount,
         successCount,
         failCount,
+        cacheHits: this.pageTranslationState.cacheHits,
+        apiCount: this.pageTranslationState.apiCount,
         elapsedSeconds: parseFloat(elapsed)
       });
       this.showPageControlComplete(
@@ -1065,6 +1162,10 @@ class YuxTransContent {
         0 / ${total}
       </span>
       <button class="yuxtrans-page-control-btn" id="yuxtrans-cancel-btn">取消</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-retry-btn"
+        style="display:none">重试失败</button>
+      <button class="yuxtrans-page-control-btn" id="yuxtrans-disable-site-btn"
+        style="display:none" title="本站禁用扩展">禁用本站</button>
       <button class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn"
         style="display:none">双语</button>
       <button class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn"
@@ -1103,11 +1204,13 @@ class YuxTransContent {
 
     const hasFailures = failCount > 0;
     const isBilingual = this.config.bilingualMode !== false;
+    const cacheHits = this.pageTranslationState.cacheHits || 0;
+    const apiCount = this.pageTranslationState.apiCount || 0;
 
     const textEl = this.pageControlElement('yuxtrans-progress-text');
     if (textEl) {
       const failureText = hasFailures ? ` · 失败 ${failCount}` : '';
-      textEl.textContent = `完成 ${successCount}/${totalCount}${failureText}`;
+      textEl.textContent = `完成 ${successCount}/${totalCount}${failureText} · 缓存 ${cacheHits} / API ${apiCount}`;
     }
 
     const bar = this.pageControlElement('yuxtrans-progress-bar');
@@ -1118,6 +1221,8 @@ class YuxTransContent {
     const restoreBtn = this.pageControlElement('yuxtrans-restore-btn');
     const bilingualBtn = this.pageControlElement('yuxtrans-bilingual-btn');
     const closeBtn = this.pageControlElement('yuxtrans-close-btn');
+    const retryBtn = this.pageControlElement('yuxtrans-retry-btn');
+    const disableBtn = this.pageControlElement('yuxtrans-disable-site-btn');
 
     if (cancelBtn) cancelBtn.style.display = 'none';
     if (restoreBtn) restoreBtn.style.display = 'inline-block';
@@ -1126,6 +1231,8 @@ class YuxTransContent {
       bilingualBtn.textContent = isBilingual ? '仅译文' : '双语';
     }
     if (closeBtn) closeBtn.style.display = 'inline-block';
+    if (retryBtn) retryBtn.style.display = hasFailures ? 'inline-block' : 'none';
+    if (disableBtn) disableBtn.style.display = 'inline-block';
 
     // 防止重复绑定
     if (this.pageControlListenersBound) return;
@@ -1154,11 +1261,102 @@ class YuxTransContent {
       });
     }
 
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => this.retryFailedPageItems());
+    }
+
+    if (disableBtn) {
+      disableBtn.addEventListener('click', () => this.disableCurrentSite());
+    }
+
     // 关闭按钮
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
         this.hidePageControl();
       });
+    }
+  }
+
+  /**
+   * 重试整页翻译中失败的节点
+   */
+  async retryFailedPageItems() {
+    const failed = this.pageTranslationState.failedItems || [];
+    if (failed.length === 0 || this.pageTranslationState.isTranslating) return;
+
+    this.pageTranslationState.isTranslating = true;
+    this.setPageControlTranslateDisabled(true);
+    const retryBtn = this.pageControlElement('yuxtrans-retry-btn');
+    if (retryBtn) {
+      retryBtn.disabled = true;
+      retryBtn.textContent = '重试中...';
+    }
+
+    const remaining = [];
+    try {
+      for (const item of failed) {
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'translate',
+            text: item.text,
+            sourceLang: this.config.sourceLang || 'auto',
+            targetLang: this.config.targetLang || 'zh',
+            context: null
+          });
+          if (response && response.success) {
+            // 清除失败标记后应用译文
+            const parent = item.nodeInfo?.node?.parentElement;
+            if (parent) parent.classList.remove('yuxtrans-failed');
+            this.applyTranslation(item.nodeInfo, response.text);
+            if (response.cached) this.pageTranslationState.cacheHits++;
+            else this.pageTranslationState.apiCount++;
+          } else {
+            remaining.push(item);
+          }
+        } catch (e) {
+          remaining.push(item);
+        }
+      }
+      this.pageTranslationState.failedItems = remaining;
+      const textEl = this.pageControlElement('yuxtrans-progress-text');
+      if (textEl) {
+        textEl.textContent = remaining.length
+          ? `仍有 ${remaining.length} 条失败 · 缓存 ${this.pageTranslationState.cacheHits} / API ${this.pageTranslationState.apiCount}`
+          : `重试完成 · 缓存 ${this.pageTranslationState.cacheHits} / API ${this.pageTranslationState.apiCount}`;
+      }
+      if (retryBtn) {
+        retryBtn.style.display = remaining.length ? 'inline-block' : 'none';
+        retryBtn.textContent = '重试失败';
+        retryBtn.disabled = false;
+      }
+    } finally {
+      this.pageTranslationState.isTranslating = false;
+      this.setPageControlTranslateDisabled(false);
+    }
+  }
+
+  /**
+   * 本站禁用扩展（写入黑名单）
+   */
+  async disableCurrentSite() {
+    const hostname = location.hostname;
+    if (!hostname) return;
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'disableSite', hostname });
+      if (res?.success) {
+        this.config.siteRule = res.siteRule || 'blacklist';
+        this.config.siteList = res.siteList || [];
+        this.restoreOriginalTexts();
+        this.hidePageControl();
+        // 简短提示
+        const tip = document.createElement('div');
+        tip.className = 'yuxtrans-page-control';
+        tip.textContent = `已禁用本站（${hostname}）`;
+        document.body.appendChild(tip);
+        setTimeout(() => tip.remove(), 2500);
+      }
+    } catch (e) {
+      console.warn('[YuxTrans] 禁用本站失败:', e);
     }
   }
 
@@ -1191,6 +1389,18 @@ class YuxTransContent {
    */
   toggleBilingualMode(isBilingual) {
     this.config.bilingualMode = isBilingual;
+
+    // 记住当前站点偏好
+    const hostname = (location.hostname || '').toLowerCase();
+    if (hostname) {
+      chrome.runtime.sendMessage({
+        action: 'setSiteBilingualMode',
+        hostname,
+        bilingualMode: isBilingual
+      }).catch(() => {});
+      if (!this.config.siteModePrefs) this.config.siteModePrefs = {};
+      this.config.siteModePrefs[hostname] = { bilingualMode: isBilingual };
+    }
 
     for (const [node, data] of this.pageTranslationState.originalTexts) {
       const parent = node.parentElement;

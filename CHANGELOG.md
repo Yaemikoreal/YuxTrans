@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-21
+
+### Added
+
+- **配置驱动的划词触发** — `triggerMode` 生效：`auto` 选中即译、`icon` 浮钮、`contextMenu` 仅右键。
+- **流式开关贯通 content** — `enableStreaming` 控制划词走 `translateStream` 或 `translate`。
+- **首次安装引导** — 安装后打开设置页；Popup 无档案时主按钮变为「去配置翻译服务」。
+- **结构化用户错误** — `userError`（code / userMessage / actionHint）并在划词浮窗展示可行动提示。
+- **整页失败重试与统计** — 控制条显示「缓存 x / API y」，支持「重试失败」「禁用本站」。
+- **术语表** — CSV/JSON 导入；命中时强制译名并跳过模型。
+- **差译反馈** — 划词结果可标记差译并剔除对应缓存。
+- **站点双语记忆** — 整页控制条切换双语/仅译文后按 hostname 记住。
+- **离线模式** — 仅允许本地模型与缓存，禁止云端请求与云端故障转移。
+- **可测纯函数模块** — `extension/lib/product-helpers.js` + 扩展单元测试。
+
+### Changed
+
+- Popup 统计「热词数」改为「缓存条目」。
+- 设置页隐私文案改为「本机存储、未额外加密」；侧栏版本号读取 manifest。
+- 通用设置增加快速开始 / 高级折叠；目标语言列表与右键菜单对齐。
+- 缓存设置补充短文不缓存（&lt;12 字符）说明。
+- Service Worker 消息处理统一 `ensureInitialized`；`loadCacheFromDB` / `flushCacheToDB` 经 `withDbRetry` 做 IndexedDB 一次重连。
+- 浏览器 `navigator.onLine=false` 时仍允许本地 Ollama（不再误拦 localhost）。
+
+### Fixed
+
+- 修复设置中的触发模式与流式开关未驱动 content script 的问题。
+- 修复设置页版本号硬编码为 0.3.0 的不一致。
+
 ## [0.3.0] - 2026-07-10
 
 ### Added

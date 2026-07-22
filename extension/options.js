@@ -52,14 +52,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return customModelSelect.value;
   }
 
-  // 3. 版本号
+  // 3. 版本号（统一读取 manifest）
   const versionBadge = getById('versionBadge');
-  if (versionBadge) {
-    try {
-      const manifest = chrome.runtime.getManifest();
-      versionBadge.textContent = `YuxTrans v${manifest.version}`;
-    } catch(e) {}
-  }
+  const sidebarVersion = getById('sidebarVersion');
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const verText = `YuxTrans v${manifest.version}`;
+    if (versionBadge) versionBadge.textContent = verText;
+    if (sidebarVersion) sidebarVersion.textContent = verText;
+  } catch (e) {}
 
   // 4. 语言设置
   const sourceLangSelect = getById('sourceLang');
@@ -74,6 +75,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const autoDetectLangInput = getById('autoDetectLang');
   const autoFallbackInput = getById('autoFallback');
   const enableStreamingInput = getById('enableStreaming');
+  const offlineModeInput = getById('offlineMode');
+  const glossaryCountEl = getById('glossaryCount');
+  const importGlossaryInput = getById('importGlossaryInput');
+  const clearGlossaryBtn = getById('clearGlossaryBtn');
 
   // 6. 统计看板
   const totalTranslatesCountEl = getById('totalTranslatesCount');
@@ -296,8 +301,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (autoDetectLangInput) autoDetectLangInput.checked = config.autoDetectLang !== false;
     if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
     if (enableStreamingInput) enableStreamingInput.checked = config.enableStreaming !== false;
+    if (offlineModeInput) offlineModeInput.checked = !!config.offlineMode;
+    if (glossaryCountEl) glossaryCountEl.textContent = String((config.glossary || []).length);
     renderActiveConfig();
   }
+
+  // 首次安装提示
+  try {
+    const fr = await chrome.storage.local.get('firstRunPending');
+    if (fr.firstRunPending) {
+      const hint = getById('firstRunHint');
+      if (hint) {
+        hint.textContent = '欢迎使用 YuxTrans：请先在「供应商档案」保存服务，再回到网页划词翻译。完成后此提示可忽略。';
+        hint.style.fontWeight = '600';
+      }
+      // 无档案时默认落在供应商档案 Tab
+      if (!(config?.profiles || []).length) {
+        const profilesTab = document.querySelector('.tab[data-tab="profiles"]');
+        profilesTab?.click();
+      }
+      chrome.storage.local.set({ firstRunPending: false }).catch(() => {});
+    }
+  } catch (e) {}
 
   // 渲染当前使用（ActiveConfig 可点击展示）
   function renderActiveConfig() {
@@ -971,7 +996,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
         autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
         autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
-        enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true
+        enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
+        offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false
       };
 
       const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
@@ -985,6 +1011,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error('[YuxTrans] Save Error:', err);
       showStatus(`运行异常: ${err.message}`, 'error');
+    }
+  });
+
+  // ===== 术语表导入 / 清空 =====
+  importGlossaryInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const res = await chrome.runtime.sendMessage({
+        action: 'importGlossary',
+        raw,
+        filename: file.name,
+        replace: false
+      });
+      if (res?.success) {
+        config.glossary = res.glossary || [];
+        if (glossaryCountEl) glossaryCountEl.textContent = String(res.count || 0);
+        showStatus(`已导入术语，当前共 ${res.count || 0} 条`, 'success');
+      } else {
+        showStatus(`导入失败: ${res?.error || '未知错误'}`, 'error');
+      }
+    } catch (err) {
+      showStatus(`导入异常: ${err.message}`, 'error');
+    }
+    e.target.value = '';
+  });
+
+  clearGlossaryBtn?.addEventListener('click', async () => {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'clearGlossary' });
+      if (res?.success) {
+        config.glossary = [];
+        if (glossaryCountEl) glossaryCountEl.textContent = '0';
+        showStatus('术语表已清空', 'success');
+      } else {
+        showStatus(`清空失败: ${res?.error || ''}`, 'error');
+      }
+    } catch (err) {
+      showStatus(`清空异常: ${err.message}`, 'error');
     }
   });
 

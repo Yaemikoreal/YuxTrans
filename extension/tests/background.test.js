@@ -271,3 +271,39 @@ test('buildRequest 批量请求为支持的供应商附加 response_format', () 
   const streamBody = JSON.parse(stream.body);
   assert.strictEqual(streamBody.response_format, undefined);
 });
+
+test('toUserError 产出结构化 userError', () => {
+  const err = bg.toUserError(new Error('请先配置 API Key'));
+  assert.ok(err.code);
+  assert.ok(err.userMessage);
+  assert.ok(err.actionHint);
+});
+
+test('ProductHelpers 经 background 导出可调用', () => {
+  assert.strictEqual(typeof bg.resolveTriggerAction, 'function');
+  assert.strictEqual(bg.resolveTranslateAction(false), 'translate');
+  assert.strictEqual(bg.applyGlossary('x', [{ source: 'x', target: 'y' }]).text, 'y');
+});
+
+test('shouldBlockWhenBrowserOffline 经 background 导出且本地离线不拦截', () => {
+  assert.strictEqual(typeof bg.shouldBlockWhenBrowserOffline, 'function');
+  assert.strictEqual(bg.shouldBlockWhenBrowserOffline(false, 'local'), false);
+  assert.strictEqual(bg.shouldBlockWhenBrowserOffline(false, 'openai'), true);
+});
+
+test('withDbRetry 成功路径直接返回，失败且非 DB 错误原样抛出', async () => {
+  assert.strictEqual(typeof bg.withDbRetry, 'function');
+  const ok = await bg.withDbRetry(async () => 42);
+  assert.strictEqual(ok, 42);
+
+  let threw = false;
+  try {
+    await bg.withDbRetry(async () => {
+      throw new Error('plain failure');
+    });
+  } catch (e) {
+    threw = true;
+    assert.match(e.message, /plain failure/);
+  }
+  assert.strictEqual(threw, true);
+});

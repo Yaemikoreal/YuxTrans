@@ -10,7 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# 仅忽略仓库根目录的 Python setuptools lib/，勿误伤 extension/lib/
+/lib/
 lib64/
 parts/
 sdist/

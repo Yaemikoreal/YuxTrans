@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "node --test extension/tests/background.test.js"
+    "test": "node --test extension/tests/*.test.js"
   },
   "dependencies": {
     "jsdom": "^29.0.1"

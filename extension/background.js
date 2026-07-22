@@ -6,6 +6,19 @@
  * 优先支持：Chrome / Edge（Chromium 内核）
  */
 
+// 加载可测纯函数（Service Worker: importScripts；Node 测试: require）
+/* global importScripts, YuxTransHelpers */
+if (typeof importScripts === 'function') {
+  try {
+    importScripts('lib/product-helpers.js');
+  } catch (e) {
+    console.warn('[YuxTrans] importScripts product-helpers failed:', e);
+  }
+}
+const ProductHelpers = (typeof require === 'function'
+  ? require('./lib/product-helpers.js')
+  : (typeof YuxTransHelpers !== 'undefined' ? YuxTransHelpers : null)) || {};
+
 // ===== 常量配置 =====
 
 const API_ENDPOINTS = {
@@ -324,7 +337,13 @@ let config = {
   siteList: [],
   autoDetectLang: true,
   autoFallback: true,
-  enableStreaming: true
+  enableStreaming: true,
+  // 离线模式：仅允许 local + 缓存
+  offlineMode: false,
+  // 用户术语表 [{ source, target }]
+  glossary: [],
+  // 站点级偏好 { [hostname]: { bilingualMode: boolean } }
+  siteModePrefs: {}
 };
 
 let cache = new Map();        // key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
@@ -458,60 +477,83 @@ async function openDatabase() {
   });
 }
 
+/**
+ * IndexedDB 操作失败时重置连接并重试一次
+ * @param {Function} fn
+ */
+async function withDbRetry(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const msg = String(e?.message || e || '');
+    if (
+      /InvalidStateError|database connection is closing|Connection is closing|IndexedDB/i.test(msg) ||
+      e?.name === 'InvalidStateError'
+    ) {
+      db = null;
+      await openDatabase();
+      return await fn();
+    }
+    throw e;
+  }
+}
+
 async function loadCacheFromDB() {
   try {
-    const database = await openDatabase();
-    return new Promise((resolve) => {
-      const transaction = database.transaction(CACHE_STORE, 'readonly');
-      const store = transaction.objectStore(CACHE_STORE);
-      const request = store.getAll();
+    await withDbRetry(async () => {
+      const database = await openDatabase();
+      await new Promise((resolve) => {
+        const transaction = database.transaction(CACHE_STORE, 'readonly');
+        const store = transaction.objectStore(CACHE_STORE);
+        const request = store.getAll();
 
-      request.onsuccess = () => {
-        const items = request.result;
-        cache.clear();
-        cacheBytes = 0;
-        pendingCacheWrites.clear();
-        pendingCacheDeletes.clear();
+        request.onsuccess = () => {
+          const items = request.result;
+          cache.clear();
+          cacheBytes = 0;
+          pendingCacheWrites.clear();
+          pendingCacheDeletes.clear();
 
-        // 按时间戳从新到旧排序，使最近使用的项位于 Map 末尾
-        items.sort((a, b) => b.timestamp - a.timestamp);
-        let invalidCount = 0;
-        for (const item of items) {
-          const validation = validateCacheEntry(item.key, item.value);
-          if (!validation.valid) {
-            pendingCacheDeletes.add(item.key);
-            invalidCount++;
-            continue;
+          // 按时间戳从新到旧排序，使最近使用的项位于 Map 末尾
+          items.sort((a, b) => b.timestamp - a.timestamp);
+          let invalidCount = 0;
+          for (const item of items) {
+            const validation = validateCacheEntry(item.key, item.value);
+            if (!validation.valid) {
+              pendingCacheDeletes.add(item.key);
+              invalidCount++;
+              continue;
+            }
+            cache.set(item.key, item.value);
+            cacheBytes += item.key.length * 2 + item.value.length * 2;
           }
-          cache.set(item.key, item.value);
-          cacheBytes += item.key.length * 2 + item.value.length * 2;
-        }
-        if (invalidCount > 0) {
-          console.log(`[YuxTrans] 加载缓存时跳过 ${invalidCount} 条无效/旧版本记录`);
-        }
+          if (invalidCount > 0) {
+            console.log(`[YuxTrans] 加载缓存时跳过 ${invalidCount} 条无效/旧版本记录`);
+          }
 
-        // 应用缓存字节限额限制 (LRU: 物理空间驱动)
-        const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
-        while (cacheBytes > maxBytes && cache.size > 0) {
-          const oldestKey = cache.keys().next().value;
-          const oldestVal = cache.get(oldestKey);
-          cache.delete(oldestKey);
-          cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
-          pendingCacheDeletes.add(oldestKey);
-        }
+          // 应用缓存字节限额限制 (LRU: 物理空间驱动)
+          const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
+          while (cacheBytes > maxBytes && cache.size > 0) {
+            const oldestKey = cache.keys().next().value;
+            const oldestVal = cache.get(oldestKey);
+            cache.delete(oldestKey);
+            cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+            pendingCacheDeletes.add(oldestKey);
+          }
 
-        updateCacheStats();
-        // 若启动加载时裁剪了缓存，立即同步删除到 DB
-        if (pendingCacheDeletes.size > 0) {
-          saveCacheToDB();
-        }
-        resolve();
-      };
+          updateCacheStats();
+          // 若启动加载时裁剪了缓存，立即同步删除到 DB
+          if (pendingCacheDeletes.size > 0) {
+            saveCacheToDB();
+          }
+          resolve();
+        };
 
-      request.onerror = () => {
-        console.error('[YuxTrans] 从 IndexedDB 加载缓存失败:', request.error);
-        resolve();
-      };
+        request.onerror = () => {
+          console.error('[YuxTrans] 从 IndexedDB 加载缓存失败:', request.error);
+          resolve();
+        };
+      });
     });
   } catch (error) {
     console.error('[YuxTrans] 打开 IndexedDB 失败:', error);
@@ -544,27 +586,29 @@ async function flushCacheToDB() {
   try {
     if (writes.size === 0 && deletes.size === 0) return;
 
-    const database = await openDatabase();
-    const transaction = database.transaction(CACHE_STORE, 'readwrite');
-    const store = transaction.objectStore(CACHE_STORE);
-    const timestamp = Date.now();
+    await withDbRetry(async () => {
+      const database = await openDatabase();
+      const transaction = database.transaction(CACHE_STORE, 'readwrite');
+      const store = transaction.objectStore(CACHE_STORE);
+      const timestamp = Date.now();
 
-    // 1. 删除被淘汰的键
-    for (const key of deletes) {
-      store.delete(key);
-    }
-
-    // 2. 仅写入变更的键，避免全量重写
-    for (const key of writes) {
-      const value = cache.get(key);
-      if (value !== undefined) {
-        store.put({ key, value, timestamp });
+      // 1. 删除被淘汰的键
+      for (const key of deletes) {
+        store.delete(key);
       }
-    }
 
-    await new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+      // 2. 仅写入变更的键，避免全量重写
+      for (const key of writes) {
+        const value = cache.get(key);
+        if (value !== undefined) {
+          store.put({ key, value, timestamp });
+        }
+      }
+
+      await new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
     });
   } catch (error) {
     console.error('[YuxTrans] IndexedDB 写入失败:', error);
@@ -1385,7 +1429,7 @@ function parseResponse(data, format, providerOverride = null) {
 }
 
 /**
- * 解析友好错误信息
+ * 解析友好错误信息（HTTP 状态映射）
  */
 function formatError(status, errorText) {
   const friendly = ERROR_MESSAGES[status];
@@ -1399,6 +1443,132 @@ function formatError(status, errorText) {
 }
 
 /**
+ * 将任意错误转为结构化用户错误
+ * @param {unknown} error
+ * @param {object} [opts]
+ * @returns {{ code: string, userMessage: string, actionHint: string, debugMessage: string }}
+ */
+function toUserError(error, opts = {}) {
+  const provider = opts.provider || resolveProviderConfig()?.provider || '';
+  if (ProductHelpers.buildUserError) {
+    if (typeof error === 'number') {
+      return ProductHelpers.buildUserError(error, {
+        provider,
+        debugMessage: opts.debugMessage || formatError(error, opts.debugMessage || '')
+      });
+    }
+    const msg = error?.message || error?.error || String(error || '');
+    // 已映射的 HTTP 友好句优先
+    return ProductHelpers.buildUserError(
+      { message: msg, status: error?.status, code: error?.code },
+      { provider }
+    );
+  }
+  const message = error?.message || String(error || '翻译失败');
+  return {
+    code: 'UNKNOWN',
+    userMessage: message,
+    actionHint: '请稍后重试，或打开设置检查服务配置',
+    debugMessage: message
+  };
+}
+
+/**
+ * 术语表命中则直接返回译文
+ * @param {string} text
+ * @returns {string|null}
+ */
+function lookupGlossary(text) {
+  if (!ProductHelpers.applyGlossary) return null;
+  const result = ProductHelpers.applyGlossary(text, config.glossary || []);
+  return result.hit ? result.text : null;
+}
+
+/**
+ * 离线门禁检查
+ * @param {boolean} cached
+ * @param {object|null} providerOverride
+ */
+function assertOfflineAllowed(cached, providerOverride = null) {
+  const provider = resolveProviderConfig(providerOverride).provider;
+  const gate = ProductHelpers.checkOfflineGate
+    ? ProductHelpers.checkOfflineGate({
+        offlineMode: !!config.offlineMode,
+        provider,
+        cached: !!cached
+      })
+    : { allowed: true };
+  if (!gate.allowed) {
+    const err = new Error(gate.reason || '离线模式不允许云端请求');
+    err.code = 'OFFLINE';
+    throw err;
+  }
+}
+
+/**
+ * 报告差译并剔除缓存
+ * @param {object} payload
+ * @returns {Promise<{success:boolean, removed:boolean, key?:string}>}
+ */
+async function reportBadTranslation(payload = {}) {
+  const text = payload.text || '';
+  const sourceLang = payload.sourceLang || config.sourceLang || 'auto';
+  const targetLang = payload.targetLang || config.targetLang || 'zh';
+  const style = payload.style || config.translateStyle || 'normal';
+  const key = payload.cacheKey || generateCacheKey(text, sourceLang, targetLang, style);
+
+  let removed = false;
+  if (key && cache.has(key)) {
+    evictCacheEntry(key);
+    removed = true;
+  }
+  // 兼容：按原文扫描可能的键
+  if (!removed && text) {
+    for (const [k] of cache.entries()) {
+      if (k.endsWith(':' + normalizeCacheKeyText(text)) || k.includes(':' + normalizeCacheKeyText(text))) {
+        const parsed = parseCacheKey(k);
+        if (normalizeCacheKeyText(parsed.text) === normalizeCacheKeyText(text)) {
+          evictCacheEntry(k);
+          removed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (removed) {
+    usageStats.userReportedHits = (usageStats.userReportedHits || 0) + 1;
+    saveUsageStatsDeferred();
+    await flushCacheToDB();
+  }
+  return { success: true, removed, key };
+}
+
+/**
+ * 将当前站点加入黑名单并切换为黑名单模式（若当前为全站启用）
+ * @param {string} hostname
+ */
+async function disableSiteForHostname(hostname) {
+  const host = (hostname || '').toLowerCase().trim();
+  if (!host) throw new Error('缺少站点域名');
+  const list = ProductHelpers.addHostnameToList
+    ? ProductHelpers.addHostnameToList(config.siteList || [], host)
+    : [...(config.siteList || []), host];
+  const next = {
+    siteList: list,
+    siteRule: config.siteRule === 'whitelist' ? 'whitelist' : 'blacklist'
+  };
+  // 白名单模式下：从白名单移除
+  if (config.siteRule === 'whitelist') {
+    next.siteList = ProductHelpers.removeHostnameFromList
+      ? ProductHelpers.removeHostnameFromList(config.siteList || [], host)
+      : (config.siteList || []).filter((x) => x !== host);
+  }
+  await saveConfig(next);
+  return { success: true, siteRule: config.siteRule, siteList: config.siteList };
+}
+
+/**
  * 非流式翻译请求
  * @param {string} text - 待翻译文本
  * @param {string} sourceLang - 源语言
@@ -1407,12 +1577,15 @@ function formatError(status, errorText) {
  * @param {object|null} providerOverride - 可选：指定使用的供应商配置，默认使用全局 config
  */
 async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', context = null, providerOverride = null) {
-  // 网络检测
-  if (!navigator.onLine) {
+  const p = resolveProviderConfig(providerOverride);
+  // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
+  const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
+    ? ProductHelpers.shouldBlockWhenBrowserOffline(navigator.onLine, p.provider)
+    : (!navigator.onLine && p.provider !== 'local');
+  if (blockOffline) {
     throw new Error('网络已断开，请检查网络连接后重试');
   }
 
-  const p = resolveProviderConfig(providerOverride);
   const endpoint = getEndpoint(p);
   const apiKey = getApiKey(p);
 
@@ -1500,11 +1673,15 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
  * 通过 chrome.tabs.sendMessage 逐字推送到 content script
  */
 async function translateWithStream(text, sourceLang, targetLang, tabId, context = null, providerOverride = null, requestId = null) {
-  if (!navigator.onLine) {
+  const p = resolveProviderConfig(providerOverride);
+  // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
+  const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
+    ? ProductHelpers.shouldBlockWhenBrowserOffline(navigator.onLine, p.provider)
+    : (!navigator.onLine && p.provider !== 'local');
+  if (blockOffline) {
     throw new Error('网络已断开，请检查网络连接后重试');
   }
 
-  const p = resolveProviderConfig(providerOverride);
   const endpoint = getEndpoint(p);
   const apiKey = getApiKey(p);
 
@@ -1769,6 +1946,23 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
   targetLang = resolveTargetLanguage(text, sourceLang, targetLang);
   const resolvedSourceLang = resolveSourceLanguage(text, sourceLang);
 
+  // 术语表优先（强制固定译名）
+  const glossaryHit = lookupGlossary(text);
+  if (glossaryHit != null) {
+    recordUsage(true, 1);
+    recordMetric({
+      action: 'translate',
+      provider: 'glossary',
+      cached: true,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: text?.length || 0,
+      tokens: 0,
+      success: true,
+      errorType: ''
+    });
+    return { text: glossaryHit, cached: true, engine: 'glossary' };
+  }
+
   const cacheKey = generateCacheKey(text, sourceLang, targetLang);
 
   const cached = getFromCache(cacheKey);
@@ -1786,6 +1980,8 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
     });
     return { text: cached, cached: true, engine: 'cache' };
   }
+
+  assertOfflineAllowed(false);
 
   const tokens = estimateTokens(text);
   const activeProvider = resolveProviderConfig().provider;
@@ -1805,8 +2001,8 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
     });
     return { text: translated, cached: false, engine: activeProvider };
   } catch (error) {
-    // 自动故障转移
-    if (config.autoFallback) {
+    // 自动故障转移（离线模式下不允许落到云端）
+    if (config.autoFallback && !config.offlineMode) {
       const fallback = buildFallbackProvider();
       if (fallback && isProviderAvailable(fallback) && fallback.provider !== activeProvider) {
         console.warn(`[YuxTrans] 主供应商 ${activeProvider} 失败，尝试 ${fallback.provider}:`, error.message);
@@ -1931,13 +2127,19 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     }
   }
 
-  // 1. 筛出未命中的项
+  // 1. 筛出未命中的项（术语表 → 缓存 → miss）
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
     // E: 复用 batchSourceLang / batchTargetLang，避免对每句都调用 detectLanguage。
     // 假设同一批次内语言方向基本一致；混合语言页面中的少量异语言文本由模型 prompt
     // 规则兜底（"已为目标语则返回不变"）。
     const resolvedTargetLang = resolveTargetLanguage(text, batchSourceLang, batchTargetLang);
+    const glossaryHit = lookupGlossary(text);
+    if (glossaryHit != null) {
+      finalResults[i] = { text: glossaryHit, cached: true, engine: 'glossary', success: true };
+      recordUsage(true, 1);
+      continue;
+    }
     const cacheKey = generateCacheKey(text, sourceLang, resolvedTargetLang);
     const cached = getFromCache(cacheKey);
     if (cached) {
@@ -1948,11 +2150,14 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     }
   }
 
-  // 2. 如果全命中缓存，直接返回
+  // 2. 如果全命中缓存/术语表，直接返回
   if (missItems.length === 0) {
     recordBatchMetric(batchStart, texts, finalResults);
     return finalResults;
   }
+
+  // 离线模式下不允许对 miss 项发起云端批量请求
+  assertOfflineAllowed(false);
 
   // 3. 按 (源语言, 目标语言) 分组，让 batch prompt 更精确
   const langGroups = new Map();
@@ -2431,7 +2636,7 @@ async function ensureInitialized() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   try {
     await loadConfig();
     await loadUsageStats();
@@ -2480,6 +2685,18 @@ chrome.runtime.onInstalled.addListener(async () => {
         contexts: ['selection']
       });
     });
+
+    // 首次安装：打开设置页完成最短成功路径
+    if (details?.reason === 'install') {
+      try {
+        await chrome.storage.local.set({ firstRunPending: true });
+        if (chrome.runtime.openOptionsPage) {
+          chrome.runtime.openOptionsPage();
+        }
+      } catch (e) {
+        console.warn('[YuxTrans] 打开首次设置页失败:', e);
+      }
+    }
   } catch (error) {
     console.error('[YuxTrans] onInstalled 初始化失败:', error);
   }
@@ -2519,6 +2736,22 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+/**
+ * 构造失败响应（含结构化用户错误）
+ * @param {unknown} error
+ * @returns {object}
+ */
+function failResponse(error) {
+  const userError = toUserError(error);
+  return {
+    success: false,
+    error: ProductHelpers.formatUserErrorText
+      ? ProductHelpers.formatUserErrorText(userError)
+      : (error?.message || String(error)),
+    userError
+  };
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const respondOnce = (payload) => {
     try { sendResponse(payload); } catch (e) { /* 消息通道可能已关闭 */ }
@@ -2534,7 +2767,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       translate(request.text, sourceLang, targetLang, context)
         .then(result => sendResponse({ success: true, ...result }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .catch(error => sendResponse(failResponse(error)));
       return;
     }
 
@@ -2549,6 +2782,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const cacheKey = generateCacheKey(request.text, sourceLang, targetLang);
       const streamTokens = estimateTokens(request.text);
       const textLength = request.text?.length || 0;
+
+      // 术语表优先
+      const glossaryHit = lookupGlossary(request.text);
+      if (glossaryHit != null) {
+        recordUsage(true, 1);
+        sendResponse({ success: true, text: glossaryHit, cached: true, engine: 'glossary' });
+        return;
+      }
 
       // 先查缓存
       const cached = getFromCache(cacheKey);
@@ -2565,6 +2806,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           errorType: ''
         });
         sendResponse({ success: true, text: cached, cached: true, engine: 'cache' });
+        return;
+      }
+
+      try {
+        assertOfflineAllowed(false);
+      } catch (offlineErr) {
+        sendResponse(failResponse(offlineErr));
         return;
       }
 
@@ -2586,7 +2834,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })
         .catch(async (error) => {
           // 流式失败时，尝试非流式故障转移（用户仍可在弹窗看到最终结果）
-          if (config.autoFallback) {
+          if (config.autoFallback && !config.offlineMode) {
             try {
               const result = await translate(request.text, sourceLang, targetLang, context);
               sendResponse({ success: true, ...result });
@@ -2605,7 +2853,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             success: false,
             errorType: classifyError(error)
           });
-          sendResponse({ success: false, error: error.message });
+          sendResponse(failResponse(error));
         });
       return;
     }
@@ -2619,7 +2867,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       translateBatchInternal(request.texts, sourceLang, targetLang, context)
         .then(results => sendResponse({ success: true, results }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .catch(error => sendResponse(failResponse(error)));
       return;
     }
 
@@ -2635,6 +2883,70 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveConfig(request.config)
         .then(() => sendResponse({ success: true }))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return;
+    }
+
+    else if (request.action === 'reportBadTranslation') {
+      reportBadTranslation(request)
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse(failResponse(error)));
+      return;
+    }
+
+    else if (request.action === 'disableSite') {
+      disableSiteForHostname(request.hostname || request.host)
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse(failResponse(error)));
+      return;
+    }
+
+    else if (request.action === 'setSiteBilingualMode') {
+      const host = (request.hostname || '').toLowerCase().trim();
+      if (!host) {
+        sendResponse({ success: false, error: '缺少 hostname' });
+        return;
+      }
+      const prefs = { ...(config.siteModePrefs || {}) };
+      prefs[host] = {
+        ...(prefs[host] || {}),
+        bilingualMode: request.bilingualMode !== false
+      };
+      saveConfig({ siteModePrefs: prefs })
+        .then(() => sendResponse({ success: true, siteModePrefs: prefs }))
+        .catch((error) => sendResponse(failResponse(error)));
+      return;
+    }
+
+    else if (request.action === 'importGlossary') {
+      try {
+        const entries = ProductHelpers.parseGlossaryImport
+          ? ProductHelpers.parseGlossaryImport(request.raw || '', request.filename || '')
+          : [];
+        const merged = Array.isArray(request.replace) && request.replace
+          ? entries
+          : [...(config.glossary || []), ...entries];
+        // 按 source 去重，后写覆盖
+        const map = new Map();
+        for (const e of merged) {
+          if (e?.source) map.set(String(e.source).replace(/\s+/g, ' ').trim(), {
+            source: String(e.source).replace(/\s+/g, ' ').trim(),
+            target: String(e.target ?? '')
+          });
+        }
+        const glossary = Array.from(map.values());
+        saveConfig({ glossary })
+          .then(() => sendResponse({ success: true, count: glossary.length, glossary }))
+          .catch((error) => sendResponse(failResponse(error)));
+      } catch (error) {
+        sendResponse(failResponse(error));
+      }
+      return;
+    }
+
+    else if (request.action === 'clearGlossary') {
+      saveConfig({ glossary: [] })
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse(failResponse(error)));
       return;
     }
 
@@ -2919,6 +3231,12 @@ if (typeof module !== 'undefined' && module.exports) {
     supportsJsonMode,
     generateCacheKey,
     formatError,
+    toUserError,
+    failResponse,
+    lookupGlossary,
+    assertOfflineAllowed,
+    withDbRetry,
+    reportBadTranslation,
     detectLanguage,
     resolveTargetLanguage,
     resolveSourceLanguage,
@@ -2929,6 +3247,9 @@ if (typeof module !== 'undefined' && module.exports) {
     getActiveProfile,
     addOrUpdateProfile,
     removeProfile,
-    makeProfileId
+    makeProfileId,
+    ProductHelpers,
+    // 便于测试直接调用 helpers
+    ...ProductHelpers
   };
 }
