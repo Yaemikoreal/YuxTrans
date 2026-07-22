@@ -8,15 +8,100 @@
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
+  <!-- 首次安装三步引导（A3） -->
+  <div id="firstRunWizard" class="first-run-wizard" hidden>
+    <div class="first-run-card" role="dialog" aria-labelledby="firstRunTitle">
+      <div class="first-run-header">
+        <h2 id="firstRunTitle">欢迎使用 YuxTrans</h2>
+        <p class="first-run-sub">约 1 分钟完成配置，即可开始划词翻译</p>
+        <div class="first-run-steps" aria-hidden="true">
+          <span class="first-run-step-dot active" data-step-dot="1">1</span>
+          <span class="first-run-step-line"></span>
+          <span class="first-run-step-dot" data-step-dot="2">2</span>
+          <span class="first-run-step-line"></span>
+          <span class="first-run-step-dot" data-step-dot="3">3</span>
+        </div>
+      </div>
+
+      <div class="first-run-pane active" data-step-pane="1">
+        <h3 class="first-run-pane-title">第 1 步 · 选择翻译路径</h3>
+        <div class="first-run-path-grid">
+          <button type="button" class="first-run-path-card" data-path="local" id="firstRunPathLocal">
+            <strong>本地 Ollama</strong>
+            <span>数据不出本机，适合隐私与离线场景</span>
+          </button>
+          <button type="button" class="first-run-path-card" data-path="cloud" id="firstRunPathCloud">
+            <strong>云端 API</strong>
+            <span>填写服务商 API Key，质量与速度通常更好</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="first-run-pane" data-step-pane="2" hidden>
+        <h3 class="first-run-pane-title">第 2 步 · 完成服务配置</h3>
+        <div id="firstRunCloudForm" hidden>
+          <div class="form-group">
+            <label class="form-label" for="firstRunProvider">服务商</label>
+            <select id="firstRunProvider">
+              <option value="qwen">通义千问 (Qwen)</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="moonshot">Moonshot</option>
+              <option value="siliconflow">SiliconFlow</option>
+              <option value="groq">Groq</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="firstRunApiKey">API Key</label>
+            <input type="password" id="firstRunApiKey" placeholder="粘贴 API Key">
+            <p class="hint">仅保存在本机浏览器，不会上传到 YuxTrans 服务器（未做额外加密）</p>
+          </div>
+        </div>
+        <div id="firstRunLocalForm" hidden>
+          <p class="hint" id="firstRunOllamaStatus">正在检测本机 Ollama…</p>
+          <div class="form-group">
+            <label class="form-label" for="firstRunLocalModel">本地模型名称</label>
+            <input type="text" id="firstRunLocalModel" value="qwen3.5:0.8b" placeholder="如 qwen3.5:0.8b">
+          </div>
+          <button type="button" class="btn-secondary" id="firstRunRecheckOllama">重新检测 Ollama</button>
+        </div>
+      </div>
+
+      <div class="first-run-pane" data-step-pane="3" hidden>
+        <h3 class="first-run-pane-title">第 3 步 · 试译一句</h3>
+        <p class="hint">将翻译「Hello」到中文，确认服务可用。</p>
+        <div class="first-run-trial-box">
+          <div class="first-run-trial-src">Hello</div>
+          <div class="first-run-trial-dst" id="firstRunTrialResult">点击下方按钮开始试译</div>
+        </div>
+        <button type="button" class="btn-primary" id="firstRunTrialBtn">试译 Hello</button>
+      </div>
+
+      <div class="first-run-footer">
+        <button type="button" class="btn-secondary" id="firstRunSkipBtn">跳过，稍后配置</button>
+        <div class="first-run-footer-right">
+          <button type="button" class="btn-secondary" id="firstRunBackBtn" hidden>上一步</button>
+          <button type="button" class="btn-primary" id="firstRunNextBtn" disabled>下一步</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <aside class="sidebar">
-      <h1>YuxTrans</h1>
-      <p class="subtitle">Configuration</p>
+      <div class="sidebar-brand">
+        <img class="sidebar-logo" src="icons/icon48.png" width="36" height="36" alt="" aria-hidden="true">
+        <div class="sidebar-brand-text">
+          <h1>YuxTrans</h1>
+          <p class="subtitle">设置</p>
+        </div>
+      </div>
 
       <nav class="tabs">
-        <button class="tab active" data-tab="profiles">供应商档案</button>
-        <button class="tab" data-tab="general">通用设置</button>
-        <button class="tab" data-tab="diagnostics">诊断数据</button>
+        <button class="tab active" data-tab="profiles">服务档案</button>
+        <button class="tab" data-tab="general">翻译偏好</button>
+        <button class="tab" data-tab="diagnostics">诊断排障</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -27,10 +112,10 @@
     <main class="main-content">
       <div id="updateBanner" class="update-banner" style="display: none;">
         <div class="update-banner-content">
-          <div class="update-icon">✨</div>
+          <div class="update-icon" aria-hidden="true">新</div>
           <div class="update-info">
             <span class="update-title" id="updateTitle">发现新版本</span>
-            <span class="update-desc" id="updateDesc">新版本已在 GitHub 发布，快去下载体验吧！</span>
+            <span class="update-desc" id="updateDesc">新版本已在 GitHub 发布，可下载更新。</span>
           </div>
           <div class="update-actions">
              <a href="#" id="downloadZipBtn" class="btn-primary" style="text-decoration: none;">立即下载 ZIP</a>
@@ -230,7 +315,7 @@
         <div class="section" id="quickStartSection">
           <h2 class="section-title">快速开始</h2>
           <p class="hint" id="firstRunHint" style="margin-bottom: var(--yxt-space-3);">
-            1）在「供应商档案」保存并启用一个服务 → 2）选择目标语言 → 3）回网页划词翻译。
+            1）在「服务档案」保存并启用一个服务 → 2）选择目标语言 → 3）回网页划词翻译。
           </p>
           <div class="form-group">
             <div class="checkbox-group">
@@ -512,6 +597,7 @@
     </main>
   </div>
 
+  <script src="lib/product-helpers.js"></script>
   <script src="common.js"></script>
   <script src="options.js"></script>
 </body>

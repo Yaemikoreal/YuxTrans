@@ -175,21 +175,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       // 指引弹窗逻辑
       showGuideBtn?.addEventListener('click', () => {
         const guideHtml = `
-          <div style="padding: 20px;">
-            <h3 style="margin-top: 0; color: #d8a051; margin-bottom: 20px;">傻瓜式更新指引</h3>
+          <div class="yxt-guide">
+            <h3 class="yxt-guide-title">三步更新指引</h3>
             <div class="guide-step">
               <div class="step-num">1</div>
-              <div class="step-content">点击<strong>“立即下载 ZIP”</strong>获取最新代码包，并解压到您的电脑。</div>
+              <div class="step-content">点击<strong>「立即下载 ZIP」</strong>获取最新代码包并解压。</div>
             </div>
             <div class="guide-step">
               <div class="step-num">2</div>
-              <div class="step-content">在浏览器地址栏输入 <strong>chrome://extensions</strong> 进入扩展管理页。</div>
+              <div class="step-content">在地址栏打开 <strong>chrome://extensions</strong> 进入扩展管理。</div>
             </div>
             <div class="guide-step">
               <div class="step-num">3</div>
-              <div class="step-content">找到 YuxTrans 插件卡片，点击右下角的<strong>“刷新”图标</strong>（或删除旧版重新拖入）。</div>
+              <div class="step-content">找到 YuxTrans，点击<strong>重新加载</strong>（或删除后重新加载解压目录）。</div>
             </div>
-            <p style="font-size: 12px; color: #999; margin-top: 20px; text-align: center;">更新后，您的 200MB 翻译缓存将自动同步（只要不清除浏览器数据）。</p>
+            <p class="yxt-guide-note">更新后本地翻译缓存会保留（除非清除浏览器数据）。</p>
           </div>
         `;
         showModal(guideHtml);
@@ -199,12 +199,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function showModal(html) {
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;';
+    modal.className = 'yxt-modal-overlay';
     modal.innerHTML = `
-      <div style="background:#fdfbf7; width:450px; border-radius:24px; box-shadow:0 12px 40px rgba(0,0,0,0.2); position:relative; overflow:hidden;">
-        ${html}
-        <button id="closeModalBtn" class="btn-secondary" style="width:100%; border-radius:0; padding:16px; border:none; background:#f2ede4; color:#3d3733; cursor:pointer; font-weight:600;">我知道了</button>
+      <div class="yxt-modal-card" role="dialog" aria-modal="true">
+        <div class="yxt-modal-body">${html}</div>
+        <button type="button" id="closeModalBtn" class="btn-secondary yxt-modal-close">我知道了</button>
       </div>
     `;
     document.body.appendChild(modal);
@@ -306,23 +305,306 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderActiveConfig();
   }
 
-  // 首次安装提示
-  try {
-    const fr = await chrome.storage.local.get('firstRunPending');
-    if (fr.firstRunPending) {
+  // 首次安装三步引导（A3：本地/云端 → 配置 → 试译）
+  const Helpers = (typeof YuxTransHelpers !== 'undefined') ? YuxTransHelpers : null;
+
+  async function initFirstRunWizard() {
+    const wizard = getById('firstRunWizard');
+    if (!wizard) return;
+
+    let shouldShow = false;
+    try {
+      const fr = await chrome.storage.local.get('firstRunPending');
+      shouldShow = !!fr.firstRunPending;
+    } catch (e) {
+      shouldShow = false;
+    }
+    // 无档案时也引导（冷启动补救）
+    if (!shouldShow && (!(config?.profiles || []).length)) {
+      shouldShow = true;
+    }
+    if (!shouldShow) return;
+
+    const state = {
+      step: 1,
+      path: null,
+      provider: 'qwen',
+      apiKey: '',
+      localModel: 'qwen3.5:0.8b',
+      ollamaOk: false,
+      trialOk: false
+    };
+
+    const nextBtn = getById('firstRunNextBtn');
+    const backBtn = getById('firstRunBackBtn');
+    const skipBtn = getById('firstRunSkipBtn');
+    const trialBtn = getById('firstRunTrialBtn');
+    const trialResult = getById('firstRunTrialResult');
+    const cloudForm = getById('firstRunCloudForm');
+    const localForm = getById('firstRunLocalForm');
+    const ollamaStatus = getById('firstRunOllamaStatus');
+    const providerSel = getById('firstRunProvider');
+    const apiKeyInputFr = getById('firstRunApiKey');
+    const localModelInputFr = getById('firstRunLocalModel');
+
+    wizard.hidden = false;
+
+    function readStateFromDom() {
+      state.provider = providerSel?.value || 'qwen';
+      state.apiKey = apiKeyInputFr?.value || '';
+      state.localModel = localModelInputFr?.value?.trim() || 'qwen3.5:0.8b';
+    }
+
+    function canAdvance() {
+      readStateFromDom();
+      if (Helpers?.canAdvanceFirstRunStep) {
+        return Helpers.canAdvanceFirstRunStep(state.step, state);
+      }
+      if (state.step === 1) return !!state.path;
+      if (state.step === 2) {
+        return state.path === 'local' ? !!state.ollamaOk : !!(state.apiKey && state.provider);
+      }
+      return !!state.trialOk;
+    }
+
+    function syncDots() {
+      wizard.querySelectorAll('[data-step-dot]').forEach((dot) => {
+        const n = Number(dot.getAttribute('data-step-dot'));
+        dot.classList.toggle('active', n === state.step);
+        dot.classList.toggle('done', n < state.step);
+      });
+    }
+
+    function syncPanes() {
+      wizard.querySelectorAll('[data-step-pane]').forEach((pane) => {
+        const n = Number(pane.getAttribute('data-step-pane'));
+        const active = n === state.step;
+        pane.hidden = !active;
+        pane.classList.toggle('active', active);
+      });
+      if (cloudForm) cloudForm.hidden = state.path !== 'cloud';
+      if (localForm) localForm.hidden = state.path !== 'local';
+      if (backBtn) backBtn.hidden = state.step === 1;
+      if (nextBtn) {
+        nextBtn.disabled = !canAdvance();
+        nextBtn.textContent = state.step === 3 ? '完成并开始使用' : '下一步';
+      }
+      syncDots();
+    }
+
+    async function probeOllama() {
+      if (ollamaStatus) ollamaStatus.textContent = '正在检测本机 Ollama…';
+      state.ollamaOk = false;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2500);
+        const res = await fetch('http://localhost:11434/api/tags', { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          state.ollamaOk = true;
+          if (ollamaStatus) {
+            ollamaStatus.textContent = '已检测到 Ollama。请确认模型已下载（默认 qwen3.5:0.8b）。';
+          }
+        } else {
+          if (ollamaStatus) ollamaStatus.textContent = 'Ollama 响应异常，请确认服务已启动。';
+        }
+      } catch (e) {
+        if (ollamaStatus) {
+          ollamaStatus.textContent = '未检测到 Ollama。请先安装并运行 ollama serve，或改用云端 API。';
+        }
+      }
+      syncPanes();
+    }
+
+    async function saveDraftProfile() {
+      readStateFromDom();
+      const draft = Helpers?.buildFirstRunProfileDraft
+        ? Helpers.buildFirstRunProfileDraft(state)
+        : {
+            provider: state.path === 'local' ? 'local' : state.provider,
+            apiKey: state.path === 'local' ? '' : state.apiKey,
+            localModel: state.localModel,
+            model: '',
+            label: '首次引导'
+          };
+
+      const profile = {
+        id: `${draft.provider}:${draft.model || draft.localModel || 'default'}`,
+        provider: draft.provider,
+        apiKey: draft.apiKey || '',
+        apiEndpoint: draft.apiEndpoint || '',
+        model: draft.model || '',
+        localModel: draft.localModel || '',
+        customProvider: { name: '', endpoint: '', apiKey: '', format: 'openai', model: '' },
+        label: draft.label || '',
+        savedAt: Date.now()
+      };
+
+      const profiles = Array.isArray(config.profiles) ? config.profiles.slice() : [];
+      const idx = profiles.findIndex((p) => p.id === profile.id);
+      if (idx >= 0) profiles[idx] = { ...profiles[idx], ...profile };
+      else profiles.push(profile);
+
+      await chrome.runtime.sendMessage({
+        action: 'setConfig',
+        config: {
+          profiles,
+          activeProfileId: profile.id,
+          provider: profile.provider,
+          apiKey: profile.apiKey,
+          model: profile.model,
+          localModel: profile.localModel,
+          apiEndpoint: profile.apiEndpoint || ''
+        }
+      });
+
+      // 同步本地 config 对象
+      config.profiles = profiles;
+      config.activeProfileId = profile.id;
+      config.provider = profile.provider;
+      config.apiKey = profile.apiKey;
+      config.model = profile.model;
+      config.localModel = profile.localModel;
+
+      try {
+        await chrome.runtime.sendMessage({
+          action: 'saveProfile',
+          profile
+        });
+      } catch (e) {
+        // 档案表写入失败不阻断试译
+      }
+    }
+
+    async function closeWizard(markDone) {
+      wizard.hidden = true;
+      if (markDone) {
+        try {
+          await chrome.storage.local.set({ firstRunPending: false });
+        } catch (e) {}
+      }
       const hint = getById('firstRunHint');
-      if (hint) {
-        hint.textContent = '欢迎使用 YuxTrans：请先在「供应商档案」保存服务，再回到网页划词翻译。完成后此提示可忽略。';
+      if (hint && state.trialOk) {
+        hint.textContent = '配置已完成：可回到网页划词翻译。需要改供应商请到「服务档案」。';
         hint.style.fontWeight = '600';
       }
-      // 无档案时默认落在供应商档案 Tab
-      if (!(config?.profiles || []).length) {
-        const profilesTab = document.querySelector('.tab[data-tab="profiles"]');
-        profilesTab?.click();
-      }
-      chrome.storage.local.set({ firstRunPending: false }).catch(() => {});
+      // 刷新档案列表 UI
+      try {
+        if (typeof loadModels === 'function') await loadModels();
+        else if (typeof renderModelList === 'function') renderModelList();
+      } catch (e) {}
+      renderActiveConfig();
     }
-  } catch (e) {}
+
+    wizard.querySelectorAll('.first-run-path-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const path = card.getAttribute('data-path');
+        state.path = Helpers?.resolveFirstRunPath
+          ? Helpers.resolveFirstRunPath(path)
+          : path;
+        wizard.querySelectorAll('.first-run-path-card').forEach((c) => {
+          c.classList.toggle('selected', c === card);
+        });
+        syncPanes();
+      });
+    });
+
+    apiKeyInputFr?.addEventListener('input', () => syncPanes());
+    providerSel?.addEventListener('change', () => syncPanes());
+    localModelInputFr?.addEventListener('input', () => syncPanes());
+    getById('firstRunRecheckOllama')?.addEventListener('click', () => probeOllama());
+
+    backBtn?.addEventListener('click', () => {
+      if (state.step > 1) {
+        state.step -= 1;
+        syncPanes();
+      }
+    });
+
+    skipBtn?.addEventListener('click', async () => {
+      await closeWizard(true);
+      const profilesTab = document.querySelector('.tab[data-tab="profiles"]');
+      profilesTab?.click();
+    });
+
+    nextBtn?.addEventListener('click', async () => {
+      if (!canAdvance()) return;
+      if (state.step === 1) {
+        state.step = 2;
+        syncPanes();
+        if (state.path === 'local') await probeOllama();
+        return;
+      }
+      if (state.step === 2) {
+        try {
+          await saveDraftProfile();
+        } catch (e) {
+          showStatus(`保存配置失败：${e.message || e}`, 'error');
+          return;
+        }
+        state.step = 3;
+        state.trialOk = false;
+        if (trialResult) {
+          trialResult.textContent = '点击下方按钮开始试译';
+          trialResult.className = 'first-run-trial-dst';
+        }
+        syncPanes();
+        return;
+      }
+      if (state.step === 3 && state.trialOk) {
+        await closeWizard(true);
+      }
+    });
+
+    trialBtn?.addEventListener('click', async () => {
+      if (trialResult) {
+        trialResult.textContent = '试译中…';
+        trialResult.className = 'first-run-trial-dst';
+      }
+      try {
+        await saveDraftProfile();
+        const trialText = Helpers?.getFirstRunTrialText
+          ? Helpers.getFirstRunTrialText()
+          : 'Hello';
+        const res = await chrome.runtime.sendMessage({
+          action: 'translate',
+          text: trialText,
+          sourceLang: 'en',
+          targetLang: 'zh'
+        });
+        if (res?.success && res.text) {
+          state.trialOk = true;
+          if (trialResult) {
+            trialResult.textContent = res.text;
+            trialResult.className = 'first-run-trial-dst ok';
+          }
+        } else {
+          state.trialOk = false;
+          const msg = res?.userError?.userMessage || res?.error || '试译失败';
+          const hint = res?.userError?.actionHint ? `\n${res.userError.actionHint}` : '';
+          if (trialResult) {
+            trialResult.textContent = `${msg}${hint}`;
+            trialResult.className = 'first-run-trial-dst err';
+          }
+        }
+      } catch (e) {
+        state.trialOk = false;
+        if (trialResult) {
+          trialResult.textContent = `试译异常：${e.message || e}`;
+          trialResult.className = 'first-run-trial-dst err';
+        }
+      }
+      syncPanes();
+    });
+
+    syncPanes();
+  }
+
+  try {
+    await initFirstRunWizard();
+  } catch (e) {
+    console.warn('[YuxTrans] 首次引导初始化失败:', e);
+  }
 
   // 渲染当前使用（ActiveConfig 可点击展示）
   function renderActiveConfig() {
@@ -331,8 +613,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!nameEl || !detailEl) return;
     const activeProfile = getActiveProfile(config);
     if (!activeProfile) {
-      nameEl.textContent = '未选择供应商档案';
-      detailEl.textContent = '请在「供应商档案」标签页配置并保存一个档案';
+      nameEl.textContent = '未选择服务档案';
+      detailEl.textContent = '请在「服务档案」标签页配置并保存一个档案';
       return;
     }
     const providerLabel = PROVIDER_NAMES[activeProfile.provider] || activeProfile.provider;
@@ -713,13 +995,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 复用 showStatus 的逻辑，但输出到 customTestResult 而非浮动层
   function showCustomTestResult(msg, type) {
     if (!customTestResult) return;
-    customTestResult.className = '';
+    customTestResult.removeAttribute('style');
+    customTestResult.className = `yxt-inline-status ${type === 'success' ? 'is-success' : 'is-error'}`;
     customTestResult.textContent = msg;
-    if (type === 'success') {
-      customTestResult.style.cssText = 'margin-top:12px; padding:10px 16px; border-radius:10px; background:rgba(46,204,113,0.1); color:#27ae60; font-size:13px; font-weight:600;';
-    } else {
-      customTestResult.style.cssText = 'margin-top:12px; padding:10px 16px; border-radius:10px; background:rgba(231,76,60,0.1); color:#c0392b; font-size:13px; font-weight:600;';
-    }
   }
 
   // ===== 刷新列表 (通用) =====
@@ -1113,13 +1391,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         storageProgressBar.style.width = `${percent}%`;
         storageText.textContent = `${usedMB} MB / ${maxMB} MB`;
-        
-        // 根据占用率改变颜色 (可选气泡感)
-        if (percent > 90) {
-          storageProgressBar.style.background = 'linear-gradient(90deg, #d85151, #e67d7d)';
-        } else {
-          storageProgressBar.style.background = 'linear-gradient(90deg, #d8a051, #e6b87d)';
-        }
+        storageProgressBar.classList.remove('is-high', 'is-warn');
+        if (percent > 90) storageProgressBar.classList.add('is-high');
+        else if (percent > 70) storageProgressBar.classList.add('is-warn');
       }
     });
   }
