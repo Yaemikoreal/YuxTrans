@@ -16,6 +16,7 @@ require(path.join(libSw, 'providers-core.js'));
 require(path.join(libSw, 'lang.js'));
 require(path.join(libSw, 'message-actions.js'));
 require(path.join(libSw, 'translate-core.js'));
+require(path.join(libSw, 'scheduler.js'));
 
 const SW = globalThis.YuxTransSW;
 
@@ -27,7 +28,8 @@ test('SW 模块文件均存在', () => {
     'providers-core.js',
     'lang.js',
     'message-actions.js',
-    'translate-core.js'
+    'translate-core.js',
+    'scheduler.js'
   ];
   for (const f of files) {
     assert.ok(fs.existsSync(path.join(libSw, f)), `missing ${f}`);
@@ -110,4 +112,37 @@ test('translate-core：Prompt 含目标语与规则', () => {
   });
   assert.ok(withCtx.includes('Page context'));
   assert.ok(withCtx.includes('Docs'));
+});
+
+test('scheduler：相同 cacheKey 的并发请求合并为一次执行', async () => {
+  SW.clearInflight();
+  let calls = 0;
+  const exec = async () => { calls++; await new Promise(r => setTimeout(r, 10)); return '译'; };
+  const [a, b] = await Promise.all([
+    SW.scheduleTranslation('k1', exec, SW.SCHEDULER_PRIORITY.NORMAL),
+    SW.scheduleTranslation('k1', exec, SW.SCHEDULER_PRIORITY.NORMAL)
+  ]);
+  assert.strictEqual(calls, 1, '并发同 key 只执行一次');
+  assert.strictEqual(a, '译');
+  assert.strictEqual(b, '译');
+  assert.strictEqual(SW.hasInflight('k1'), false, '完成后从在途表移除');
+});
+
+test('scheduler：不同 cacheKey 各自执行；空 key 不去重', async () => {
+  SW.clearInflight();
+  let calls = 0;
+  const exec = async () => { calls++; return 'x'; };
+  await Promise.all([
+    SW.scheduleTranslation('ka', exec),
+    SW.scheduleTranslation('kb', exec),
+    SW.scheduleTranslation('', exec)
+  ]);
+  assert.strictEqual(calls, 3);
+});
+
+test('scheduler：失败时从在途表移除并抛出', async () => {
+  SW.clearInflight();
+  const exec = async () => { throw new Error('boom'); };
+  await assert.rejects(() => SW.scheduleTranslation('ke', exec), /boom/);
+  assert.strictEqual(SW.hasInflight('ke'), false);
 });

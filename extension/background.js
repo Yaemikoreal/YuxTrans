@@ -17,7 +17,8 @@
     'lib/sw/providers-core.js',
     'lib/sw/lang.js',
     'lib/sw/message-actions.js',
-    'lib/sw/translate-core.js'
+    'lib/sw/translate-core.js',
+    'lib/sw/scheduler.js'
   ];
   if (typeof importScripts === 'function') {
     try {
@@ -37,6 +38,7 @@
     require('./lib/sw/lang.js');
     require('./lib/sw/message-actions.js');
     require('./lib/sw/translate-core.js');
+    require('./lib/sw/scheduler.js');
   }
 })();
 
@@ -2013,7 +2015,10 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
   const tokens = estimateTokens(text);
   const activeProvider = resolveProviderConfig().provider;
   try {
-    const translated = await translateWithCloud(text, resolvedSourceLang, targetLang, context);
+    // 划词优先级最高；相同 cacheKey 的并发请求（划词+整页批次同文本）共享一次结果
+    const translated = SW.scheduleTranslation
+      ? await SW.scheduleTranslation(cacheKey, () => translateWithCloud(text, resolvedSourceLang, targetLang, context), SW.SCHEDULER_PRIORITY.HIGH)
+      : await translateWithCloud(text, resolvedSourceLang, targetLang, context);
     await setToCache(cacheKey, translated);
     recordUsage(false, 1, tokens);
     recordMetric({
