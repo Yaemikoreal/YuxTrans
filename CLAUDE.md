@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 YuxTrans 是一个 AI 翻译工具，核心目标是「响应速度是生命，翻译准度是底线」。项目采用三层架构：缓存 → 本地模型 → 云端API，自动故障转移。
 
 这是一个复合项目：
-- **Python 包** (`yuxtrans/`) — 核心翻译引擎、缓存系统、桌面客户端
+- **Python 包** (`yuxtrans/`) — 核心翻译引擎、缓存系统
 - **浏览器扩展** (`extension/`) — Chrome/Edge 划词翻译插件 (Manifest V3)，**独立运行不依赖 Python 后端**
 
 ## 常用命令
@@ -18,9 +18,6 @@ cd yuxtrans
 
 # 安装开发依赖
 pip install -e ".[dev]"
-
-# 安装桌面端依赖（可选）
-pip install -e ".[desktop]"
 
 # 安装本地模型依赖（可选）
 pip install -e ".[local]"
@@ -35,10 +32,6 @@ pytest --tb=short                        # 简短错误回溯
 # 代码检查
 ruff check yuxtrans/                     # Lint 检查
 ruff format yuxtrans/                    # 格式化代码
-
-# 运行桌面客户端
-python -m yuxtrans.desktop               # 直接运行
-yuxtrans                                 # 安装后运行（entry point）
 
 # 打包浏览器扩展
 # 直接加载 extension/ 目录到 Chrome/Edge 即可（开发者模式）
@@ -185,7 +178,7 @@ node --test --test-reporter spec extension/tests/  # 带详细输出
 - `YUXTRANS_CLOUD_MODEL` — 模型名称
 
 **Extension 设置页面** (`options.js`) 支持：
-- 12 个云端供应商 + 自定义 + 本地 Ollama
+- 7 个云端供应商 + 自定义 + 本地 Ollama
 - 源语言/目标语言/翻译风格（普通/学术/技术/文学）
 - 缓存限额（200MB 默认），触发模式，双语模式
 
@@ -206,11 +199,9 @@ node --test --test-reporter spec extension/tests/  # 带详细输出
 ├── yuxtrans/                        # Python 包（唯一生效的源码）
 │   ├── engine/                      # 翻译引擎（核心）
 │   ├── cache/                       # 缓存层（SQLite + LRU）
-│   ├── desktop/                     # 桌面客户端（PyQt6，暂停开发）
 │   ├── metrics/                     # 性能监控与质量评估
-│   └── utils/                       # 工具函数
+│   └── utils/                       # 工具函数（重试/并发/配置）
 ├── tests/                           # Python 单元测试（pytest）
-├── benchmark/                       # 性能测试用例
 ├── examples/                        # 示例脚本
 │
 ├── extension/                       # 浏览器插件（Manifest V3）
@@ -222,7 +213,7 @@ node --test --test-reporter spec extension/tests/  # 带详细输出
 │   ├── common.js                    # 共享常量（PROVIDER_NAMES 等）
 │   ├── popup.html / popup.js        # 弹窗界面
 │   ├── popup.css                    # 弹窗专属样式（从 popup.html 独立）
-│   ├── options.html / options.js    # 设置页面（12供应商+自定义）
+│   ├── options.html / options.js    # 设置页面（7 云端供应商+自定义+本地）
 │   ├── options.css                  # 设置页专属样式
 │   ├── _locales/                    # i18n（zh_CN / en）
 │   ├── tests/                       # Node 内置测试（background 核心逻辑）
