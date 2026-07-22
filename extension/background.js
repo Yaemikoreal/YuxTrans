@@ -6,86 +6,68 @@
  * 优先支持：Chrome / Edge（Chromium 内核）
  */
 
-// 加载可测纯函数（Service Worker: importScripts；Node 测试: require）
-/* global importScripts, YuxTransHelpers */
-if (typeof importScripts === 'function') {
-  try {
-    importScripts('lib/product-helpers.js');
-  } catch (e) {
-    console.warn('[YuxTrans] importScripts product-helpers failed:', e);
+// 加载可测纯函数与 SW 拆分模块（Service Worker: importScripts；Node 测试: require）
+/* global importScripts, YuxTransHelpers, YuxTransSW */
+(function loadSwModules() {
+  const scripts = [
+    'lib/product-helpers.js',
+    'lib/sw/bootstrap.js',
+    'lib/sw/constants.js',
+    'lib/sw/cache-keys.js',
+    'lib/sw/providers-core.js',
+    'lib/sw/lang.js',
+    'lib/sw/message-actions.js',
+    'lib/sw/translate-core.js'
+  ];
+  if (typeof importScripts === 'function') {
+    try {
+      importScripts(...scripts);
+    } catch (e) {
+      console.warn('[YuxTrans] importScripts SW modules failed:', e);
+    }
+    return;
   }
-}
-const ProductHelpers = (typeof require === 'function'
-  ? require('./lib/product-helpers.js')
-  : (typeof YuxTransHelpers !== 'undefined' ? YuxTransHelpers : null)) || {};
+  if (typeof require === 'function') {
+    // Node 测试路径：按依赖顺序 require
+    require('./lib/product-helpers.js');
+    require('./lib/sw/bootstrap.js');
+    require('./lib/sw/constants.js');
+    require('./lib/sw/cache-keys.js');
+    require('./lib/sw/providers-core.js');
+    require('./lib/sw/lang.js');
+    require('./lib/sw/message-actions.js');
+    require('./lib/sw/translate-core.js');
+  }
+})();
 
-// ===== 常量配置 =====
+const ProductHelpers = (typeof YuxTransHelpers !== 'undefined' ? YuxTransHelpers : null)
+  || (typeof require === 'function' ? require('./lib/product-helpers.js') : null)
+  || {};
 
-const API_ENDPOINTS = {
-  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
-  openai: 'https://api.openai.com/v1/chat/completions',
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  anthropic: 'https://api.anthropic.com/v1/messages',
-  groq: 'https://api.groq.com/openai/v1/chat/completions',
-  moonshot: 'https://api.moonshot.cn/v1/chat/completions',
-  siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
-  local: 'http://localhost:11434/api/chat'
-};
+const SW = (typeof YuxTransSW !== 'undefined' ? YuxTransSW : {}) || {};
 
-const DEFAULT_MODELS = {
-  qwen: ['qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-max-longcontext'],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  deepseek: ['deepseek-chat', 'deepseek-v4-flash', 'deepseek-v4-pro'],
-  anthropic: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'],
-  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-  moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-  siliconflow: ['Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'],
-  local: []
-};
+// ===== 常量配置（来自 lib/sw/constants.js）=====
 
+const API_ENDPOINTS = SW.API_ENDPOINTS || {};
+const DEFAULT_MODELS = SW.DEFAULT_MODELS || {};
+const STYLE_PROMPTS = SW.STYLE_PROMPTS || {};
+const LANG_NAMES = SW.LANG_NAMES || Object.create(null);
+const ERROR_MESSAGES = SW.ERROR_MESSAGES || {};
+const CLOUD_TIMEOUT_MS = SW.CLOUD_TIMEOUT_MS || 30000;
+const LOCAL_TIMEOUT_MS = SW.LOCAL_TIMEOUT_MS || 120000;
+const REQUEST_TIMEOUT_MS = SW.REQUEST_TIMEOUT_MS || 30000;
+const MAX_BATCH_CHARS = SW.MAX_BATCH_CHARS || 4000;
+const DEFAULT_BATCH_SIZE = SW.DEFAULT_BATCH_SIZE || 20;
+const CACHE_KEY_VERSION = SW.CACHE_KEY_VERSION || 'v2';
+
+/**
+ * 默认模型（providers 模块）
+ * @param {string} provider
+ * @returns {string}
+ */
 function getDefaultModel(provider) {
-  const models = DEFAULT_MODELS[provider];
-  return Array.isArray(models) && models.length > 0 ? models[0] : '';
+  return SW.getDefaultModel ? SW.getDefaultModel(provider) : '';
 }
-
-const STYLE_PROMPTS = {
-  normal: '',
-  academic: 'Use an academic and formal style with precise terminology.',
-  technical: 'Preserve technical accuracy, keep technical terms and code references intact.',
-  literary: 'Use literary elegance and artistic expression.'
-};
-
-// 语言代码 → 自然语言名称（用于 Prompt）
-// 使用无原型对象防止 __proto__ 等键名污染
-const LANG_NAMES = Object.assign(Object.create(null), {
-  'zh': 'Simplified Chinese', 'zh-TW': 'Traditional Chinese',
-  'en': 'English', 'ja': 'Japanese', 'ko': 'Korean',
-  'fr': 'French', 'de': 'German', 'es': 'Spanish',
-  'ru': 'Russian', 'pt': 'Portuguese', 'it': 'Italian',
-  'ar': 'Arabic', 'th': 'Thai', 'vi': 'Vietnamese'
-});
-
-// 友好错误提示映射
-const ERROR_MESSAGES = {
-  401: 'API Key 无效或已过期，请在设置中检查',
-  403: '无权限访问该模型，请确认 API Key 权限',
-  429: '请求过于频繁，请稍后再试',
-  500: '服务器内部错误，请稍后重试',
-  502: '网关错误，请检查网络连接',
-  503: '服务暂时不可用，请稍后重试',
-  504: '请求超时，请检查网络或更换模型',
-  RATE_LIMITED: '请求过于频繁，正在自动降速...'
-};
-
-// 请求超时时间（毫秒）
-const CLOUD_TIMEOUT_MS = 30000;
-const LOCAL_TIMEOUT_MS = 120000;
-const REQUEST_TIMEOUT_MS = 30000;
-
-// 批量翻译单批最大字符数（避免超出模型上下文或导致响应过长）
-// 注：实际运行时通过 getBatchConfig() 按 provider/model 动态获取
-const MAX_BATCH_CHARS = 4000;
-const DEFAULT_BATCH_SIZE = 20;
 
 // 按 provider + model 返回批量参数 { maxBatchChars, batchSize }
 function getBatchConfig(providerOverride = null) {
@@ -804,15 +786,13 @@ function scheduleCacheFlush() {
   }
 }
 
+/**
+ * 归一化缓存键文本（cache 模块）
+ * @param {string} text
+ * @returns {string}
+ */
 function normalizeCacheKeyText(text) {
-  if (!text) return '';
-  // 严格策略：只保留与语义无关的最小化归一化，避免不同文本因标点/引号/全角折叠成同一个键。
-  // 移除非可见字符和折叠连续空白即可；引号、破折号、省略号、全角半角差异视为不同文本。
-  return text
-    .normalize('NFC')                       // Unicode 组合字符归一化
-    .replace(/[\u200B-\u200F\uFEFF]/g, '')   // 去除零宽字符
-    .replace(/\s+/g, ' ')                   // 折叠连续空白
-    .trim();
+  return SW.normalizeCacheKeyText ? SW.normalizeCacheKeyText(text) : String(text || '').trim();
 }
 
 // ===== 缓存命中校验器 =====
@@ -839,20 +819,24 @@ const RULE3_MIN_TARGET_SCRIPT_RATIO = 0.5;
 const CJK_LANGS = new Set(['zh', 'ja', 'ko']);
 const LATIN_LANGS = new Set(['en', 'vi', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl']);
 
+/**
+ * 解析缓存键（cache 模块）
+ * @param {string} key
+ * @returns {{version:string,sourceLang:string,targetLang:string,style:string,text:string}}
+ */
 function parseCacheKey(key) {
-  // key 格式：version:sourceLang:targetLang:style:text，text 本身可能包含冒号
-  const parts = key.split(':');
-  return {
-    version: parts[0] || '',
-    sourceLang: parts[1] || 'auto',
-    targetLang: parts[2] || 'zh',
-    style: parts[3] || 'normal',
-    text: parts.slice(4).join(':')
-  };
+  return SW.parseCacheKey
+    ? SW.parseCacheKey(key)
+    : { version: '', sourceLang: 'auto', targetLang: 'zh', style: 'normal', text: '' };
 }
 
+/**
+ * 缓存键文本段（cache 模块）
+ * @param {string} key
+ * @returns {string}
+ */
 function getCacheKeyTextPart(key) {
-  return parseCacheKey(key).text;
+  return SW.getCacheKeyTextPart ? SW.getCacheKeyTextPart(key) : parseCacheKey(key).text;
 }
 
 function getLangFamily(lang) {
@@ -1039,12 +1023,19 @@ async function cleanupInvalidCacheEntries() {
   console.log(`[YuxTrans] 启动清理：移除 ${invalidKeys.length} 条无效缓存`);
 }
 
-// 缓存键版本，用于 prompt 策略或过滤规则发生重大变更时自动失效旧缓存
-const CACHE_KEY_VERSION = 'v2';
-
+/**
+ * 生成缓存键（cache 模块；style 默认读全局配置）
+ * @param {string} text
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @param {string|null} [style]
+ * @returns {string}
+ */
 function generateCacheKey(text, sourceLang, targetLang, style = null) {
   const resolvedStyle = style || config.translateStyle || 'normal';
-  return `${CACHE_KEY_VERSION}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
+  return SW.generateCacheKey
+    ? SW.generateCacheKey(text, sourceLang, targetLang, resolvedStyle)
+    : `${CACHE_KEY_VERSION}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
 }
 
 // ===== 性能指标（轻量本地埋点）=====
@@ -1193,9 +1184,17 @@ function resolveProviderConfig(providerOverride = null) {
   return config;
 }
 
+/**
+ * 档案 ID（providers 模块）
+ * @param {string} provider
+ * @param {string} model
+ * @param {string} localModel
+ * @returns {string}
+ */
 function makeProfileId(provider, model, localModel) {
-  const modelPart = model || localModel || 'default';
-  return `${provider}:${modelPart}`;
+  return SW.makeProfileId
+    ? SW.makeProfileId(provider, model, localModel)
+    : `${provider}:${model || localModel || 'default'}`;
 }
 
 function addOrUpdateProfile(profile) {
@@ -1291,31 +1290,25 @@ async function saveConfig(newConfig) {
 
 // ===== Prompt 构建（上下文增强）=====
 
+/**
+ * 构建翻译 Prompt（translate 模块）
+ * @param {string} text
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @param {object|null} context
+ * @returns {string}
+ */
 function buildTranslationPrompt(text, sourceLang, targetLang, context) {
-  const targetName = LANG_NAMES[targetLang] || targetLang;
-  const sourceName = sourceLang === 'auto' ? null : (LANG_NAMES[sourceLang] || sourceLang);
-  const styleHint = STYLE_PROMPTS[config.translateStyle] || '';
-
-  let prompt = `You are a professional translator. Translate the following text`;
-  if (sourceName) {
-    prompt += ` from ${sourceName}`;
+  if (SW.buildTranslationPrompt) {
+    return SW.buildTranslationPrompt(
+      text,
+      sourceLang,
+      targetLang,
+      config.translateStyle || 'normal',
+      context
+    );
   }
-  prompt += ` to ${targetName}.`;
-
-  if (styleHint) {
-    prompt += ` ${styleHint}`;
-  }
-
-  prompt += `
-STRICT OUTPUT RULES:
-- Provide ONLY the translation of the text below. No explanations, notes, markdown, or code fences.
-- Translate naturally, not word-by-word.
-- Preserve proper nouns, brand names, URLs, and code unchanged.
-- Keep numbers, punctuation marks, and formatting intact.
-- If the text is already in the target language or contains only proper nouns/code/numbers, return it unchanged.`;
-
-  prompt += `\n\nText to translate:\n${text}`;
-  return prompt;
+  return `Translate to ${targetLang}:\n${text}`;
 }
 
 // ===== 翻译核心 =====
@@ -1364,8 +1357,15 @@ function getFormat(providerOverride = null) {
 /**
  * 判断供应商是否支持 OpenAI 风格的 json_object 输出格式
  */
+/**
+ * 是否支持 JSON mode（providers 模块）
+ * @param {string} provider
+ * @returns {boolean}
+ */
 function supportsJsonMode(provider) {
-  return ['openai', 'qwen', 'deepseek', 'groq', 'moonshot', 'siliconflow'].includes(provider);
+  return SW.supportsJsonMode
+    ? SW.supportsJsonMode(provider)
+    : ['openai', 'qwen', 'deepseek', 'groq', 'moonshot', 'siliconflow'].includes(provider);
 }
 
 /**
@@ -1791,7 +1791,7 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, context 
 /**
  * Unicode 脚本区间定义（用于轻量语言检测）
  */
-const SCRIPT_RANGES = {
+const SCRIPT_RANGES = SW.SCRIPT_RANGES || {
   han: /[\u4e00-\u9fff\u3400-\u4dbf]/,
   hiragana: /[\u3040-\u309f]/,
   katakana: /[\u30a0-\u30ff]/,
@@ -1804,82 +1804,43 @@ const SCRIPT_RANGES = {
 };
 
 /**
- * 基于 Unicode 脚本分布检测文本语言
- * 返回最可能的 ISO-639-1 语言代码，无法判断时返回 'unknown'
+ * 基于 Unicode 脚本检测语言（lang 模块）
+ * @param {string} text
+ * @returns {string}
  */
 function detectLanguage(text) {
-  if (!text || text.trim().length === 0) return 'unknown';
-
-  const sample = text.slice(0, 500); // 只检测前 500 字符，足够且轻量
-  const scores = {
-    zh: 0, ja: 0, ko: 0, en: 0, ru: 0, ar: 0, th: 0, vi: 0, other: 0
-  };
-
-  for (const char of sample) {
-    if (SCRIPT_RANGES.han.test(char)) scores.zh++;
-    else if (SCRIPT_RANGES.hiragana.test(char) || SCRIPT_RANGES.katakana.test(char)) scores.ja++;
-    else if (SCRIPT_RANGES.hangul.test(char)) scores.ko++;
-    else if (SCRIPT_RANGES.cyrillic.test(char)) scores.ru++;
-    else if (SCRIPT_RANGES.arabic.test(char)) scores.ar++;
-    else if (SCRIPT_RANGES.thai.test(char)) scores.th++;
-    else if (SCRIPT_RANGES.latin.test(char)) {
-      scores.en++;
-      if (SCRIPT_RANGES.vietnamese.test(char)) scores.vi++;
-    }
-  }
-
-  // 日文判定：假名 + 少量汉字；纯汉字优先判中文
-  if (scores.ja > 0 && (scores.zh === 0 || scores.ja >= scores.zh * 0.3)) return 'ja';
-  if (scores.zh > 0) return 'zh';
-  if (scores.ko > 0) return 'ko';
-  if (scores.ru > 0) return 'ru';
-  if (scores.ar > 0) return 'ar';
-  if (scores.th > 0) return 'th';
-  if (scores.en > 0) return scores.vi > scores.en * 0.15 ? 'vi' : 'en';
-
-  return 'unknown';
+  return SW.detectLanguage ? SW.detectLanguage(text) : 'unknown';
 }
 
 /**
  * 根据检测到的源语言，决定实际目标语言
  * 核心规则：避免「同语种互译」，自动翻向常用对照语种
+ * @param {string} text
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @returns {string}
  */
 function resolveTargetLanguage(text, sourceLang, targetLang) {
   if (!config.autoDetectLang || sourceLang !== 'auto') {
     return targetLang;
   }
-
   const detected = detectLanguage(text);
-  if (detected === 'unknown') {
-    return targetLang;
+  if (SW.flipTargetIfSameLanguage) {
+    return SW.flipTargetIfSameLanguage(detected, targetLang);
   }
-
-  // 如果源语言已经等于目标语言，翻向常用对照语言
-  const normalizedTarget = targetLang.startsWith('zh') ? 'zh' : targetLang;
-  if (detected === normalizedTarget) {
-    const oppositeMap = {
-      zh: 'en',
-      ja: 'zh',
-      ko: 'zh',
-      en: 'zh',
-      ru: 'en',
-      ar: 'en',
-      th: 'en',
-      vi: 'en'
-    };
-    return oppositeMap[detected] || 'en';
-  }
-
   return targetLang;
 }
 
 /**
- * 当 sourceLang 为 auto 时，返回检测到的源语言代码
+ * 当 sourceLang 为 auto 时，返回检测到的源语言代码（lang 模块）
+ * @param {string} text
+ * @param {string} sourceLang
+ * @returns {string}
  */
 function resolveSourceLanguage(text, sourceLang) {
-  if (sourceLang !== 'auto') return sourceLang;
-  const detected = detectLanguage(text);
-  return detected === 'unknown' ? 'auto' : detected;
+  return SW.resolveSourceLanguage
+    ? SW.resolveSourceLanguage(text, sourceLang)
+    : sourceLang;
 }
 
 // ===== 翻译入口 =====
@@ -1887,11 +1848,15 @@ function resolveSourceLanguage(text, sourceLang) {
 /**
  * 判断某个供应商配置是否可用（本地只需 endpoint，云端需要 API Key）
  */
+/**
+ * 供应商是否可用（providers 模块）
+ * @param {object} providerConfig
+ * @returns {boolean}
+ */
 function isProviderAvailable(providerConfig) {
-  const p = providerConfig;
-  if (p.provider === 'local') return true;
-  if (p.provider === 'custom') return !!(p.customProvider?.endpoint && p.customProvider?.apiKey);
-  return !!(p.apiKey || p.customProvider?.apiKey);
+  return SW.isProviderAvailable
+    ? SW.isProviderAvailable(providerConfig)
+    : !!(providerConfig && (providerConfig.provider === 'local' || providerConfig.apiKey));
 }
 
 /**
@@ -3230,6 +3195,8 @@ if (typeof module !== 'undefined' && module.exports) {
     buildRequest,
     supportsJsonMode,
     generateCacheKey,
+    normalizeCacheKeyText,
+    parseCacheKey,
     formatError,
     toUserError,
     failResponse,
@@ -3243,13 +3210,17 @@ if (typeof module !== 'undefined' && module.exports) {
     isProviderAvailable,
     splitIntoCharBatches,
     buildBatchPrompt,
+    buildTranslationPrompt,
     resolveProviderConfig,
     getActiveProfile,
     addOrUpdateProfile,
     removeProfile,
     makeProfileId,
     ProductHelpers,
-    // 便于测试直接调用 helpers
-    ...ProductHelpers
+    SW,
+    // 便于测试直接调用 helpers / SW modules
+    ...ProductHelpers,
+    isKnownMessageAction: SW.isKnownMessageAction,
+    classifyMessageAction: SW.classifyMessageAction
   };
 }
