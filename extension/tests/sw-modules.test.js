@@ -17,6 +17,7 @@ require(path.join(libSw, 'lang.js'));
 require(path.join(libSw, 'message-actions.js'));
 require(path.join(libSw, 'translate-core.js'));
 require(path.join(libSw, 'scheduler.js'));
+require(path.join(libSw, 'placeholders.js'));
 
 const SW = globalThis.YuxTransSW;
 
@@ -145,4 +146,29 @@ test('scheduler：失败时从在途表移除并抛出', async () => {
   const exec = async () => { throw new Error('boom'); };
   await assert.rejects(() => SW.scheduleTranslation('ke', exec), /boom/);
   assert.strictEqual(SW.hasInflight('ke'), false);
+});
+
+test('placeholders：提取内联标签为占位符并按序还原', () => {
+  const src = 'Visit <a href="/x">our site</a> for <b>more</b>';
+  const { text, placeholders } = SW.extractPlaceholders(src);
+  assert.strictEqual(placeholders.length, 4); // <a>, </a>, <b>, </b>
+  assert.ok(text.includes('<t n="1">'));
+  assert.ok(!text.includes('<a'));
+  const restored = SW.restorePlaceholders(text, placeholders);
+  assert.strictEqual(restored, src);
+});
+
+test('placeholders：纯文本无占位符（原样返回）', () => {
+  const { text, placeholders } = SW.extractPlaceholders('Hello world 你好');
+  assert.strictEqual(text, 'Hello world 你好');
+  assert.strictEqual(placeholders.length, 0);
+  assert.strictEqual(SW.restorePlaceholders('译文', []), '译文');
+});
+
+test('placeholders：自闭合与带属性标签', () => {
+  const src = 'Line<br/>break <img src="a.png" alt="x"/>';
+  const { text, placeholders } = SW.extractPlaceholders(src);
+  assert.strictEqual(placeholders.length, 2);
+  const restored = SW.restorePlaceholders(text, placeholders);
+  assert.strictEqual(restored, src);
 });
