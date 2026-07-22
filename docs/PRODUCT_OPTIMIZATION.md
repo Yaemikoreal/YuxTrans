@@ -3,14 +3,14 @@
 > 范围：仅浏览器扩展（`extension/`）  
 > 日期：2026-07-21  
 > 依据：过期计划清理后的代码审视 + 使用者 / 产品经理视角  
-> **执行状态（2026-07-21）：Phase A–D 已落地**（见下方勾选）
+> **执行状态（2026-07-22）：Phase A–D 已落地并随扩展 v0.4.1 发布**（见下方勾选）
 
 ### 阶段完成勾选
 
 - [x] Phase A：triggerMode / enableStreaming / 安装与空档案 CTA / 隐私文案 / 版本号 / Popup 缓存条目
 - [x] Phase B：结构化错误 / 整页重试与统计 / 禁用本站 / ensureInitialized+DB 重试 / 语言列表 / 设置 IA+缓存说明
 - [x] Phase C：术语表 / 差译清缓存 / 站点双语记忆 / 离线模式
-- [x] Phase D：`lib/product-helpers.js` + 扩展单测 / package test 脚本 / CHANGELOG 0.4.0
+- [x] Phase D：`lib/product-helpers.js` + 扩展单测 / package test 脚本 / CHANGELOG 0.4.1
 
 ---
 
@@ -35,7 +35,7 @@
 
 | 版本与体量 | 数值 |
 |------------|------|
-| 版本 | `manifest` 0.4.0（设置页侧栏仍写 v0.3.0） |
+| 版本 | `manifest` 0.4.1（随本方案 Phase A–D 发布） |
 | 核心代码 | `background.js` ~2.5k 行 / `content.js` ~1.1k / `options.js` ~1.1k |
 | 测试 | `background.test.js` 22 项通过；无 content/popup E2E |
 | 主路径 | 划词浮窗 → 流式单句；整页 → 去重 + mini-batch 首屏 + 批量后续 |

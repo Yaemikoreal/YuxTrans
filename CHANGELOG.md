@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-07-21
+## [0.4.1] - 2026-07-22
 
 ### Added
 
@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **站点双语记忆** — 整页控制条切换双语/仅译文后按 hostname 记住。
 - **离线模式** — 仅允许本地模型与缓存，禁止云端请求与云端故障转移。
 - **可测纯函数模块** — `extension/lib/product-helpers.js` + 扩展单元测试。
+- **产品优化方案文档** — `docs/PRODUCT_OPTIMIZATION.md`（Phase A–D 已落地）。
 
 ### Changed
 
@@ -28,11 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 缓存设置补充短文不缓存（&lt;12 字符）说明。
 - Service Worker 消息处理统一 `ensureInitialized`；`loadCacheFromDB` / `flushCacheToDB` 经 `withDbRetry` 做 IndexedDB 一次重连。
 - 浏览器 `navigator.onLine=false` 时仍允许本地 Ollama（不再误拦 localhost）。
+- `.gitignore` 仅忽略根目录 `/lib/`，避免误伤 `extension/lib/`。
 
 ### Fixed
 
 - 修复设置中的触发模式与流式开关未驱动 content script 的问题。
 - 修复设置页版本号硬编码为 0.3.0 的不一致。
+
+## [0.4.0] - 2026-07-13
+
+### Added
+
+- **整页翻译控制条** — 进度可视化，支持取消 / 恢复原文 / 双语切换 / 关闭。
+- **双语 / 仅译文切换** — 整页完成后可一键切换对照与纯译文。
+
+### Changed
+
+- 默认并发提升，加快整页翻译。
+- 视觉系统现代化重构；`popup.css` 独立拆分；设计令牌对齐。
+- 简化 README，聚焦概况与快速使用。
 
 ## [0.3.0] - 2026-07-10
 
