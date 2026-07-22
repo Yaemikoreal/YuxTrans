@@ -3,14 +3,15 @@
 > 范围：仅浏览器扩展（`extension/`）  
 > 日期：2026-07-21  
 > 依据：过期计划清理后的代码审视 + 使用者 / 产品经理视角  
-> **执行状态（2026-07-22）：Phase A–D 已落地并随扩展 v0.4.1 发布**（见下方勾选）
+> **执行状态（2026-07-22 复核）：Phase A–D 表内动作已全部落地并通过审计/单测**（见下方勾选）  
+> 扩展版本：`manifest` 0.4.1；本轮补齐 A3 三步引导与 D1 `lib/sw/*` 拆分
 
 ### 阶段完成勾选
 
-- [x] Phase A：triggerMode / enableStreaming / 安装与空档案 CTA / 隐私文案 / 版本号 / Popup 缓存条目
+- [x] Phase A：triggerMode / enableStreaming / **三步首次引导** / 空档案 CTA / 隐私文案 / 版本号 / Popup 缓存条目
 - [x] Phase B：结构化错误 / 整页重试与统计 / 禁用本站 / ensureInitialized+DB 重试 / 语言列表 / 设置 IA+缓存说明
-- [x] Phase C：术语表 / 差译清缓存 / 站点双语记忆 / 离线模式
-- [x] Phase D：`lib/product-helpers.js` + 扩展单测 / package test 脚本 / CHANGELOG 0.4.1
+- [x] Phase C：术语表 / 差译清缓存 / 站点双语记忆 / 离线模式（C-e 悬停释义为可选，未做）
+- [x] Phase D：`lib/product-helpers.js` + **`lib/sw/{constants,cache-keys,providers-core,lang,message-actions,translate-core}`** + 扩展单测 / package test / CHANGELOG 0.4.1
 
 ---
 
@@ -35,9 +36,9 @@
 
 | 版本与体量 | 数值 |
 |------------|------|
-| 版本 | `manifest` 0.4.1（随本方案 Phase A–D 发布） |
-| 核心代码 | `background.js` ~2.5k 行 / `content.js` ~1.1k / `options.js` ~1.1k |
-| 测试 | `background.test.js` 22 项通过；无 content/popup E2E |
+| 版本 | `manifest` 0.4.1 |
+| 核心代码 | `background.js`（编排）+ `lib/sw/*` 纯模块 + `lib/product-helpers.js` |
+| 测试 | `extension/tests/*` 46 项通过（含 product-helpers / sw-modules）；无浏览器 E2E |
 | 主路径 | 划词浮窗 → 流式单句；整页 → 去重 + mini-batch 首屏 + 批量后续 |
 
 ---
@@ -177,7 +178,7 @@
 |----|------|----------|
 | A1 | `content.js` 读取并遵守 `triggerMode`：`auto` 直接译、`icon` 浮钮、`contextMenu` 不弹钮 | C1 |
 | A2 | 划词 / 整页尊重 `enableStreaming`：关则走 `translate` | C2 |
-| A3 | 首次安装：`onInstalled` 打开 options 或轻量欢迎页（3 步：选本地/云端 → 填 Key 或检测 Ollama → 试译一句） | C3 |
+| A3 | 首次安装：`onInstalled` 打开 options；设置页三步引导（选本地/云端 → 填 Key 或检测 Ollama → 试译 Hello） | C3 |
 | A4 | 去掉「加密存储」措辞，改为「仅保存在本机浏览器，不会上传到 YuxTrans 服务器」 | C4 |
 | A5 | 版本号统一读 `manifest.version`；修 options 硬编码 | C5 |
 | A6 | Popup 无档案时主按钮改为「去配置翻译服务」并 `openOptionsPage` | C3 |
@@ -223,10 +224,10 @@
 
 | 项 | 动作 |
 |----|------|
-| D1 | 拆分 `background.js`：`cache` / `providers` / `translate` / `messages`（可先无构建，多 script 或简单 concat） |
-| D2 | 为 `content` 关键路径加可测纯函数 + 扩展测试用例 |
-| D3 | 最小 CI：`node --test extension/tests/` |
-| D4 | 发版检查清单：版本三处一致、CHANGELOG、zip 打包 |
+| D1 | 拆分：`lib/sw/cache-keys` · `providers-core` · `translate-core` · `message-actions`（+ constants/lang）；SW 经 `importScripts` 加载；**有状态** I/O 与 onMessage 编排仍在 `background.js`（刻意保留） |
+| D2 | 为 content/产品路径加可测纯函数 + `product-helpers` / `sw-modules` 单测 |
+| D3 | 最小测试入口：`npm test` → `node --test extension/tests/*.test.js` |
+| D4 | 发版检查：manifest 版本、CHANGELOG、zip（v0.4.1 已发） |
 
 ---
 

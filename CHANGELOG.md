@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **品牌 Logo 适配** — 以 `logo/logo.png` 生成 `extension/icons` 16/32/48/128；Popup/Options 展示品牌标；`scripts/generate_extension_icons.py` 可重生成。
+- **首次安装三步引导** — 设置页向导：选本地/云端 → 配置 Key 或检测 Ollama → 试译 Hello。
+- **Service Worker 模块拆分** — `extension/lib/sw/`：`constants` / `cache-keys` / `providers-core` / `lang` / `message-actions` / `translate-core`（`importScripts` 加载）。
+- **UI 纯策略 helpers** — `formatUserErrorCompact`、`pageControlCompletedActions`、`shouldCollapsePopupStats`。
+
+### Changed
+
+- 扩展单测覆盖首次引导门禁与 SW 模块；`npm test` 覆盖 `extension/tests/*.test.js`。
+- **书房衬纸 UI 落地（P0–P1）** — 铅字 paper-toggle；Popup 用量折叠；整页控制条主次分离；设置侧栏任务化中文；状态色/模态走 design tokens；暗色阴影去纯黑胶囊风格。
+
+### Removed
+
+- **归档 Python 桌面客户端与孤岛工具** - 删除 `yuxtrans/desktop/`、六个零调用方 utils（memory / style / terminology / text_processing / startup / setup_wizard）、冗余 `setup.py`、孤儿 `benchmark/` 与 `test-options.js` + jsdom 依赖；Python 包仅保留 engine + cache 作最小可复用库，浏览器扩展为主产品。
+- 误导性安装脚本 `install.sh` / `install.bat`（宣传已不存在的 `yuxtrans --help` CLI 与桌面端 entry point）。
+
+### Fixed
+
+- 修复 `cloud.translate_stream` 用普通 `for` 遍历 httpx 异步生成器导致运行时 `TypeError`（改 `async for`）。
+- 修复 `router.preload` 将同步 `_preload_popular()` 返回值（None）塞入 `asyncio.gather` 导致 `TypeError`（改为直接调用同步预热、仅 gather 异步协程）。
+
 ## [0.4.1] - 2026-07-22
 
 ### Added

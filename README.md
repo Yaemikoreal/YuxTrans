@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="extension/icons/icon128.png" width="88" alt="YuxTrans Logo">
+  <img src="extension/icons/icon128.png" width="96" alt="YuxTrans Logo">
 </p>
 
 <h1 align="center">YuxTrans</h1>
@@ -29,7 +29,7 @@ YuxTrans 是一个**纯浏览器扩展**，不需要 Python 后端。它在 Serv
 
 - **本地优先**：原生支持 Ollama，敏感文本不出户，离线也能翻译。
 - **自动故障转移**：本地模型不可用或云端限流时，自动切换备用供应商。
-- **物理定额缓存**：默认 200MB IndexedDB 缓存 + 预置热词库，命中时毫秒级返回。
+- **物理定额缓存**：默认 200MB IndexedDB 缓存，命中时毫秒级返回。
 - **档案式模型管理**：在设置页保存多组「ProviderProfile」，popup 中一键切换模型。
 - **现代简约视觉**：清透原生质感，让工具退后、内容向前。
 
