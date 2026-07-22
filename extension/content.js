@@ -27,6 +27,8 @@ class YuxTransContent {
     this._isProcessingAdded = false;
     this._pageSessionId = null; // 当前整页/动态翻译会话 id，用于 SW 侧取消
     this._pageSessionCounter = 0;
+    this._viewportObserver = null; // belowFold 视口感知：入视口才提交翻译
+    this._viewportCleanup = null; // belowFold 取消回调（放弃未提交项）
     this.pageControl = null;
     this.config = {
       concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
@@ -1046,38 +1048,32 @@ class YuxTransContent {
         });
       }
 
-      // 2. 后续区域批量翻译（随到随渲染）
+      // 2. belowFold 视口感知翻译：入视口（200px 预加载区）才提交批次，
+      //    取代一次性全提交以节省配额；2s 超时回退避免用户不滚动时 await 卡死。
       const appliedTexts = new Set();
-      let lastBatchCompleted = 0;
-      if (belowFoldItems.length > 0 && this.pageTranslationState.isTranslating) {
-        await this.translateBatchParallel(
-          belowFoldItems,
-          (completed, total) => {
-            reportProgress(completed - lastBatchCompleted);
-            lastBatchCompleted = completed;
-          },
-          (indices, nodes, results) => {
-            // 每个 batch 完成立即渲染
-            results.forEach((res, localIdx) => {
-              const item = nodes[localIdx];
-              if (res && res.success) {
-                uniqueTexts.get(item.text).translation = res.text;
-                appliedTexts.add(item.text);
-                if (res.cached) this.pageTranslationState.cacheHits++;
-                else this.pageTranslationState.apiCount++;
-                this.applyTranslation(item.nodeInfo, res.text);
-              }
-            });
-          }
-        );
-        // 记录失败项
-        belowFoldItems.forEach((item) => {
-          const resultItem = uniqueTexts.get(item.text);
-          if (!resultItem.translation && !resultItem.error) {
-            resultItem.error = '翻译失败';
+      const belowFoldOnBatchResult = (indices, nodes, results) => {
+        if (this.pageTranslationState.cancelRequested) return;
+        results.forEach((res, localIdx) => {
+          const item = nodes[localIdx];
+          if (res && res.success) {
+            const resultItem = uniqueTexts.get(item.text);
+            if (resultItem) resultItem.translation = res.text;
+            appliedTexts.add(item.text);
+            if (res.cached) this.pageTranslationState.cacheHits++;
+            else this.pageTranslationState.apiCount++;
+            this.applyTranslation(item.nodeInfo, res.text);
+          } else {
+            const resultItem = uniqueTexts.get(item.text);
+            if (resultItem && !resultItem.translation) resultItem.error = '翻译失败';
           }
         });
+      };
+      if (belowFoldItems.length > 0 && this.pageTranslationState.isTranslating) {
+        await this._translateBelowFoldViaViewport(belowFoldItems, belowFoldOnBatchResult);
       }
+
+      // 取消场景：restoreOriginalTexts 已恢复原文，跳过应用结果与完成收尾
+      if (this.pageTranslationState.cancelRequested) return;
 
       // 3. 应用翻译结果（包括重复文本；applyTranslation 内部已做去重）
       let successCount = 0;
@@ -1477,6 +1473,12 @@ class YuxTransContent {
       } catch (e) { /* SW 未就绪忽略 */ }
       this._pageSessionId = null;
     }
+    // 放弃 belowFold 视口感知中未提交的项，让 translatePage 的 await 尽快结束
+    if (this._viewportCleanup) {
+      const cleanup = this._viewportCleanup;
+      this._viewportCleanup = null;
+      cleanup();
+    }
   }
 
   restoreOriginalTexts() {
@@ -1544,6 +1546,107 @@ class YuxTransContent {
       this._dynamicObserver.disconnect();
       this._dynamicObserver = null;
     }
+  }
+
+  /**
+   * 断开 belowFold 视口观察者
+   */
+  _disconnectViewportObserver() {
+    if (this._viewportObserver) {
+      this._viewportObserver.disconnect();
+      this._viewportObserver = null;
+    }
+  }
+
+  /**
+   * belowFold 视口感知翻译：节点进入视口（200px 预加载区）才提交批次，
+   * 取代一次性全提交以节省配额；2s 超时后剩余项回退一次性提交避免 await 卡死。
+   * @param {Array} items belowFold 去重后的待译项
+   * @param {Function} onBatchResult 每个 batch 完成回调
+   * @returns {Promise<void>}
+   */
+  _translateBelowFoldViaViewport(items, onBatchResult) {
+    return new Promise((resolve) => {
+      if (!items || items.length === 0) { resolve(); return; }
+
+      // 元素 -> 其下待译项（多文本节点共享同一 parentElement）
+      const elementToItems = new Map();
+      for (const item of items) {
+        const el = item.nodeInfo && item.nodeInfo.node && item.nodeInfo.node.parentElement;
+        if (!el) continue;
+        if (!elementToItems.has(el)) elementToItems.set(el, []);
+        elementToItems.get(el).push(item);
+      }
+      if (elementToItems.size === 0) { resolve(); return; }
+
+      const pending = new Set(items);
+      let pendingBatch = [];
+      let submitTimer = null;
+      let fallbackTimer = null;
+      let activeBatches = 0;
+      let resolved = false;
+
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (submitTimer) clearTimeout(submitTimer);
+        this._viewportCleanup = null;
+        this._disconnectViewportObserver();
+        resolve();
+      };
+
+      // 取消回调：放弃未提交项，在途批次自行结束后 finish
+      this._viewportCleanup = () => {
+        pending.clear();
+        pendingBatch = [];
+        if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+        if (submitTimer) { clearTimeout(submitTimer); submitTimer = null; }
+        if (activeBatches === 0) finish();
+      };
+
+      const submit = async () => {
+        if (pendingBatch.length === 0) { finish(); return; }
+        const batch = pendingBatch;
+        pendingBatch = [];
+        activeBatches++;
+        try {
+          if (!this.pageTranslationState.cancelRequested && this.pageTranslationState.isTranslating) {
+            await this.translateBatchParallel(batch, null, onBatchResult);
+          }
+        } catch (e) { /* 单批异常不中断整体 */ }
+        activeBatches--;
+        finish();
+      };
+
+      // 超时回退：2s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
+      fallbackTimer = setTimeout(() => {
+        for (const it of pending) pendingBatch.push(it);
+        pending.clear();
+        if (!submitTimer) submit();
+      }, 2000);
+
+      this._viewportObserver = new IntersectionObserver((entries) => {
+        if (this.pageTranslationState.cancelRequested || resolved) return;
+        let added = false;
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const its = elementToItems.get(entry.target);
+            if (its) {
+              for (const it of its) {
+                if (pending.has(it)) { pendingBatch.push(it); pending.delete(it); added = true; }
+              }
+              this._viewportObserver.unobserve(entry.target);
+            }
+          }
+        }
+        if (added && !submitTimer) {
+          submitTimer = setTimeout(() => { submitTimer = null; submit(); }, 100);
+        }
+      }, { rootMargin: '200px' });
+
+      for (const el of elementToItems.keys()) this._viewportObserver.observe(el);
+    });
   }
 
   _onMutations(mutations) {
