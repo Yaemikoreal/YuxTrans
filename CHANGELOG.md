@@ -14,9 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Service Worker 模块拆分** — `extension/lib/sw/`：`constants` / `cache-keys` / `providers-core` / `lang` / `message-actions` / `translate-core`（`importScripts` 加载）。
 - **UI 纯策略 helpers** — `formatUserErrorCompact`、`pageControlCompletedActions`、`shouldCollapsePopupStats`。
 
+- **整页翻译用户取消链路** - `cancelTranslate` action + SW 会话级 AbortController：恢复原文/重入时 abort 在途请求并阻止后续批次，停止翻译后不再继续消耗配额。
+- **belowFold 视口感知翻译** - 非首屏节点注册 IntersectionObserver（200px 预加载区），入视口才提交批次取代一次性全提交，节省未浏览内容的配额；2s 超时回退避免卡死。
+- **在途翻译去重调度器** - `lib/sw/scheduler.js`：相同 cacheKey 的并发请求共享一次结果（划词+整页+动态同文本不重复请求），优先级分级（划词 > 视口 > 批次）。
+- **批量翻译滑动窗口上下文** - 上一批末尾原文+译文透传到下一批 prompt（标记勿重译），提升跨段指代与连贯性。
+- **内联标签占位符保护工具** - `lib/sw/placeholders.js`：`extractPlaceholders`/`restorePlaceholders` 将 HTML 标签替换为 `<t n="N">` 占位并按序还原。
+
 ### Changed
 
 - 扩展单测覆盖首次引导门禁与 SW 模块；`npm test` 覆盖 `extension/tests/*.test.js`。
+- **缓存键编入 prompt 版本与模型** - `CACHE_KEY_VERSION` 升至 v3，键内含 `PROMPT_VERSION` + 当前模型 slug，prompt 规则或模型变更后旧缓存自然失效，修复术语表/模型切换后旧译文误命中；顺手清理 `yuxtrans-spin` 关键帧与 spinner 样式残骸。
 - **书房衬纸 UI 落地（P0–P1）** — 铅字 paper-toggle；Popup 用量折叠；整页控制条主次分离；设置侧栏任务化中文；状态色/模态走 design tokens；暗色阴影去纯黑胶囊风格。
 
 ### Removed
