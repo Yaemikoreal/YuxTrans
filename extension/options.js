@@ -980,12 +980,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   testProviderBtn?.addEventListener('click', () => handleTestConnection(providerSelect.value, testProviderBtn));
   testLocalBtn?.addEventListener('click', () => handleTestConnection('local', testLocalBtn));
 
+  // 自定义端点按需申请域名权限（optional_host_permissions，不预先放开全域名）
+  async function ensureCustomHostPermission(endpoint) {
+    if (!endpoint) return true;
+    if (typeof chrome === 'undefined' || !chrome.permissions) return true;
+    try {
+      const pattern = new URL(endpoint).origin + '/*';
+      if (await chrome.permissions.contains({ origins: [pattern] })) return true;
+      return await chrome.permissions.request({ origins: [pattern] });
+    } catch (e) {
+      return false;
+    }
+  }
+
   // 自定义供应商连接测试
   const testCustomBtn = getById('testCustomBtn');
-  testCustomBtn?.addEventListener('click', () => {
+  testCustomBtn?.addEventListener('click', async () => {
+    const endpoint = customEndpointInput.value.trim();
+    if (endpoint && !await ensureCustomHostPermission(endpoint)) {
+      showCustomTestResult('未授权该端点域名，已取消测试', 'error');
+      return;
+    }
     handleTestConnection('custom', testCustomBtn, {
       apiKey: customApiKeyInput.value.trim(),
-      endpoint: customEndpointInput.value.trim(),
+      endpoint,
       model: getCustomModelValue()
     });
   });
@@ -1059,6 +1077,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!endpoint) { showStatus('请先填写 API 端点地址', 'error'); return; }
     if (!apiKey) { showStatus('请先填写 API Key', 'error'); return; }
+    if (!await ensureCustomHostPermission(endpoint)) {
+      showStatus('未授权该端点域名，已取消获取', 'error'); return;
+    }
 
     fetchCustomModelsBtn.disabled = true;
     const originalText = fetchCustomModelsBtn.textContent;

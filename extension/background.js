@@ -1591,6 +1591,20 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
     throw new Error('请配置自定义 API 地址');
   }
 
+  // 自定义端点需已授权域名（optional_host_permissions 按需申请，见 options 页测试连接/获取模型）
+  if (p.provider === 'custom' && endpoint && typeof chrome !== 'undefined' && chrome.permissions) {
+    try {
+      const originPattern = new URL(endpoint).origin + '/*';
+      const hasHost = await chrome.permissions.contains({ origins: [originPattern] });
+      if (!hasHost) {
+        throw new Error('该自定义端点域名未授权，请在设置页点击「测试连接」或「获取模型」以授权');
+      }
+    } catch (permErr) {
+      if (permErr && permErr.message && permErr.message.includes('未授权')) throw permErr;
+      // URL 解析等异常不阻断，交由后续 fetch 暴露真实错误
+    }
+  }
+
   // 应用速率延迟
   await applyRateDelay();
 
