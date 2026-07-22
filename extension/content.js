@@ -131,9 +131,6 @@ class YuxTransContent {
         from { opacity: 0; }
         to { opacity: 1; }
       }
-      @keyframes yuxtrans-spin {
-        to { transform: rotate(360deg); }
-      }
     ;`
     document.head.appendChild(style);
   }

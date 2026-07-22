@@ -817,7 +817,7 @@ const LATIN_LANGS = new Set(['en', 'vi', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'pl
 /**
  * 解析缓存键（cache 模块）
  * @param {string} key
- * @returns {{version:string,sourceLang:string,targetLang:string,style:string,text:string}}
+ * @returns {{version:string,promptVersion:string,model:string,sourceLang:string,targetLang:string,style:string,text:string}}
  */
 function parseCacheKey(key) {
   return SW.parseCacheKey
@@ -1028,9 +1028,12 @@ async function cleanupInvalidCacheEntries() {
  */
 function generateCacheKey(text, sourceLang, targetLang, style = null) {
   const resolvedStyle = style || config.translateStyle || 'normal';
+  // 编入当前 model：不同模型译文各自独立缓存，避免切档案对比时读到旧模型缓存
+  const pc = resolveProviderConfig();
+  const model = pc.model || pc.localModel || '';
   return SW.generateCacheKey
-    ? SW.generateCacheKey(text, sourceLang, targetLang, resolvedStyle)
-    : `${CACHE_KEY_VERSION}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
+    ? SW.generateCacheKey(text, sourceLang, targetLang, resolvedStyle, model)
+    : `${CACHE_KEY_VERSION}:${SW.PROMPT_VERSION || 'p1'}:${SW.modelSlug ? SW.modelSlug(model) : (model || '_')}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
 }
 
 // ===== 性能指标（轻量本地埋点）=====

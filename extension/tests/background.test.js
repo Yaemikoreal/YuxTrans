@@ -10,13 +10,22 @@ require('./mock-chrome.js');
 const bg = require('../background.js');
 
 test('generateCacheKey 拼接规则', () => {
-  assert.strictEqual(bg.generateCacheKey('Hello', 'auto', 'zh'), 'v2:auto:zh:normal:Hello');
-  assert.strictEqual(bg.generateCacheKey('a:b', 'en', 'zh-TW'), 'v2:en:zh-TW:normal:a:b');
+  const k = bg.generateCacheKey('Hello', 'auto', 'zh');
+  assert.ok(k.startsWith('v3:p1:'), '含 version + promptVersion');
+  assert.ok(k.endsWith(':auto:zh:normal:Hello'), 'lang/style/text 后缀');
+  // model 段非空（包装函数注入了当前模型）
+  assert.ok(k.split(':')[2].length > 0, 'model 段非空');
+  // text 含冒号时 parseCacheKey 仍能正确还原（不被冒号破坏分段）
+  const k2 = bg.generateCacheKey('a:b', 'en', 'zh-TW');
+  const parsed = bg.parseCacheKey(k2);
+  assert.strictEqual(parsed.sourceLang, 'en');
+  assert.strictEqual(parsed.targetLang, 'zh-TW');
+  assert.strictEqual(parsed.text, 'a:b');
 });
 
 test('normalizeCacheKeyText 去除噪声并折叠空白', () => {
-  assert.strictEqual(bg.generateCacheKey('  Hello   world  ', 'auto', 'zh'), 'v2:auto:zh:normal:Hello world');
-  assert.strictEqual(bg.generateCacheKey('Hello\u200Bworld', 'auto', 'zh'), 'v2:auto:zh:normal:Helloworld');
+  assert.ok(bg.generateCacheKey('  Hello   world  ', 'auto', 'zh').endsWith(':auto:zh:normal:Hello world'));
+  assert.ok(bg.generateCacheKey('Hello\u200Bworld', 'auto', 'zh').endsWith(':auto:zh:normal:Helloworld'));
   assert.strictEqual(
     bg.generateCacheKey('Hello \u200B world', 'auto', 'zh'),
     bg.generateCacheKey('Hello world', 'auto', 'zh')

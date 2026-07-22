@@ -37,18 +37,38 @@ test('SW 模块文件均存在', () => {
 test('constants：端点与默认模型', () => {
   assert.ok(SW.API_ENDPOINTS.qwen.includes('dashscope'));
   assert.ok(SW.API_ENDPOINTS.local.includes('11434'));
-  assert.strictEqual(SW.CACHE_KEY_VERSION, 'v2');
+  assert.strictEqual(SW.CACHE_KEY_VERSION, 'v3');
+  assert.strictEqual(SW.PROMPT_VERSION, 'p1');
   assert.ok(SW.DEFAULT_MODELS.openai.length > 0);
 });
 
 test('cache-keys：归一化与生成', () => {
   assert.strictEqual(SW.normalizeCacheKeyText('  a   b  '), 'a b');
+  // 不传 model -> model 段为 '_'
   const key = SW.generateCacheKey('Hello world', 'en', 'zh', 'normal');
-  assert.ok(key.startsWith('v2:en:zh:normal:'));
+  assert.ok(key.startsWith('v3:p1:_:en:zh:normal:'));
   const parsed = SW.parseCacheKey(key);
+  assert.strictEqual(parsed.promptVersion, 'p1');
+  assert.strictEqual(parsed.model, '_');
   assert.strictEqual(parsed.sourceLang, 'en');
   assert.strictEqual(parsed.targetLang, 'zh');
   assert.strictEqual(parsed.text, 'Hello world');
+});
+
+test('cache-keys：model 隔离与 slug 化', () => {
+  const t = 'Hello';
+  // 不同模型产生不同键（切档案对比效果不被旧模型缓存污染）
+  const k1 = SW.generateCacheKey(t, 'en', 'zh', 'normal', 'gpt-4o');
+  const k2 = SW.generateCacheKey(t, 'en', 'zh', 'normal', 'qwen-turbo');
+  assert.notStrictEqual(k1, k2);
+  assert.ok(k1.includes(':gpt-4o:'));
+  assert.ok(k2.includes(':qwen-turbo:'));
+  // 模型名含冒号（ollama qwen2:7b）被 slug 化，不破坏键分段
+  const k3 = SW.generateCacheKey(t, 'en', 'zh', 'normal', 'qwen2:7b');
+  assert.ok(k3.includes(':qwen2-7b:'));
+  const p3 = SW.parseCacheKey(k3);
+  assert.strictEqual(p3.model, 'qwen2-7b');
+  assert.strictEqual(p3.text, 'Hello');
 });
 
 test('providers-core：默认模型与 JSON mode', () => {

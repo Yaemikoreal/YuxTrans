@@ -68,7 +68,11 @@
   SW.REQUEST_TIMEOUT_MS = 30000;
   SW.MAX_BATCH_CHARS = 4000;
   SW.DEFAULT_BATCH_SIZE = 20;
-  SW.CACHE_KEY_VERSION = 'v2';
+  // Prompt 规则版本：STRICT OUTPUT RULES / 上下文注入等 prompt 结构变更时 bump，
+  // 配合 CACHE_KEY_VERSION 让旧缓存自动失效，避免译文错配。
+  SW.PROMPT_VERSION = 'p1';
+  // v3：键内编入 promptVersion + model，术语表/模型/prompt 变更后旧缓存不再误命中。
+  SW.CACHE_KEY_VERSION = 'v3';
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = SW;
