@@ -204,6 +204,16 @@ test('buildBatchPrompt 包含必要格式要求但不注入页面上下文', () 
   assert.ok(!prompt.includes('example.com'));
 });
 
+test('buildBatchPrompt 注入上一批滑动窗口上下文（标记勿重译）', () => {
+  const prompt = bg.buildBatchPrompt(['Next'], 'en', 'zh', {
+    prevContext: { source: 'Previous text', translation: '上一段译文' }
+  });
+  assert.ok(prompt.includes('Previous segment'));
+  assert.ok(prompt.includes('do NOT re-translate'));
+  assert.ok(prompt.includes('Previous text'));
+  assert.ok(prompt.includes('上一段译文'));
+});
+
 test('makeProfileId 生成稳定 ID', () => {
   assert.strictEqual(bg.makeProfileId('qwen', 'qwen-turbo', ''), 'qwen:qwen-turbo');
   assert.strictEqual(bg.makeProfileId('local', '', 'qwen3.5:0.8b'), 'local:qwen3.5:0.8b');

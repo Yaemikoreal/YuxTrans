@@ -2128,7 +2128,13 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
 
   prompt += `\n\nExample:\nInput: ["Hello", "GitHub"]\nOutput: ["你好", "GitHub"]`;
 
-  // 批量翻译不注入任何页面上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
+  // 批量翻译不注入页面级上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
+  // 但注入上一批末尾的「原文+译文」作为滑动窗口，提升跨段指代与连贯性（明确标记勿重译）。
+  if (context && context.prevContext && context.prevContext.source) {
+    prompt += `\n\nPrevious segment (for reference ONLY, do NOT re-translate or include in output):`;
+    prompt += `\nSource: ${String(context.prevContext.source).slice(0, 300)}`;
+    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 300)}`;
+  }
   prompt += `\n\nInput:\n${JSON.stringify(groupTexts)}`;
   return prompt;
 }
@@ -2207,6 +2213,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
   for (const [groupKey, groupItems] of langGroups) {
     const [groupSourceLang, groupTargetLang] = groupKey.split(':');
     const subBatches = splitIntoCharBatches(groupItems, maxBatchChars);
+    let windowContext = null; // 该语言组的滑动窗口：上一批末尾原文+译文
 
     for (const batchItems of subBatches) {
       if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
@@ -2228,7 +2235,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       });
 
       const groupTexts = uniqueItems.map((item) => item.text);
-      const prompt = buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context);
+      const prompt = buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, { prevContext: windowContext });
 
       // 发送请求并解析（先应用速率延迟）
       let jsonParsed = false;
@@ -2325,6 +2332,18 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
             invalidUniqueIndices.push(i);
           }
         });
+
+        // 更新滑动窗口：取本批末尾有效项的原文+译文，供下一批参考（勿重译）
+        for (let wi = groupTexts.length - 1; wi >= 0; wi--) {
+          const wt = batchOutput[wi];
+          if (groupTexts[wi] && wt && typeof wt === 'string' && wt.trim()) {
+            windowContext = {
+              source: String(groupTexts[wi]).slice(0, 300),
+              translation: String(wt).trim().slice(0, 300)
+            };
+            break;
+          }
+        }
 
         const validOriginalCount = uniqueItems
           .filter((_, i) => !invalidUniqueIndices.includes(i))
