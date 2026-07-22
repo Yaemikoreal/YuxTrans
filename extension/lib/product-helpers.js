@@ -116,7 +116,7 @@
     const map = {
       AUTH: {
         userMessage: 'API Key 无效或权限不足',
-        actionHint: '请打开设置检查并保存供应商档案'
+        actionHint: '请打开设置检查并保存服务档案'
       },
       RATE_LIMIT: {
         userMessage: '请求过于频繁，请稍后重试',
@@ -164,7 +164,7 @@
   }
 
   /**
-   * 格式化用户可见错误字符串
+   * 格式化用户可见错误字符串（完整，含空行分隔）
    * @param {ReturnType<typeof buildUserError>} err
    * @returns {string}
    */
@@ -172,6 +172,43 @@
     if (!err) return '翻译失败';
     if (err.actionHint) return `${err.userMessage}\n\n${err.actionHint}`;
     return err.userMessage || '翻译失败';
+  }
+
+  /**
+   * 紧凑错误文案：结论一行 + 行动一行（划词浮层用）
+   * @param {ReturnType<typeof buildUserError>|object|null} err
+   * @param {number} [maxMsg=72]
+   * @param {number} [maxHint=56]
+   * @returns {string}
+   */
+  function formatUserErrorCompact(err, maxMsg = 72, maxHint = 56) {
+    if (!err) return '翻译失败';
+    const rawMsg = String(err.userMessage || err.message || '翻译失败').split('\n')[0].trim();
+    const rawHint = String(err.actionHint || '').split('\n')[0].trim();
+    const msg = rawMsg.length > maxMsg ? `${rawMsg.slice(0, maxMsg - 1)}…` : rawMsg;
+    if (!rawHint) return msg || '翻译失败';
+    const hint = rawHint.length > maxHint ? `${rawHint.slice(0, maxHint - 1)}…` : rawHint;
+    return `${msg}\n${hint}`;
+  }
+
+  /**
+   * 整页控制条完成态：哪些按钮应作为主操作可见
+   * @param {{ hasFailures?: boolean }} opts
+   * @returns {{ primary: string[], secondary: string[] }}
+   */
+  function pageControlCompletedActions(opts = {}) {
+    const primary = ['restore', 'bilingual', 'close'];
+    const secondary = ['disableSite'];
+    if (opts.hasFailures) secondary.unshift('retry');
+    return { primary, secondary };
+  }
+
+  /**
+   * Popup 用量区是否默认折叠（信息降噪）
+   * @returns {boolean}
+   */
+  function shouldCollapsePopupStats() {
+    return true;
   }
 
   /**
@@ -345,6 +382,75 @@
     );
   }
 
+  /** 首次引导试译句 */
+  const FIRST_RUN_TRIAL_TEXT = 'Hello';
+
+  /**
+   * 解析首次引导路径
+   * @param {string} path
+   * @returns {'local'|'cloud'|null}
+   */
+  function resolveFirstRunPath(path) {
+    if (path === 'local' || path === 'cloud') return path;
+    return null;
+  }
+
+  /**
+   * 是否可进入下一步
+   * @param {1|2|3} step
+   * @param {{path?:string,provider?:string,apiKey?:string,ollamaOk?:boolean,localModel?:string,trialOk?:boolean}} state
+   * @returns {boolean}
+   */
+  function canAdvanceFirstRunStep(step, state = {}) {
+    if (step === 1) return !!resolveFirstRunPath(state.path);
+    if (step === 2) {
+      if (state.path === 'local') return !!state.ollamaOk;
+      if (state.path === 'cloud') {
+        const key = String(state.apiKey || '').trim();
+        const provider = state.provider || '';
+        return !!(provider && provider !== 'local' && key);
+      }
+      return false;
+    }
+    if (step === 3) return !!state.trialOk;
+    return false;
+  }
+
+  /**
+   * 根据引导状态构建档案草稿
+   * @param {{path?:string,provider?:string,apiKey?:string,model?:string,localModel?:string}} state
+   * @returns {object}
+   */
+  function buildFirstRunProfileDraft(state = {}) {
+    if (state.path === 'local') {
+      return {
+        provider: 'local',
+        localModel: state.localModel || 'qwen3.5:0.8b',
+        apiKey: '',
+        model: '',
+        apiEndpoint: '',
+        label: '本地 Ollama（首次引导）'
+      };
+    }
+    const provider = state.provider || 'qwen';
+    return {
+      provider,
+      apiKey: String(state.apiKey || '').trim(),
+      model: state.model || '',
+      localModel: '',
+      apiEndpoint: '',
+      label: `云端 ${provider}（首次引导）`
+    };
+  }
+
+  /**
+   * 试译原文
+   * @returns {string}
+   */
+  function getFirstRunTrialText() {
+    return FIRST_RUN_TRIAL_TEXT;
+  }
+
   return {
     resolveTriggerAction,
     shouldShowFloatButton,
@@ -353,6 +459,9 @@
     resolveTranslateAction,
     buildUserError,
     formatUserErrorText,
+    formatUserErrorCompact,
+    pageControlCompletedActions,
+    shouldCollapsePopupStats,
     applyGlossary,
     parseGlossaryImport,
     isCloudRequestAllowed,
@@ -360,6 +469,11 @@
     checkOfflineGate,
     resolveSiteBilingualMode,
     addHostnameToList,
-    removeHostnameFromList
+    removeHostnameFromList,
+    FIRST_RUN_TRIAL_TEXT,
+    resolveFirstRunPath,
+    canAdvanceFirstRunStep,
+    buildFirstRunProfileDraft,
+    getFirstRunTrialText
   };
 });

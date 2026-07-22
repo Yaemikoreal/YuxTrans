@@ -131,3 +131,77 @@ test('addHostnameToList / removeHostnameFromList', () => {
   const c = H.removeHostnameFromList(['a.com', 'b.com'], 'a.com');
   assert.deepStrictEqual(c, ['b.com']);
 });
+
+test('首次引导：路径解析与步骤门禁', () => {
+  assert.strictEqual(H.resolveFirstRunPath('local'), 'local');
+  assert.strictEqual(H.resolveFirstRunPath('cloud'), 'cloud');
+  assert.strictEqual(H.resolveFirstRunPath('other'), null);
+
+  assert.strictEqual(H.canAdvanceFirstRunStep(1, { path: 'local' }), true);
+  assert.strictEqual(H.canAdvanceFirstRunStep(1, {}), false);
+
+  assert.strictEqual(H.canAdvanceFirstRunStep(2, { path: 'local', ollamaOk: true }), true);
+  assert.strictEqual(H.canAdvanceFirstRunStep(2, { path: 'local', ollamaOk: false }), false);
+  assert.strictEqual(
+    H.canAdvanceFirstRunStep(2, { path: 'cloud', provider: 'qwen', apiKey: 'sk-x' }),
+    true
+  );
+  assert.strictEqual(
+    H.canAdvanceFirstRunStep(2, { path: 'cloud', provider: 'qwen', apiKey: '' }),
+    false
+  );
+
+  assert.strictEqual(H.canAdvanceFirstRunStep(3, { trialOk: true }), true);
+  assert.strictEqual(H.canAdvanceFirstRunStep(3, { trialOk: false }), false);
+});
+
+test('首次引导：档案草稿与试译句', () => {
+  const local = H.buildFirstRunProfileDraft({ path: 'local', localModel: 'phi4-mini:latest' });
+  assert.strictEqual(local.provider, 'local');
+  assert.strictEqual(local.localModel, 'phi4-mini:latest');
+
+  const cloud = H.buildFirstRunProfileDraft({
+    path: 'cloud',
+    provider: 'deepseek',
+    apiKey: ' sk-test '
+  });
+  assert.strictEqual(cloud.provider, 'deepseek');
+  assert.strictEqual(cloud.apiKey, 'sk-test');
+  assert.strictEqual(H.getFirstRunTrialText(), 'Hello');
+  assert.strictEqual(H.FIRST_RUN_TRIAL_TEXT, 'Hello');
+});
+
+test('formatUserErrorCompact 结论+行动两行且截断', () => {
+  const compact = H.formatUserErrorCompact({
+    userMessage: 'API Key 无效或权限不足',
+    actionHint: '请打开设置检查并保存服务档案'
+  });
+  assert.ok(compact.includes('API Key'));
+  assert.ok(compact.includes('\n'));
+  assert.ok(!compact.includes('\n\n'));
+
+  const long = H.formatUserErrorCompact({
+    userMessage: 'A'.repeat(100),
+    actionHint: 'B'.repeat(80)
+  }, 20, 15);
+  const [m, h] = long.split('\n');
+  assert.ok(m.length <= 20);
+  assert.ok(h.length <= 15);
+  assert.ok(m.endsWith('…'));
+});
+
+test('pageControlCompletedActions 主次分离', () => {
+  const ok = H.pageControlCompletedActions({ hasFailures: false });
+  assert.deepStrictEqual(ok.primary, ['restore', 'bilingual', 'close']);
+  assert.deepStrictEqual(ok.secondary, ['disableSite']);
+  assert.ok(!ok.primary.includes('retry'));
+
+  const fail = H.pageControlCompletedActions({ hasFailures: true });
+  assert.ok(fail.secondary.includes('retry'));
+  assert.ok(fail.secondary.includes('disableSite'));
+  assert.ok(!fail.primary.includes('disableSite'));
+});
+
+test('shouldCollapsePopupStats 默认折叠用量', () => {
+  assert.strictEqual(H.shouldCollapsePopupStats(), true);
+});
