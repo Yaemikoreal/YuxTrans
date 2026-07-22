@@ -240,12 +240,13 @@ class SmartRouter(BaseTranslator):
 
     async def preload(self):
         """预加载模型和缓存"""
-        tasks = []
+        # _preload_popular 是同步方法（返回 None），直接调用填充 LRU，不放入 gather
+        if self.cache:
+            self.cache._preload_popular()
 
+        tasks = []
         if self.local:
             tasks.append(self.local.preload_model())
 
-        if self.cache:
-            tasks.append(self.cache._preload_popular())
-
-        await asyncio.gather(*tasks, return_exceptions=True)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)

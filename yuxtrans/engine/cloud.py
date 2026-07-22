@@ -255,7 +255,7 @@ class CloudTranslator(BaseTranslator):
                     json=body,
                     headers=headers,
                 ) as response:
-                    for line in response.aiter_lines():
+                    async for line in response.aiter_lines():
                         if line.strip():
                             chunk = self._parse_stream_chunk(line)
                             if chunk:
