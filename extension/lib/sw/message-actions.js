@@ -27,7 +27,6 @@
     'getRequestLogs',
     'fetchModels',
     'testProvider',
-    'testConnection',
     'testProviderConnection',
     'saveProfile',
     'getProfiles',

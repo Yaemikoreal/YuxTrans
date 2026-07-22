@@ -283,11 +283,6 @@ async function applyRateDelay() {
   }
 }
 
-// ===== 热点词库（安装时预加载） =====
-// 严格缓存策略下，短词/固定译法的内置热词属于「近似命中」，不再预加载。
-// 缓存只保留用户实际翻译过且通过校验的真实句子/段落。
-const BUILTIN_CACHE = {};
-
 // ===== 运行时状态 =====
 
 let config = {
@@ -2379,51 +2374,6 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
 
 // ===== 连接测试 =====
 
-async function testConnection(testConfig) {
-  const { endpoint, apiKey, format, model } = testConfig;
-
-  if (!endpoint) return { success: false, error: '请输入 API 地址' };
-
-  const prompt = 'Translate to Chinese. Provide only the translation.\n\nHello';
-  let requestBody;
-  let headers = { 'Content-Type': 'application/json' };
-
-  try {
-    if (format === 'anthropic') {
-      headers['x-api-key'] = apiKey;
-      headers['anthropic-version'] = '2023-06-01';
-      requestBody = { model, max_tokens: 100, messages: [{ role: 'user', content: prompt }] };
-    } else {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      requestBody = { model, messages: [{ role: 'user', content: prompt }], temperature: 0.3 };
-    }
-
-    const timeout = config.provider === 'local' ? LOCAL_TIMEOUT_MS : CLOUD_TIMEOUT_MS;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    const response = await fetch(endpoint, {
-      method: 'POST', headers,
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: formatError(response.status, errorText) };
-    }
-
-    return { success: true };
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      return { success: false, error: '连接超时，请检查地址是否正确' };
-    }
-    return { success: false, error: error.message };
-  }
-}
-
 async function testProviderConnection(testConfig) {
   const { provider, apiKey, endpoint, model } = testConfig;
 
@@ -2546,25 +2496,6 @@ async function fetchModels(testConfig) {
   }
 }
 
-// ===== 热点词库预加载 =====
-
-async function preloadBuiltinCache() {
-  let loaded = 0;
-  for (const [key, value] of Object.entries(BUILTIN_CACHE)) {
-    if (!cache.has(key)) {
-      cache.set(key, value);
-      cacheBytes += key.length * 2 + value.length * 2;
-      pendingCacheWrites.add(key);
-      loaded++;
-    }
-  }
-  if (loaded > 0) {
-    updateCacheStats();
-    await saveCacheToDB();
-    console.log(`[YuxTrans] 预加载 ${loaded} 个热点词汇`);
-  }
-}
-
 // ===== 事件监听 =====
 
 let initialized = false;
@@ -2607,9 +2538,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     await loadUsageStats();
     await loadRateLimitState();
     initialized = true;
-
-    // 预加载热点词库
-    await preloadBuiltinCache();
 
     // 清理已持久化的无效缓存条目
     cleanupInvalidCacheEntries().catch(() => {});
@@ -2912,13 +2840,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveConfig({ glossary: [] })
         .then(() => sendResponse({ success: true }))
         .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
-
-    else if (request.action === 'testConnection') {
-      testConnection(request.config)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
       return;
     }
 

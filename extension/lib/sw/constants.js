@@ -69,7 +69,6 @@
   SW.MAX_BATCH_CHARS = 4000;
   SW.DEFAULT_BATCH_SIZE = 20;
   SW.CACHE_KEY_VERSION = 'v2';
-  SW.MIN_CACHE_SOURCE_LENGTH = 12;
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = SW;
