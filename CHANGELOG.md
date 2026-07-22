@@ -217,7 +217,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Roadmap
 
-### [0.3.0] - Planned
+### [Planned]
 - OCR image translation
 - Voice translation
 - PDF document translation
@@ -231,6 +231,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[Unreleased]: https://github.com/Yaemikoreal/YuxTrans/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.1
+[0.4.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.1.0
