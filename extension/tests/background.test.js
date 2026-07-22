@@ -316,3 +316,23 @@ test('withDbRetry 成功路径直接返回，失败且非 DB 错误原样抛出'
   }
   assert.strictEqual(threw, true);
 });
+
+
+test('翻译会话取消：abort 注册的 controller 并标记 cancelled', () => {
+  const sid = 'cancel-test-' + Math.random().toString(36).slice(2);
+  const ctrl = new AbortController();
+  assert.strictEqual(bg.isSessionCancelled(sid), false);
+  bg.registerSessionController(sid, ctrl);
+  assert.strictEqual(ctrl.signal.aborted, false);
+  const aborted = bg.cancelTranslationSession(sid);
+  assert.strictEqual(aborted, 1);
+  assert.strictEqual(ctrl.signal.aborted, true);
+  assert.strictEqual(bg.isSessionCancelled(sid), true);
+});
+
+test('isSessionCancelled 对未知 / 空 session 返回 false', () => {
+  assert.strictEqual(bg.isSessionCancelled('unknown-' + Math.random().toString(36).slice(2)), false);
+  assert.strictEqual(bg.isSessionCancelled(null), false);
+  assert.strictEqual(bg.isSessionCancelled(''), false);
+});
+

@@ -1036,6 +1036,56 @@ function generateCacheKey(text, sourceLang, targetLang, style = null) {
     : `${CACHE_KEY_VERSION}:${SW.PROMPT_VERSION || 'p1'}:${SW.modelSlug ? SW.modelSlug(model) : (model || '_')}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
 }
 
+// ===== 翻译会话取消管理 =====
+// 整页/动态批量翻译分配 sessionId，用户取消时 abort 在途请求并阻止后续批次，
+// 避免停止翻译后继续消耗云端配额。
+const translationSessions = new Map(); // sessionId -> { cancelled, controllers }
+
+function getTranslationSession(sessionId) {
+  if (!sessionId) return null;
+  let s = translationSessions.get(sessionId);
+  if (!s) {
+    // 惰性清理已取消的旧会话，避免 Map 无限增长
+    if (translationSessions.size > 16) {
+      for (const [k, v] of translationSessions) {
+        if (v.cancelled) translationSessions.delete(k);
+      }
+    }
+    s = { cancelled: false, controllers: new Set() };
+    translationSessions.set(sessionId, s);
+  }
+  return s;
+}
+
+function isSessionCancelled(sessionId) {
+  const s = sessionId ? translationSessions.get(sessionId) : null;
+  return !!(s && s.cancelled);
+}
+
+function registerSessionController(sessionId, controller) {
+  const s = getTranslationSession(sessionId);
+  if (!s) return;
+  s.controllers.add(controller);
+  // controller 结束后从集合移除，避免集合无限增长
+  try {
+    controller.signal.addEventListener('abort', () => s.controllers.delete(controller));
+  } catch (e) { /* 忽略 */ }
+}
+
+function cancelTranslationSession(sessionId) {
+  const s = translationSessions.get(sessionId);
+  if (!s) return 0;
+  s.cancelled = true;
+  let n = 0;
+  for (const c of s.controllers) {
+    try { c.abort(); n++; } catch (e) { /* 已 abort 忽略 */ }
+  }
+  s.controllers.clear();
+  // 不立即删除：在途的 translateBatchInternal 循环需读到 cancelled=true 才会中止；
+  // 旧会话由后续 getTranslationSession 惰性清理。
+  return n;
+}
+
 // ===== 性能指标（轻量本地埋点）=====
 
 const METRICS_RETENTION_DAYS = 7;
@@ -2082,7 +2132,7 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
  * 批量翻译逻辑 (JSON 数组) + 降级处理
  * 额外在 batch 内做文本去重：相同原文只请求一次，结果映射回所有出现位置
  */
-async function translateBatchInternal(texts, sourceLang, targetLang, context = null) {
+async function translateBatchInternal(texts, sourceLang, targetLang, context = null, sessionId = null) {
   const batchStart = performance.now();
   const finalResults = new Array(texts.length);
   const missItems = [];
@@ -2154,6 +2204,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     const subBatches = splitIntoCharBatches(groupItems, maxBatchChars);
 
     for (const batchItems of subBatches) {
+      if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
       // 4.1 同一批次内去重：相同原文只发送一次
       const uniqueItems = [];
       const textToUniqueIndex = new Map();
@@ -2185,6 +2236,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         const endpoint = getEndpoint();
         const timeout = resolveProviderConfig().provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
         const controller = new AbortController();
+        registerSessionController(sessionId, controller);
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         const response = await fetch(endpoint, {
@@ -2280,9 +2332,10 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         updateRateLimitState(true);
 
         if (invalidUniqueIndices.length > 0) {
+          if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
           console.warn(`[YuxTrans] 批处理有 ${invalidUniqueIndices.length} 项无效结果，正在补全...`);
           const invalidItems = invalidUniqueIndices.map((i) => uniqueItems[i]);
-          await fallbackBatchItems(invalidItems, sourceLang, context, finalResults);
+          await fallbackBatchItems(invalidItems, sourceLang, context, finalResults, sessionId);
         }
       } else {
         // 降级：利用已解析的部分结果 + 并发补全缺失项
@@ -2312,8 +2365,9 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         const needFallbackItems = uniqueItems.filter((_, i) => !usedUniqueIndices.has(i));
         if (needFallbackItems.length === 0) continue;
 
+        if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
         console.log(`[YuxTrans] 需要补全 ${needFallbackItems.length} 项...`);
-        await fallbackBatchItems(needFallbackItems, sourceLang, context, finalResults);
+        await fallbackBatchItems(needFallbackItems, sourceLang, context, finalResults, sessionId);
       }
     }
   }
@@ -2344,7 +2398,7 @@ function recordBatchMetric(start, texts, finalResults) {
 /**
  * 批量翻译失败项的并发补全
  */
-async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults) {
+async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults, sessionId = null) {
   const { maxConcurrent, requestDelay } = getRateLimitParams();
   const chunks = [];
   for (let i = 0; i < uniqueItems.length; i += maxConcurrent) {
@@ -2352,6 +2406,7 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
   }
 
   for (const chunk of chunks) {
+    if (isSessionCancelled(sessionId)) break;
     const chunkPromises = chunk.map(async (uniqueItem) => {
       const originalIndices = [];
       // 在 fallback 中 uniqueItem 可能不携带 originalIndices，兼容兜底
@@ -2775,9 +2830,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const targetLang = request.targetLang || config.targetLang || 'zh';
       const context = request.context || null;
 
-      translateBatchInternal(request.texts, sourceLang, targetLang, context)
+      translateBatchInternal(request.texts, sourceLang, targetLang, context, request.sessionId || null)
         .then(results => sendResponse({ success: true, results }))
         .catch(error => sendResponse(failResponse(error)));
+      return;
+    }
+
+    else if (request.action === 'cancelTranslate') {
+      // 用户停止整页/动态翻译：abort 在途请求并阻止后续批次，避免继续消耗配额
+      const aborted = cancelTranslationSession(request.sessionId || null);
+      sendResponse({ success: true, aborted });
       return;
     }
 
@@ -3135,6 +3197,10 @@ if (typeof module !== 'undefined' && module.exports) {
     generateCacheKey,
     normalizeCacheKeyText,
     parseCacheKey,
+    isSessionCancelled,
+    cancelTranslationSession,
+    getTranslationSession,
+    registerSessionController,
     formatError,
     toUserError,
     failResponse,

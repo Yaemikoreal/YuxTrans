@@ -11,6 +11,7 @@
     'translate',
     'translateStream',
     'translateBatch',
+    'cancelTranslate',
     'getConfig',
     'getProviderDefaults',
     'setConfig',
@@ -49,7 +50,7 @@
    * @returns {'translate'|'config'|'cache'|'glossary'|'site'|'diagnostics'|'unknown'}
    */
   function classifyMessageAction(action) {
-    if (['translate', 'translateStream', 'translateBatch', 'checkConnection', 'testProvider'].includes(action)) {
+    if (['translate', 'translateStream', 'translateBatch', 'cancelTranslate', 'checkConnection', 'testProvider'].includes(action)) {
       return 'translate';
     }
     if (['getConfig', 'setConfig', 'getProviderDefaults', 'saveProfile', 'getProfiles', 'deleteProfile', 'setActiveProfile', 'fetchModels'].includes(action)) {

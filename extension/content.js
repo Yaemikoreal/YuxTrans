@@ -14,6 +14,7 @@ class YuxTransContent {
     this.pageTranslationState = {
       isTranslated: false,
       isTranslating: false,
+      cancelRequested: false, // 用户取消整页/动态翻译：阻止 worker 发起新批次
       originalTexts: new Map(), // node -> { text, styles }
       translatedNodes: [],
       streamingNodes: new Map(), // requestId -> { nodeInfo, tempSpan }
@@ -24,6 +25,8 @@ class YuxTransContent {
     this._dynamicObserver = null;
     this._addedDebounceTimer = null;
     this._isProcessingAdded = false;
+    this._pageSessionId = null; // 当前整页/动态翻译会话 id，用于 SW 侧取消
+    this._pageSessionCounter = 0;
     this.pageControl = null;
     this.config = {
       concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
@@ -745,7 +748,7 @@ class YuxTransContent {
     let fallbackMode = false; // 是否已进入单句翻译降级模式
 
     const worker = async () => {
-      while (queue.length > 0 && this.pageTranslationState.isTranslating) {
+      while (queue.length > 0 && this.pageTranslationState.isTranslating && !this.pageTranslationState.cancelRequested) {
         const batchIndex = queue.shift();
         const batch = batches[batchIndex];
         
@@ -773,7 +776,8 @@ class YuxTransContent {
                 sourceLang: this.config.sourceLang || 'auto',
                 targetLang: this.config.targetLang || 'zh',
                 // 整页批量翻译不携带页面标题，避免模型把所有片段译成同一个标题。
-                context: null
+                context: null,
+                sessionId: this._pageSessionId
               },
               (res) => {
                 clearTimeout(timer);
@@ -935,12 +939,10 @@ class YuxTransContent {
       // 站点规则控制
       if (!this.isSiteAllowed()) return;
 
-    // 防止重入：如果正在翻译中，再次触发则恢复原文
+    // 防止重入：翻译进行中再次触发则取消在途批次并恢复已译原文
     if (this.pageTranslationState.isTranslating) {
-      if (this.pageTranslationState.isTranslated) {
-        this.restoreOriginalTexts();
-        this.setPageControlRestoredState();
-      }
+      this.restoreOriginalTexts();
+      this.setPageControlRestoredState();
       return;
     }
 
@@ -961,11 +963,14 @@ class YuxTransContent {
     // 初始化状态
     this.pageTranslationState.translatedNodes = [];
     this.pageTranslationState.isTranslating = true;
+    this.pageTranslationState.cancelRequested = false;
     this.pageTranslationState.originalTexts.clear();
     this.pageTranslationState.streamingNodes.clear();
     this.pageTranslationState.failedItems = [];
     this.pageTranslationState.cacheHits = 0;
     this.pageTranslationState.apiCount = 0;
+    // 分配本轮会话 id，供 SW 侧取消链路使用
+    this._pageSessionId = 'yxt-page-' + (++this._pageSessionCounter);
 
     // 禁用控制条上的翻译/重新翻译按钮，防止任务进行中重复点击
     this.setPageControlTranslateDisabled(true);
@@ -1461,7 +1466,24 @@ class YuxTransContent {
     }
   }
 
+  /**
+   * 取消进行中的整页/动态翻译：通知 SW abort 在途请求并阻止后续批次。
+   */
+  cancelPageTranslation() {
+    this.pageTranslationState.cancelRequested = true;
+    if (this._pageSessionId) {
+      try {
+        chrome.runtime.sendMessage({ action: 'cancelTranslate', sessionId: this._pageSessionId });
+      } catch (e) { /* SW 未就绪忽略 */ }
+      this._pageSessionId = null;
+    }
+  }
+
   restoreOriginalTexts() {
+    // 若仍有在途翻译，先取消，避免恢复原文后继续消耗配额
+    if (this.pageTranslationState.isTranslating) {
+      this.cancelPageTranslation();
+    }
     // 清理流式翻译中的临时节点
     if (this.pageTranslationState.streamingNodes) {
       for (const state of this.pageTranslationState.streamingNodes.values()) {
