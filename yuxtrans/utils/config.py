@@ -159,6 +159,7 @@ class ConfigManager:
             "YUXTRANS_LOCAL_MODEL": ("engine", "local_model"),
             "YUXTRANS_LOCAL_TIMEOUT": ("engine", "local_timeout_ms"),
             "YUXTRANS_CLOUD_PROVIDER": ("engine", "cloud_provider"),
+            "YUXTRANS_CLOUD_MODEL": ("engine", "cloud_model"),
             "YUXTRANS_CLOUD_API_KEY": ("engine", "cloud_api_key"),
             "YUXTRANS_CACHE_DB_PATH": ("engine", "cache_db_path"),
             "YUXTRANS_MAX_RETRIES": ("performance", "max_retries"),

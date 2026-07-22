@@ -41,14 +41,12 @@ class SmartRouter(BaseTranslator):
         cache: Optional["TranslationCache"] = None,
         local_translator: Optional[LocalTranslator] = None,
         cloud_translator: Optional[CloudTranslator] = None,
-        prefer_local: bool = True,
         fallback_order: Optional[List[EngineType]] = None,
     ):
         super().__init__()
         self.cache = cache
         self.local = local_translator
         self.cloud = cloud_translator
-        self.prefer_local = prefer_local
 
         self.fallback_order = fallback_order or [
             EngineType.CACHE,
