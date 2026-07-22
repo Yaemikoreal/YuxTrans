@@ -322,13 +322,18 @@ class YuxTransContent {
           this.updatePopup(response.text, response.cached, response.engine, text);
         } else {
           const userError = response?.userError;
-          const errorMsg = userError
-            ? (this.helpers.formatUserErrorText
-              ? this.helpers.formatUserErrorText(userError)
-              : `${userError.userMessage}\n\n${userError.actionHint || ''}`)
-            : (response?.error || '未知错误');
+          let errorMsg;
+          if (userError) {
+            errorMsg = this.helpers.formatUserErrorCompact
+              ? this.helpers.formatUserErrorCompact(userError)
+              : (this.helpers.formatUserErrorText
+                ? this.helpers.formatUserErrorText(userError)
+                : `${userError.userMessage}\n${userError.actionHint || ''}`.trim());
+          } else {
+            errorMsg = response?.error || '未知错误';
+          }
           if (!isLocal && (errorMsg.includes('API Key') || errorMsg.includes('请先配置') || userError?.code === 'AUTH')) {
-            this.updatePopup('⚠️ 请先在设置中配置 API Key\n\n打开扩展设置 → 供应商档案 完成配置', false, 'warning');
+            this.updatePopup('请先配置 API Key\n打开设置 → 服务档案', false, 'warning');
           } else {
             this.updatePopup(errorMsg, false, 'error');
           }
@@ -409,22 +414,21 @@ class YuxTransContent {
     popup.innerHTML = `
       <div class="yuxtrans-popup-header">
         <span class="yuxtrans-popup-title">YuxTrans</span>
-        <button class="yuxtrans-popup-close" aria-label="关闭">&times;</button>
+        <button class="yuxtrans-popup-close" aria-label="关闭" type="button">&times;</button>
       </div>
       <div class="yuxtrans-popup-content">
         <div class="yuxtrans-source">${this.escapeHtml(sourceText)}</div>
         <div class="yuxtrans-target">
-          <div class="yuxtrans-loading">
-            <div class="yuxtrans-spinner"></div>
-            <span>翻译中...</span>
+          <div class="yuxtrans-loading" aria-live="polite">
+            <span class="yuxtrans-loading-label">翻译中</span>
           </div>
         </div>
       </div>
       <div class="yuxtrans-popup-footer">
         <span class="yuxtrans-status"><span class="yuxtrans-status-badge">准备</span></span>
         <div class="yuxtrans-popup-actions">
-          <button class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" style="display:none" title="标记差译并清除缓存">差译</button>
-          <button class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn">复制</button>
+          <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn">复制</button>
+          <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" title="标记差译并清除缓存">差译</button>
         </div>
       </div>
     `;
@@ -468,9 +472,10 @@ class YuxTransContent {
 
     const targetEl = this.popup.querySelector('.yuxtrans-target');
     targetEl.textContent = translatedText;
+    const isError = engine === 'error' || engine === 'warning';
+    targetEl.classList.toggle('is-error', isError);
 
     const statusEl = this.popup.querySelector('.yuxtrans-status');
-    const isError = engine === 'error' || engine === 'warning';
     const badgeClass = this._getStatusBadgeClass(cached, engine);
     let statusText = '完成';
     if (isError) statusText = engine === 'warning' ? '需配置' : '失败';
@@ -484,9 +489,16 @@ class YuxTransContent {
     this.popup.dataset.translation = translatedText;
     if (sourceText) this.popup.dataset.sourceText = sourceText;
 
+    // 复制 / 差译常驻可见（差译仅在有译文时可用）
     const badBtn = this.popup.querySelector('.yuxtrans-bad-btn');
+    const copyBtn = this.popup.querySelector('.yuxtrans-copy-btn');
     if (badBtn) {
-      badBtn.style.display = isError ? 'none' : 'inline-block';
+      badBtn.hidden = false;
+      badBtn.disabled = isError;
+    }
+    if (copyBtn) {
+      copyBtn.hidden = false;
+      copyBtn.disabled = false;
     }
 
     // 自动复制（如果用户开启）
@@ -1161,17 +1173,22 @@ class YuxTransContent {
       <span class="yuxtrans-page-control-text" id="yuxtrans-progress-text">
         0 / ${total}
       </span>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-cancel-btn">取消</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-retry-btn"
-        style="display:none">重试失败</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-disable-site-btn"
-        style="display:none" title="本站禁用扩展">禁用本站</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn"
-        style="display:none">双语</button>
-      <button class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn"
+      <button type="button" class="yuxtrans-page-control-btn" id="yuxtrans-cancel-btn">取消</button>
+      <button type="button" class="yuxtrans-page-control-btn primary" id="yuxtrans-restore-btn"
         style="display:none">恢复原文</button>
-      <button class="yuxtrans-page-control-btn" id="yuxtrans-close-btn"
+      <button type="button" class="yuxtrans-page-control-btn" id="yuxtrans-bilingual-btn"
+        style="display:none">双语</button>
+      <button type="button" class="yuxtrans-page-control-btn" id="yuxtrans-close-btn"
         style="display:none">关闭</button>
+      <details class="yuxtrans-page-control-more" id="yuxtrans-more" style="display:none">
+        <summary>更多</summary>
+        <div class="yuxtrans-page-control-more-menu">
+          <button type="button" class="yuxtrans-page-control-btn secondary" id="yuxtrans-retry-btn"
+            style="display:none">重试失败</button>
+          <button type="button" class="yuxtrans-page-control-btn secondary" id="yuxtrans-disable-site-btn"
+            title="本站禁用扩展">禁用本站</button>
+        </div>
+      </details>
     `;
 
     document.body.appendChild(control);
@@ -1224,15 +1241,25 @@ class YuxTransContent {
     const retryBtn = this.pageControlElement('yuxtrans-retry-btn');
     const disableBtn = this.pageControlElement('yuxtrans-disable-site-btn');
 
+    const moreEl = this.pageControlElement('yuxtrans-more');
+    const actionPlan = (this.helpers.pageControlCompletedActions
+      ? this.helpers.pageControlCompletedActions({ hasFailures })
+      : { primary: ['restore', 'bilingual', 'close'], secondary: hasFailures ? ['retry', 'disableSite'] : ['disableSite'] });
+
     if (cancelBtn) cancelBtn.style.display = 'none';
-    if (restoreBtn) restoreBtn.style.display = 'inline-block';
+    if (restoreBtn) restoreBtn.style.display = actionPlan.primary.includes('restore') ? 'inline-block' : 'none';
     if (bilingualBtn) {
-      bilingualBtn.style.display = 'inline-block';
+      bilingualBtn.style.display = actionPlan.primary.includes('bilingual') ? 'inline-block' : 'none';
       bilingualBtn.textContent = isBilingual ? '仅译文' : '双语';
     }
-    if (closeBtn) closeBtn.style.display = 'inline-block';
-    if (retryBtn) retryBtn.style.display = hasFailures ? 'inline-block' : 'none';
-    if (disableBtn) disableBtn.style.display = 'inline-block';
+    if (closeBtn) closeBtn.style.display = actionPlan.primary.includes('close') ? 'inline-block' : 'none';
+    if (moreEl) moreEl.style.display = actionPlan.secondary.length ? 'inline-block' : 'none';
+    if (retryBtn) {
+      retryBtn.style.display = actionPlan.secondary.includes('retry') ? 'block' : 'none';
+    }
+    if (disableBtn) {
+      disableBtn.style.display = actionPlan.secondary.includes('disableSite') ? 'block' : 'none';
+    }
 
     // 防止重复绑定
     if (this.pageControlListenersBound) return;

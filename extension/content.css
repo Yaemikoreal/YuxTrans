@@ -123,9 +123,10 @@
     --yxt-border-strong: var(--yxt-ink-15);
     --yxt-divider: var(--yxt-ink-06);
 
-    --yxt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-    --yxt-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
-    --yxt-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    /* 与 design-tokens 暗色一致：暖墨韵阴影，禁止纯黑 */
+    --yxt-shadow-sm: 0 1px 2px rgba(20, 18, 16, 0.35), 0 0 0 1px rgba(184, 165, 196, 0.08);
+    --yxt-shadow-md: 0 2px 10px rgba(20, 18, 16, 0.4), 0 1px 3px rgba(184, 165, 196, 0.1);
+    --yxt-shadow-lg: 0 12px 28px rgba(20, 18, 16, 0.48), 0 2px 8px rgba(184, 165, 196, 0.12);
 
     --yxt-success: #8AAF9B;
     --yxt-success-soft: rgba(138, 175, 155, 0.16);
@@ -212,7 +213,6 @@ code {
 .yuxtrans-popup-close:hover {
   background: var(--yxt-dusk-12);
   color: var(--yxt-text);
-  transform: scale(1.05);
 }
 
 .yuxtrans-popup-content {
@@ -243,10 +243,25 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--yxt-space-2);
   padding: var(--yxt-space-3) var(--yxt-space-4);
   border-top: 1px solid var(--yxt-divider);
   font-size: var(--yxt-text-xs);
   color: var(--yxt-text-tertiary);
+}
+
+.yuxtrans-popup-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--yxt-space-1);
+  flex-shrink: 0;
+}
+
+.yuxtrans-target.is-error {
+  color: var(--yxt-error);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .yuxtrans-status {
@@ -506,6 +521,56 @@ code {
 .yuxtrans-page-control-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.yuxtrans-page-control-btn.secondary,
+.yuxtrans-page-control-btn.is-muted {
+  color: var(--yxt-text-tertiary);
+  font-size: var(--yxt-text-xs);
+}
+
+.yuxtrans-page-control-more {
+  position: relative;
+}
+
+.yuxtrans-page-control-more summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--yxt-space-1) var(--yxt-space-2);
+  border-radius: var(--yxt-radius-md);
+  color: var(--yxt-text-tertiary);
+  font-size: var(--yxt-text-xs);
+  user-select: none;
+}
+
+.yuxtrans-page-control-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.yuxtrans-page-control-more summary:hover {
+  background: var(--yxt-bg-hover);
+  color: var(--yxt-text);
+}
+
+.yuxtrans-page-control-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 112px;
+  padding: var(--yxt-space-1);
+  background: var(--yxt-bg);
+  border: 1px solid var(--yxt-border);
+  border-radius: var(--yxt-radius-lg);
+  box-shadow: var(--yxt-shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
+
+.yuxtrans-page-control-more-menu .yuxtrans-page-control-btn {
+  text-align: left;
+  width: 100%;
 }
 
 /* ===== 站点规则反馈提示 ===== */
