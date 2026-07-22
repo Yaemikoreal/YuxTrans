@@ -21,6 +21,9 @@ class YuxTransContent {
       cacheHits: 0,
       apiCount: 0
     };
+    this._dynamicObserver = null;
+    this._addedDebounceTimer = null;
+    this._isProcessingAdded = false;
     this.pageControl = null;
     this.config = {
       concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
@@ -1119,6 +1122,8 @@ class YuxTransContent {
       this.showPageControlComplete(
         successCount, nodesInfo.length, elapsed, duplicateCount, failCount
       );
+      // 整页翻译完成后，监听动态新增内容（无限滚动 / SPA 异步加载）
+      this._startDynamicObserver();
     } catch (error) {
       console.error('[YuxTrans] 整页翻译异常:', error);
     } finally {
@@ -1497,6 +1502,73 @@ class YuxTransContent {
     this.pageTranslationState.originalTexts.clear();
     this.pageTranslationState.translatedNodes = [];
     this.pageTranslationState.isTranslated = false;
+    this._stopDynamicObserver();
+  }
+
+  /**
+   * 动态内容翻译：整页翻译完成后监听新增 DOM 节点（无限滚动 / SPA 异步加载），
+   * 防抖后复用 collectTextNodes 收集未翻译文本并翻译。
+   * collectTextNodes 已排除 yuxtrans-translated 等标记节点，故只会收集真正新增的未翻译文本。
+   */
+  _startDynamicObserver() {
+    if (this._dynamicObserver || typeof MutationObserver === 'undefined') return;
+    this._dynamicObserver = new MutationObserver((muts) => this._onMutations(muts));
+    this._dynamicObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  _stopDynamicObserver() {
+    if (this._addedDebounceTimer) {
+      clearTimeout(this._addedDebounceTimer);
+      this._addedDebounceTimer = null;
+    }
+    if (this._dynamicObserver) {
+      this._dynamicObserver.disconnect();
+      this._dynamicObserver = null;
+    }
+  }
+
+  _onMutations(mutations) {
+    if (!this.pageTranslationState.isTranslated) return;
+    // 主翻译或上一轮动态翻译进行中时，忽略自身插入译文节点触发的 mutation
+    if (this._isProcessingAdded || this.pageTranslationState.isTranslating) return;
+    const hasAdded = mutations.some((m) => m.addedNodes && m.addedNodes.length > 0);
+    if (!hasAdded) return;
+    clearTimeout(this._addedDebounceTimer);
+    this._addedDebounceTimer = setTimeout(() => {
+      this._processAddedNodes();
+    }, 500);
+  }
+
+  async _processAddedNodes() {
+    if (!this.pageTranslationState.isTranslated) return;
+    if (this.pageTranslationState.isTranslating) return;
+    this.pageTranslationState.isTranslating = true;
+    this._isProcessingAdded = true;
+    try {
+      // collectTextNodes 遍历 body，已翻译节点会被 acceptNode 排除，
+      // 因此结果只含动态新增（或之前失败未标记）的未翻译文本
+      const nodesInfo = this.collectTextNodes();
+      const seen = new Set();
+      const items = [];
+      for (const ni of nodesInfo) {
+        // 跳过已翻译或已失败的节点，避免重复请求
+        if (this.pageTranslationState.originalTexts.has(ni.node)) continue;
+        if (seen.has(ni.text)) continue;
+        seen.add(ni.text);
+        items.push({ text: ni.text, nodeInfo: ni });
+      }
+      if (items.length === 0) return;
+      await this.translateBatchParallel(items, null, (_idx, nodes, results) => {
+        results.forEach((res, i) => {
+          if (res && res.success) this.applyTranslation(nodes[i].nodeInfo, res.text);
+        });
+      });
+    } catch (e) {
+      console.error('[YuxTrans] 动态内容翻译异常:', e);
+    } finally {
+      this.pageTranslationState.isTranslating = false;
+      this._isProcessingAdded = false;
+    }
   }
 
   /**
