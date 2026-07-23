@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **F2 单词词典模式** - 划到单词或双击单词直出词典卡片（词 / 音标 / 词性义项 / 双语例句）；`buildDictionaryPrompt` 严格 JSON schema；`lookupWord` action + 独立 `dict` 缓存键（绕过 12 字符门槛与译文校验）；解析降级链（JSON 失败回退纯文本）；纯函数 `isSingleWord`。
 - **F3 译文显示样式** - 整页双语原文可弱化（`fade`）或模糊（`blur`，悬停还原）；`originalStyle` 配置实时生效；补全 `--yxt-text-xs/sm`、`--yxt-ink-25` 未定义令牌。
 - **F4 浮窗钉住** - 钉住当前浮窗使其不被新划词覆盖，便于结果对照；`pinnedPopups` 多浮窗管理；暖色左边线视觉区分。
+- **F4b 双档案对照** - `translateWithProfile` action 用指定档案再译同一文本，对照浮窗（黄昏紫边线）并排展示；`compareProfileId` 从已存档案下拉选择。
 - **F5 输入框翻译** - `inputTranslate` 开关下 input/textarea 选中文本可翻译，浮窗「插入」按钮将译文回填输入框（触发 input 事件兼容前端框架）。
 - **F6 正文区域识别** - `smartContentDetection` 开关下整页翻译只翻正文根（`main`/`article` 或文本密度最高块），跳过导航/侧栏/页脚。
 - **F7 谷歌免费翻译接口** - `google` provider，`translate.googleapis.com` 免 Key GET 请求 + 嵌套数组解析；providers-core 免 Key可用判定；manifest `host_permissions` 同步。
