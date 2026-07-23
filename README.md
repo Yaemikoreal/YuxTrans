@@ -1,4 +1,8 @@
 <p align="center">
+  <sub><b>简体中文</b> · <a href="README_EN.md">English</a></sub>
+</p>
+
+<p align="center">
   <img src="logo/logo.png" width="96" alt="YuxTrans">
 </p>
 
