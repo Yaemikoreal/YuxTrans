@@ -187,6 +187,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       config.bilingualMode = isBilingual;
       renderModeToggle();
+      // 通知当前页面立即重渲染已翻译内容（不写站点偏好，与页面内切换区分）
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          await chrome.tabs.sendMessage(tab.id, { action: 'applyBilingualMode', bilingualMode: isBilingual });
+        }
+      } catch (e) {
+        // 当前页无 content script（如 chrome:// 内部页），配置仍已持久化，忽略
+      }
       showToast(isBilingual ? '已切换为双语模式' : '已切换为仅译文模式');
     } catch (e) {
       showToast('模式保存失败', true);

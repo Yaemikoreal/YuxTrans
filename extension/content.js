@@ -194,6 +194,10 @@ class YuxTransContent {
       } else if (request.action === 'streamChunk') {
         // 流式输出：逐字更新弹窗或整页段落
         this.handleStreamChunk(request.chunk, request.fullText, request.requestId);
+      } else if (request.action === 'applyBilingualMode') {
+        // popup 翻译模式切换：立即重渲染已翻译内容（不写站点偏好）
+        this.applyBilingualRender(request.bilingualMode !== false);
+        sendResponse({ success: true });
       }
       return true;
     });
@@ -1982,21 +1986,12 @@ class YuxTransContent {
   /**
    * 核心逻辑：动态切换双语对照与纯译文模式
    */
-  toggleBilingualMode(isBilingual) {
+  /**
+   * 重渲染已翻译内容的双语/仅译文呈现（纯 DOM，不写站点偏好）
+   * 供 popup 全局模式切换与页面内切换共用
+   */
+  applyBilingualRender(isBilingual) {
     this.config.bilingualMode = isBilingual;
-
-    // 记住当前站点偏好
-    const hostname = (location.hostname || '').toLowerCase();
-    if (hostname) {
-      chrome.runtime.sendMessage({
-        action: 'setSiteBilingualMode',
-        hostname,
-        bilingualMode: isBilingual
-      }).catch(() => {});
-      if (!this.config.siteModePrefs) this.config.siteModePrefs = {};
-      this.config.siteModePrefs[hostname] = { bilingualMode: isBilingual };
-    }
-
     for (const [node, data] of this.pageTranslationState.originalTexts) {
       const parent = node.parentElement;
       if (!parent) continue;
@@ -2028,6 +2023,23 @@ class YuxTransContent {
         // F3：仅译文模式无原文，移除原文样式类
         parent.classList.remove('yuxtrans-original-fade', 'yuxtrans-original-blur');
       }
+    }
+  }
+
+  toggleBilingualMode(isBilingual) {
+    // 重渲染 DOM（含 F3 原文样式）
+    this.applyBilingualRender(isBilingual);
+
+    // 记住当前站点偏好（页面内切换才写；popup 全局切换走 applyBilingualRender 不写）
+    const hostname = (location.hostname || '').toLowerCase();
+    if (hostname) {
+      chrome.runtime.sendMessage({
+        action: 'setSiteBilingualMode',
+        hostname,
+        bilingualMode: isBilingual
+      }).catch(() => {});
+      if (!this.config.siteModePrefs) this.config.siteModePrefs = {};
+      this.config.siteModePrefs[hostname] = { bilingualMode: isBilingual };
     }
   }
 
