@@ -53,7 +53,43 @@ STRICT OUTPUT RULES:
 
   SW.buildTranslationPrompt = buildTranslationPrompt;
 
+  /**
+   * F2：构建单词词典查询 Prompt（严格 JSON 输出，与翻译风格无关）
+   * @param {string} word - 待查单词
+   * @param {string} sourceLang
+   * @param {string} targetLang
+   * @returns {string}
+   */
+  function buildDictionaryPrompt(word, sourceLang, targetLang) {
+    const langNames = SW.LANG_NAMES || {};
+    const targetName = langNames[targetLang] || targetLang;
+    const sourceName = sourceLang === 'auto' ? null : (langNames[sourceLang] || sourceLang);
+
+    let prompt = 'You are a bilingual dictionary. Look up the word below';
+    if (sourceName) {
+      prompt += ` (in ${sourceName})`;
+    }
+    prompt += ` and provide its meanings in ${targetName}.`;
+
+    prompt += `
+
+STRICT OUTPUT RULES:
+- Output ONLY a single JSON object. No explanations, no markdown, no code fences.
+- Schema:
+  {"word":"...","phonetic":"...","senses":[{"pos":"part of speech","meaning":"...","examples":[{"source":"...","target":"..."}]}]}
+- Provide at most 4 senses; each sense with 1-2 example sentence pairs.
+- "phonetic" is the IPA or romanization; use empty string if unknown.
+- "examples.source" must be in the source language; "examples.target" is its translation in ${targetName}.
+- If the input is not a single word, still return valid JSON with "senses": [].
+
+Word to look up:
+${word}`;
+    return prompt;
+  }
+
+  SW.buildDictionaryPrompt = buildDictionaryPrompt;
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buildTranslationPrompt };
+    module.exports = { buildTranslationPrompt, buildDictionaryPrompt };
   }
 })(typeof self !== 'undefined' ? self : typeof globalThis !== 'undefined' ? globalThis : this);

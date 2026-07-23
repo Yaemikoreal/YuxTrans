@@ -451,12 +451,43 @@
     return FIRST_RUN_TRIAL_TEXT;
   }
 
+  /**
+   * F1：判断元素是否为悬停段落翻译候选（纯函数，便于单测）
+   * @param {object} opts - { tagName, textLen, inExcluded, alreadyDone }
+   * @returns {boolean}
+   */
+  function isHoverParagraphCandidate(opts) {
+    if (!opts) return false;
+    if (opts.inExcluded || opts.alreadyDone) return false;
+    const textLen = typeof opts.textLen === 'number' ? opts.textLen : 0;
+    // 文本过短（无翻译价值）或过长（超长截断）均不作为候选
+    if (textLen < 3 || textLen > 1500) return false;
+    const blockTags = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TD', 'DD', 'DT', 'FIGCAPTION'];
+    return blockTags.includes(opts.tagName);
+  }
+
+  /**
+   * F2：判断文本是否为单个单词（trim 后无内部空白，首尾字母，长度 ≤ 30）
+   * @param {string} text
+   * @returns {boolean}
+   */
+  function isSingleWord(text) {
+    if (typeof text !== 'string') return false;
+    const s = text.trim();
+    if (s.length === 0 || s.length > 30) return false;
+    if (/\s/.test(s)) return false;
+    // 首尾为字母，中间允许字母 / 附加符号 / 撇号 / 连字符
+    return /^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(s);
+  }
+
   return {
     resolveTriggerAction,
     shouldShowFloatButton,
     shouldAutoTranslateOnSelect,
     shouldUseStreaming,
     resolveTranslateAction,
+    isHoverParagraphCandidate,
+    isSingleWord,
     buildUserError,
     formatUserErrorText,
     formatUserErrorCompact,

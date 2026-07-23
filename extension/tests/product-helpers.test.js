@@ -205,3 +205,44 @@ test('pageControlCompletedActions 主次分离', () => {
 test('shouldCollapsePopupStats 默认折叠用量', () => {
   assert.strictEqual(H.shouldCollapsePopupStats(), true);
 });
+
+test('isSingleWord 判定单词边界', () => {
+  // 纯字母单词
+  assert.strictEqual(H.isSingleWord('hello'), true);
+  assert.strictEqual(H.isSingleWord('Translation'), true);
+  // 含连字符 / 撇号
+  assert.strictEqual(H.isSingleWord('state-of-the-art'), true);
+  assert.strictEqual(H.isSingleWord("don't"), true);
+  assert.strictEqual(H.isSingleWord("it's"), true);
+  // 含空白 -> 非单词
+  assert.strictEqual(H.isSingleWord('hello world'), false);
+  assert.strictEqual(H.isSingleWord('  hello  '), true); // trim 后单词
+  // 长度边界
+  assert.strictEqual(H.isSingleWord(''), false);
+  assert.strictEqual(H.isSingleWord('a'), false); // 单字符不匹配首尾字母模式
+  assert.strictEqual(H.isSingleWord('ab'), true);
+  assert.strictEqual(H.isSingleWord('x'.repeat(31)), false); // 超长
+  // 非字母开头
+  assert.strictEqual(H.isSingleWord('123abc'), false);
+  assert.strictEqual(H.isSingleWord('-hello'), false);
+  assert.strictEqual(H.isSingleWord(null), false);
+  assert.strictEqual(H.isSingleWord(123), false);
+});
+
+test('isHoverParagraphCandidate 判定悬停段落候选', () => {
+  // 合法块级段落
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 50, inExcluded: false, alreadyDone: false }), true);
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'LI', textLen: 100, inExcluded: false, alreadyDone: false }), true);
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'BLOCKQUOTE', textLen: 300, inExcluded: false, alreadyDone: false }), true);
+  // 非块级标签
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'SPAN', textLen: 50, inExcluded: false, alreadyDone: false }), false);
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'CODE', textLen: 50, inExcluded: false, alreadyDone: false }), false);
+  // 排除区 / 已译
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 50, inExcluded: true, alreadyDone: false }), false);
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 50, inExcluded: false, alreadyDone: true }), false);
+  // 文本长度边界
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 2, inExcluded: false, alreadyDone: false }), false); // 过短
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 1501, inExcluded: false, alreadyDone: false }), false); // 过长
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 1500, inExcluded: false, alreadyDone: false }), true); // 上限
+  assert.strictEqual(H.isHoverParagraphCandidate(null), false);
+});

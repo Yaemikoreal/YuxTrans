@@ -322,7 +322,20 @@ let config = {
   // 用户术语表 [{ source, target }]
   glossary: [],
   // 站点级偏好 { [hostname]: { bilingualMode: boolean } }
-  siteModePrefs: {}
+  siteModePrefs: {},
+
+  // F1 悬停段落翻译
+  hoverTranslate: true,
+  hoverModifier: 'alt', // 'alt' | 'ctrl'
+  // F2 单词词典模式
+  dictMode: true,
+  dictDblclick: true,
+  // F3 译文显示样式：原文呈现 normal | fade | blur
+  originalStyle: 'normal',
+  // F5 输入框翻译
+  inputTranslate: false,
+  // F6 正文区域识别（整页翻译只翻正文区）
+  smartContentDetection: false
 };
 
 let cache = new Map();        // key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
@@ -721,11 +734,14 @@ function getFromCache(key) {
   return value;
 }
 
-async function setToCache(key, value) {
+async function setToCache(key, value, skipValidation = false) {
   if (!config.cacheEnabled) return;
 
-  const validation = validateCacheEntry(key, value);
-  if (!validation.valid) return;
+  // F2：词典缓存（skipValidation=true）绕过校验--词典 JSON 非译文，且单词 <12 字符会被 too_short 误拦
+  if (!skipValidation) {
+    const validation = validateCacheEntry(key, value);
+    if (!validation.valid) return;
+  }
 
   const entryBytes = key.length * 2 + value.length * 2;
   const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
@@ -1361,6 +1377,126 @@ function buildTranslationPrompt(text, sourceLang, targetLang, context) {
   return `Translate to ${targetLang}:\n${text}`;
 }
 
+/**
+ * F2：构建单词词典查询 Prompt（转发到 SW.buildDictionaryPrompt）
+ * 词典模式与翻译风格无关，不注入 style/context；无 SW 实现时降级为普通翻译 prompt
+ */
+function buildDictionaryPrompt(word, sourceLang, targetLang) {
+  if (SW.buildDictionaryPrompt) {
+    return SW.buildDictionaryPrompt(word, sourceLang, targetLang);
+  }
+  return `Translate to ${targetLang}:\n${word}`;
+}
+
+/**
+ * F2：单词词典查询--结构化词典卡片（音标/义项/例句）
+ * 独立缓存键（style 段复用为 'dict' mode），单词 <12 字符绕过缓存长度门槛
+ * @param {string} word
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @returns {Promise<{dict: object, cached: boolean, engine: string}>}
+ */
+async function lookupWord(word, sourceLang = 'auto', targetLang = 'zh') {
+  const start = performance.now();
+  targetLang = resolveTargetLanguage(word, sourceLang, targetLang);
+  const resolvedSourceLang = resolveSourceLanguage(word, sourceLang);
+
+  // 缓存键：style 段复用为 mode 段（'dict'），与正常译文（'normal' 等）不撞
+  const cacheKey = generateCacheKey(word, sourceLang, targetLang, 'dict');
+
+  // 先查缓存（getFromCache 不检查长度门槛，单词可命中）
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    recordUsage(true, 1);
+    return { dict: safeParseDictJson(cached), cached: true, engine: 'cache' };
+  }
+
+  assertOfflineAllowed(false);
+
+  const tokens = estimateTokens(word);
+  const activeProvider = resolveProviderConfig().provider;
+  try {
+    const prompt = buildDictionaryPrompt(word, resolvedSourceLang, targetLang);
+    // jsonMode + 自定义 prompt，复用 translateWithCloud 的请求/限流/超时路径
+    const raw = await translateWithCloud(word, resolvedSourceLang, targetLang, null, null, {
+      promptOverride: prompt,
+      jsonMode: true
+    });
+    // 解析降级链：JSON.parse -> 失败则 { word, senses: [], raw } 纯文本降级
+    const dict = parseDictionaryResult(raw, word);
+    // 缓存：词典 JSON 非译文，skipValidation 绕过 validateCacheEntry（单词 <12 字符会被 too_short 误拦）
+    await setToCache(cacheKey, JSON.stringify(dict), true);
+    recordUsage(false, 1, tokens);
+    recordMetric({
+      action: 'lookupWord',
+      provider: activeProvider,
+      cached: false,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: word?.length || 0,
+      tokens,
+      success: true,
+      errorType: ''
+    });
+    return { dict, cached: false, engine: activeProvider };
+  } catch (error) {
+    recordMetric({
+      action: 'lookupWord',
+      provider: activeProvider,
+      cached: false,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: word?.length || 0,
+      tokens,
+      success: false,
+      errorType: classifyError(error)
+    });
+    throw error;
+  }
+}
+
+/**
+ * F2：解析词典 JSON 输出，规范化结构；解析失败降级为 { word, senses: [], raw }
+ */
+function parseDictionaryResult(raw, word) {
+  if (!raw || typeof raw !== 'string') {
+    return { word: word || '', phonetic: '', senses: [] };
+  }
+  // 提取首个 JSON 对象（模型可能带多余前后文本）
+  const match = raw.match(/\{[\s\S]*\}/);
+  const jsonStr = match ? match[0] : raw.trim();
+  try {
+    const obj = JSON.parse(jsonStr);
+    const senses = Array.isArray(obj.senses) ? obj.senses.map((s) => ({
+      pos: typeof s.pos === 'string' ? s.pos : '',
+      meaning: typeof s.meaning === 'string' ? s.meaning : '',
+      examples: Array.isArray(s.examples) ? s.examples.map((ex) => ({
+        source: typeof ex.source === 'string' ? ex.source : '',
+        target: typeof ex.target === 'string' ? ex.target : ''
+      })) : []
+    })) : [];
+    return {
+      word: typeof obj.word === 'string' ? obj.word : (word || ''),
+      phonetic: typeof obj.phonetic === 'string' ? obj.phonetic : '',
+      senses
+    };
+  } catch (e) {
+    // 解析失败：按纯文本降级（本地小模型可能不输出 JSON）
+    return { word: word || '', phonetic: '', senses: [], raw };
+  }
+}
+
+/**
+ * F2：安全解析缓存的词典 JSON（缓存以字符串形式存储）
+ */
+function safeParseDictJson(cached) {
+  if (cached == null) return null;
+  if (typeof cached === 'object') return cached;
+  try {
+    return JSON.parse(cached);
+  } catch (e) {
+    return { word: '', phonetic: '', senses: [], raw: String(cached) };
+  }
+}
+
 // ===== 翻译核心 =====
 
 function getEndpoint(providerOverride = null) {
@@ -1626,7 +1762,7 @@ async function disableSiteForHostname(hostname) {
  * @param {object|null} context - 页面上下文
  * @param {object|null} providerOverride - 可选：指定使用的供应商配置，默认使用全局 config
  */
-async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', context = null, providerOverride = null) {
+async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', context = null, providerOverride = null, options = {}) {
   const p = resolveProviderConfig(providerOverride);
   // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
   const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
@@ -1639,7 +1775,7 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
   const endpoint = getEndpoint(p);
   const apiKey = getApiKey(p);
 
-  if (!apiKey && p.provider !== 'local' && p.provider !== 'custom') {
+  if (!apiKey && p.provider !== 'local' && p.provider !== 'custom' && p.provider !== 'google') {
     throw new Error('请先配置 API Key');
   }
   if (!endpoint && p.provider === 'custom') {
@@ -1663,8 +1799,14 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
   // 应用速率延迟
   await applyRateDelay();
 
-  const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
-  const { headers, body } = buildRequest(prompt, false, p);
+  // F7：谷歌免费接口走专门请求路径（GET + 数组响应，非 OpenAI 格式）
+  if (p.provider === 'google') {
+    return googleTranslate(text, sourceLang, targetLang, p);
+  }
+
+  // F2：词典模式支持自定义 prompt + jsonMode（复用同一 fetch/限流/超时路径）
+  const prompt = options.promptOverride || buildTranslationPrompt(text, sourceLang, targetLang, context);
+  const { headers, body } = buildRequest(prompt, false, p, options.jsonMode === true);
   const logStart = performance.now();
 
   // AbortController 超时控制
@@ -1731,6 +1873,66 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
 }
 
 
+
+/**
+ * F7：谷歌免费翻译接口（translate.googleapis.com）
+ * 无需 API Key，GET 请求，响应为嵌套数组，提取译文段拼接
+ */
+async function googleTranslate(text, sourceLang, targetLang, providerOverride = null) {
+  const endpoint = API_ENDPOINTS.google || 'https://translate.googleapis.com/translate_a/single';
+  const sl = sourceLang === 'auto' ? 'auto' : sourceLang;
+  const url = `${endpoint}?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const logStart = performance.now();
+  try {
+    const response = await fetch(url, { method: 'GET', signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const isRateLimit = response.status === 429;
+      updateRateLimitState(false, isRateLimit);
+      throw new Error(
+        isRateLimit
+          ? (ERROR_MESSAGES.RATE_LIMITED || '请求过于频繁，请稍后再试')
+          : formatError(response.status, await response.text())
+      );
+    }
+    const data = await response.json();
+    // 响应格式：[[["译文","原文",null,null,10],...],...]
+    const translated = (Array.isArray(data) && Array.isArray(data[0]))
+      ? data[0].map((seg) => (Array.isArray(seg) && typeof seg[0] === 'string') ? seg[0] : '').join('')
+      : '';
+    updateRateLimitState(true);
+    logRequest({
+      action: 'translate',
+      provider: 'google',
+      model: 'gtx',
+      sourceLang,
+      targetLang,
+      prompt: truncateForLog(text),
+      response: truncateForLog(translated),
+      latencyMs: Math.round(performance.now() - logStart),
+      success: true
+    });
+    return translated.trim();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    const finalError = error.name === 'AbortError' ? new Error('请求超时（30秒），请检查网络') : error;
+    logRequest({
+      action: 'translate',
+      provider: 'google',
+      model: 'gtx',
+      sourceLang,
+      targetLang,
+      prompt: truncateForLog(text),
+      error: truncateForLog(finalError.message),
+      latencyMs: Math.round(performance.now() - logStart),
+      success: false
+    });
+    throw finalError;
+  }
+}
 
 /**
  * 流式翻译请求（SSE）
@@ -2860,6 +3062,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return;
     }
 
+    else if (request.action === 'lookupWord') {
+      // F2：单词词典查询--结构化词典卡片（音标/义项/例句）
+      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+      const targetLang = request.targetLang || config.targetLang || 'zh';
+      lookupWord(request.text, sourceLang, targetLang)
+        .then(result => sendResponse({ success: true, ...result }))
+        .catch(error => sendResponse(failResponse(error)));
+      return;
+    }
+
     else if (request.action === 'cancelTranslate') {
       // 用户停止整页/动态翻译：abort 在途请求并阻止后续批次，避免继续消耗配额
       const aborted = cancelTranslationSession(request.sessionId || null);
@@ -3239,6 +3451,10 @@ if (typeof module !== 'undefined' && module.exports) {
     splitIntoCharBatches,
     buildBatchPrompt,
     buildTranslationPrompt,
+    buildDictionaryPrompt,
+    lookupWord,
+    parseDictionaryResult,
+    googleTranslate,
     resolveProviderConfig,
     getActiveProfile,
     addOrUpdateProfile,

@@ -346,3 +346,51 @@ test('isSessionCancelled 对未知 / 空 session 返回 false', () => {
   assert.strictEqual(bg.isSessionCancelled(''), false);
 });
 
+
+test('parseDictionaryResult 解析词典 JSON 并降级', () => {
+  // 合法 JSON
+  const raw = '{"word":"hello","phonetic":"həˈləʊ","senses":[{"pos":"int.","meaning":"你好","examples":[{"source":"Hello!","target":"你好！"}]}]}';
+  const dict = bg.parseDictionaryResult(raw, 'hello');
+  assert.strictEqual(dict.word, 'hello');
+  assert.strictEqual(dict.phonetic, 'həˈləʊ');
+  assert.strictEqual(dict.senses.length, 1);
+  assert.strictEqual(dict.senses[0].pos, 'int.');
+  assert.strictEqual(dict.senses[0].meaning, '你好');
+  assert.strictEqual(dict.senses[0].examples[0].source, 'Hello!');
+  assert.strictEqual(dict.senses[0].examples[0].target, '你好！');
+
+  // 带 markdown 围栏，正则提取首个 JSON
+  const fenced = '```json\n{"word":"hi","senses":[]}\n```';
+  const d2 = bg.parseDictionaryResult(fenced, 'hi');
+  assert.strictEqual(d2.word, 'hi');
+  assert.strictEqual(d2.senses.length, 0);
+
+  // 解析失败降级为 raw
+  const broken = 'not a json at all';
+  const d3 = bg.parseDictionaryResult(broken, 'word1');
+  assert.strictEqual(d3.word, 'word1');
+  assert.strictEqual(d3.senses.length, 0);
+  assert.strictEqual(d3.raw, broken);
+
+  // 空输入
+  assert.strictEqual(bg.parseDictionaryResult('', 'x').word, 'x');
+  assert.strictEqual(bg.parseDictionaryResult(null, 'x').senses.length, 0);
+});
+
+test('buildDictionaryPrompt 转发 SW 并要求严格 JSON 输出', () => {
+  const prompt = bg.buildDictionaryPrompt('hello', 'en', 'zh');
+  assert.ok(prompt.includes('JSON'));
+  assert.ok(prompt.includes('senses'));
+  assert.ok(prompt.includes('hello'));
+  // 不注入翻译风格（词典与风格无关）
+  assert.ok(!prompt.includes('academic'));
+});
+
+test('generateCacheKey 词典模式独立缓存键（dict 段）', () => {
+  const word = 'apple';
+  const dictKey = bg.generateCacheKey(word, 'en', 'zh', 'dict');
+  const normalKey = bg.generateCacheKey(word, 'en', 'zh', 'normal');
+  // dict 与 normal 不撞，避免单词词典结果污染普通翻译缓存
+  assert.notStrictEqual(dictKey, normalKey);
+  assert.ok(dictKey.includes(':dict:'));
+});

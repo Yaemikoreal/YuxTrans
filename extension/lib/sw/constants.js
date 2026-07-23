@@ -14,6 +14,8 @@
     groq: 'https://api.groq.com/openai/v1/chat/completions',
     moonshot: 'https://api.moonshot.cn/v1/chat/completions',
     siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
+    // F7：谷歌免费翻译接口（无需 API Key，非 OpenAI 格式，走专门请求路径）
+    google: 'https://translate.googleapis.com/translate_a/single',
     local: 'http://localhost:11434/api/chat'
   };
 
@@ -25,6 +27,7 @@
     groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
     moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     siliconflow: ['Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'],
+    google: [],
     local: []
   };
 

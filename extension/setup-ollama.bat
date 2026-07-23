@@ -1,11 +1,20 @@
 @echo off
 chcp 65001 >nul
-title YuxTrans 本地模型配置 - Qwen3.5-0.8B
+title YuxTrans 本地模型配置
+
+:: F8：模型名参数化，默认 qwen3.5:0.8b，可用首个参数覆盖：setup-ollama.bat translategemma:4b
+set MODEL=%1
+if "%MODEL%"=="" set MODEL=qwen3.5:0.8b
+
+:: 按模型映射体积
+set MODEL_SIZE=约 1GB
+if /I "%MODEL%"=="translategemma:4b" set MODEL_SIZE=约 3.3GB
+if /I "%MODEL%"=="translategemma:12b" set MODEL_SIZE=约 8GB
 
 echo.
 echo ╔══════════════════════════════════════════╗
 echo ║  YuxTrans 本地离线模型配置              ║
-echo ║  Qwen3.5-0.8B (Ollama)                 ║
+echo ║  %MODEL% (Ollama)
 echo ╚══════════════════════════════════════════╝
 echo.
 
@@ -59,11 +68,11 @@ echo  [✓] Ollama 服务运行中
 echo.
 
 :: ─── 步骤 3：拉取模型 ───
-echo [3/4] 下载 Qwen3.5-0.8B 模型（约 600MB）...
+echo [3/4] 下载 %MODEL% 模型（%MODEL_SIZE%）...
 echo      首次下载需要一些时间，请耐心等待...
 echo.
 
-ollama pull qwen3.5:0.8b
+ollama pull %MODEL%
 if errorlevel 1 (
     echo.
     echo  [×] 模型下载失败
@@ -72,7 +81,7 @@ if errorlevel 1 (
     echo    - 网络连接问题
     echo    - 磁盘空间不足
     echo.
-    echo  请检查后重试: ollama pull qwen3.5:0.8b
+    echo  请检查后重试: ollama pull %MODEL%
     echo.
     pause
     exit /b 1
@@ -86,11 +95,12 @@ echo [4/4] 验证模型可用性...
 echo.
 
 echo  测试翻译: "Hello, world!" →
-ollama run qwen3.5:0.8b "Translate to Chinese: Hello, world!" --nowordwrap 2>nul
+ollama run %MODEL% "Translate to Chinese: Hello, world!" --nowordwrap 2>nul
 echo.
 
-:: 检查模型列表确认存在
-ollama list 2>nul | findstr "qwen3.5" >nul
+:: 提取模型名首段用于列表匹配（处理含 tag 的 model，如 translategemma:4b），随后检查模型列表确认存在
+for /f "tokens=1 delims=:" %%m in ("%MODEL%") do set MODEL_PREFIX=%%m
+ollama list 2>nul | findstr "%MODEL_PREFIX%" >nul
 if errorlevel 1 (
     echo  [!] 模型可能未正确安装，请手动检查: ollama list
 ) else (
@@ -104,11 +114,16 @@ echo ╠════════════════════════
 echo ║  接下来：                                ║
 echo ║  1. 打开 YuxTrans 扩展设置页            ║
 echo ║  2. 服务商选择「本地模型 (Ollama)」      ║
-echo ║  3. 确认模型为 qwen3.5:0.8b            ║
+echo ║  3. 确认模型为 %MODEL%
 echo ║  4. 点击「保存服务商配置」              ║
 echo ║                                          ║
 echo ║  现在可以离线使用翻译功能了！            ║
 echo ╚══════════════════════════════════════════╝
+echo  推荐模型分档（可按需切换，重跑脚本时用参数指定）：
+echo    最快（低配 / 纯 CPU）    qwen3.5:0.8b         约 1GB
+echo    推荐（专用翻译模型）     translategemma:4b    约 3.3GB
+echo    最佳质量（高端机 / GPU） translategemma:12b   约 8GB
 echo.
-
+echo  示例: setup-ollama.bat translategemma:4b
+echo.
 pause

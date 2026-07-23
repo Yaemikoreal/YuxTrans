@@ -13,6 +13,7 @@
   --yxt-ink-80: rgba(44, 40, 37, 0.8);
   --yxt-ink-60: rgba(44, 40, 37, 0.6);
   --yxt-ink-40: rgba(44, 40, 37, 0.4);
+  --yxt-ink-25: rgba(44, 40, 37, 0.25);
   --yxt-ink-15: rgba(44, 40, 37, 0.15);
   --yxt-ink-08: rgba(44, 40, 37, 0.08);
   --yxt-ink-06: rgba(44, 40, 37, 0.06);
@@ -77,6 +78,10 @@
   --yxt-radius-md: 4px;
   --yxt-radius-lg: 6px;
 
+  /* 字号 */
+  --yxt-text-xs: 11px;
+  --yxt-text-sm: 12px;
+
   /* 动效 */
   --yxt-ease-paper: cubic-bezier(0.25, 0.1, 0.25, 1.0);
   --yxt-transition-fast: 150ms var(--yxt-ease-paper);
@@ -90,6 +95,7 @@
     --yxt-ink-80: rgba(212, 207, 199, 0.8);
     --yxt-ink-60: rgba(212, 207, 199, 0.6);
     --yxt-ink-40: rgba(212, 207, 199, 0.4);
+    --yxt-ink-25: rgba(212, 207, 199, 0.25);
     --yxt-ink-15: rgba(212, 207, 199, 0.15);
     --yxt-ink-08: rgba(212, 207, 199, 0.08);
     --yxt-ink-06: rgba(212, 207, 199, 0.06);
@@ -174,6 +180,11 @@ code {
 .yuxtrans-popup::before,
 .yuxtrans-popup::after {
   display: none;
+}
+
+/* F4：已 pin 的浮窗左边线变暖色，区别于普通浮窗 */
+.yuxtrans-popup[data-pinned="1"] {
+  border-left-color: var(--yxt-warning);
 }
 
 .yuxtrans-popup-header {
@@ -594,6 +605,130 @@ code {
 
 .yuxtrans-site-rule-toast.show {
   transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* ===== F1 悬停段落翻译 ===== */
+.yuxtrans-hover-target {
+  outline: 1.5px dashed var(--yxt-dusk-40);
+  outline-offset: 2px;
+  transition: outline-color var(--yxt-transition-fast);
+}
+
+.yuxtrans-hover-translation {
+  display: block;
+  margin: var(--yxt-space-2) 0 0;
+  padding: var(--yxt-space-2) var(--yxt-space-3) var(--yxt-space-2) var(--yxt-space-3);
+  background: var(--yxt-paper-98);
+  border-left: 2px solid var(--yxt-dusk-40);
+  border-radius: var(--yxt-radius-sm);
+  font-family: var(--yxt-font-serif);
+  font-size: var(--yxt-text-sm);
+  line-height: 1.7;
+  color: var(--yxt-text-secondary);
+  box-shadow: var(--yxt-shadow-sm);
+  position: relative;
+  animation: yuxtrans-slideIn 200ms var(--yxt-ease-paper);
+}
+
+.yuxtrans-hover-translation .yuxtrans-hover-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--yxt-text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--yxt-radius-sm);
+  transition: all var(--yxt-transition-fast);
+}
+
+.yuxtrans-hover-translation .yuxtrans-hover-close:hover {
+  color: var(--yxt-text);
+  background: var(--yxt-bg-hover);
+}
+
+/* ===== F2 单词词典卡片 ===== */
+.yuxtrans-dict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--yxt-space-2);
+  font-size: var(--yxt-text-sm);
+  line-height: 1.6;
+}
+
+.yuxtrans-dict-word {
+  font-family: var(--yxt-font-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--yxt-text);
+}
+
+.yuxtrans-dict-phonetic {
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.yuxtrans-dict-sense {
+  padding: var(--yxt-space-1) 0;
+  border-top: 1px solid var(--yxt-divider);
+}
+
+.yuxtrans-dict-sense:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.yuxtrans-dict-pos {
+  display: inline-block;
+  margin-right: var(--yxt-space-2);
+  padding: 1px 6px;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-dusk);
+  background: var(--yxt-dusk-12);
+  border-radius: var(--yxt-radius-sm);
+}
+
+.yuxtrans-dict-meaning {
+  color: var(--yxt-text);
+}
+
+.yuxtrans-dict-example {
+  display: block;
+  margin-top: var(--yxt-space-1);
+  padding-left: var(--yxt-space-3);
+  border-left: 1.5px solid var(--yxt-dusk-25);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-secondary);
+}
+
+.yuxtrans-dict-example .yuxtrans-dict-example-target {
+  display: block;
+  color: var(--yxt-text-tertiary);
+  font-style: italic;
+}
+
+/* ===== F3 译文显示样式：弱化/模糊原文 ===== */
+.yuxtrans-original-fade {
+  opacity: 0.45;
+  transition: opacity var(--yxt-transition-normal);
+}
+
+.yuxtrans-original-blur {
+  filter: blur(2.5px);
+  opacity: 0.6;
+  transition: filter var(--yxt-transition-normal), opacity var(--yxt-transition-normal);
+  cursor: pointer;
+}
+
+.yuxtrans-original-blur:hover {
+  filter: blur(0);
   opacity: 1;
 }
 

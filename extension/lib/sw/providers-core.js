@@ -35,6 +35,8 @@
   function isProviderAvailable(providerConfig) {
     const p = providerConfig || {};
     if (p.provider === 'local') return true;
+    // F7：谷歌免费接口无需 API Key
+    if (p.provider === 'google') return true;
     if (p.provider === 'custom') {
       return !!(p.customProvider?.endpoint && p.customProvider?.apiKey);
     }

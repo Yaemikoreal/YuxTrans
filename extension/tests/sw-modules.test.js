@@ -172,3 +172,25 @@ test('placeholders：自闭合与带属性标签', () => {
   const restored = SW.restorePlaceholders(text, placeholders);
   assert.strictEqual(restored, src);
 });
+
+test('buildDictionaryPrompt 要求严格 JSON 输出', () => {
+  const prompt = SW.buildDictionaryPrompt('world', 'en', 'zh');
+  assert.ok(prompt.includes('JSON'));
+  assert.ok(prompt.includes('senses'));
+  assert.ok(prompt.includes('"word"'));
+  assert.ok(prompt.includes('"phonetic"'));
+  assert.ok(prompt.includes('world'));
+  // 最多 4 个义项约束
+  assert.ok(prompt.includes('at most 4 senses'));
+});
+
+test('message-actions：lookupWord 归入 translate 类', () => {
+  assert.strictEqual(SW.isKnownMessageAction('lookupWord'), true);
+  assert.strictEqual(SW.classifyMessageAction('lookupWord'), 'translate');
+});
+
+test('constants：google 免费接口端点', () => {
+  assert.ok(SW.API_ENDPOINTS.google.includes('translate.googleapis.com'));
+  assert.ok(Array.isArray(SW.DEFAULT_MODELS.google));
+  assert.ok(SW.supportsJsonMode('google') === false);
+});
