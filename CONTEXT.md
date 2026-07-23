@@ -19,4 +19,4 @@
 ## 边界上下文
 
 - **Browser Extension**：面向用户的所有交互发生地，包含 Popup、Options Page、Content Script、Background Service Worker。
-- **Python Package**：当前暂停维护，不提供本次优化范围内的交互入口。
+- **Android App（规划，未实现）**：作为后续版本 roadmap 选项之一，设计与实现计划留存于 `docs/superpowers/`。

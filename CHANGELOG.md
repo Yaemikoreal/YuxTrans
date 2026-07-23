@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **归档 Python 桌面客户端与孤岛工具** - 删除 `yuxtrans/desktop/`、六个零调用方 utils（memory / style / terminology / text_processing / startup / setup_wizard）、冗余 `setup.py`、孤儿 `benchmark/` 与 `test-options.js` + jsdom 依赖；Python 包仅保留 engine + cache 作最小可复用库，浏览器扩展为主产品。
 - 误导性安装脚本 `install.sh` / `install.bat`（宣传已不存在的 `yuxtrans --help` CLI 与桌面端 entry point）。
+- **移除 Python 包** — 删除 `yuxtrans/`、`tests/`、`examples/`、`benchmark/` 及 `pyproject.toml` / `requirements.txt` / `pytest.ini`，项目聚焦浏览器扩展；安卓端设计与实现计划留存于 `docs/superpowers/`，作为后续版本 roadmap 选项之一。
 
 ### Fixed
 
