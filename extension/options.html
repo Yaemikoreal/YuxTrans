@@ -50,6 +50,7 @@
               <option value="siliconflow">SiliconFlow</option>
               <option value="groq">Groq</option>
               <option value="anthropic">Anthropic</option>
+              <option value="google">谷歌免费翻译（免 Key）</option>
             </select>
           </div>
           <div class="form-group">
@@ -138,6 +139,7 @@
               <option value="groq">Groq</option>
               <option value="moonshot">Moonshot (月之暗面)</option>
               <option value="siliconflow">SiliconFlow</option>
+              <option value="google">谷歌免费翻译（免 Key）</option>
               <option value="local">本地模型 (Ollama)</option>
               <option value="custom">自定义供应商</option>
             </select>
@@ -181,14 +183,14 @@
               </div>
             </div>
 
-            <!-- 轻量模型推荐 -->
+            <!-- 推荐模型分档（F8） -->
             <div id="recommendedModelsPanel" class="model-recommendations" style="margin-bottom: var(--yxt-space-4);">
-              <div class="model-recommendations-title">轻量模型推荐</div>
+              <div class="model-recommendations-title">推荐模型分档</div>
               <div id="modelRecommendations">
-                <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 600MB">
+                <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 1GB">
                   <div class="model-card-info">
-                    <div class="model-card-name">Qwen 3.5 · 0.8B</div>
-                    <div class="model-card-meta">约 600MB · 中文优化 · 默认推荐</div>
+                    <div class="model-card-name">Qwen 3.5 · 0.8B · 最快</div>
+                    <div class="model-card-meta">约 1GB · 低配 / 纯 CPU · 默认</div>
                   </div>
                   <div class="model-card-actions">
                     <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
@@ -200,30 +202,30 @@
                     <div class="model-progress-text">0%</div>
                   </div>
                 </div>
-                <div class="model-card" data-model="phi4-mini:latest" data-size="约 2GB">
+                <div class="model-card" data-model="translategemma:4b" data-size="约 3.3GB">
                   <div class="model-card-info">
-                    <div class="model-card-name">Phi 4 · Mini</div>
-                    <div class="model-card-meta">约 2GB · 英文能力强</div>
+                    <div class="model-card-name">TranslateGemma · 4B · 推荐</div>
+                    <div class="model-card-meta">约 3.3GB · 专用翻译模型 · 推荐</div>
                   </div>
                   <div class="model-card-actions">
-                    <button class="btn-test model-download-btn" data-model="phi4-mini:latest">下载</button>
-                    <button class="btn-test model-cancel-btn" data-model="phi4-mini:latest" style="display: none;">取消</button>
-                    <button class="btn-test model-copy-btn" data-model="phi4-mini:latest">复制命令</button>
+                    <button class="btn-test model-download-btn" data-model="translategemma:4b">下载</button>
+                    <button class="btn-test model-cancel-btn" data-model="translategemma:4b" style="display: none;">取消</button>
+                    <button class="btn-test model-copy-btn" data-model="translategemma:4b">复制命令</button>
                   </div>
                   <div class="model-card-progress" style="display: none;">
                     <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
                     <div class="model-progress-text">0%</div>
                   </div>
                 </div>
-                <div class="model-card" data-model="gemma3:1b" data-size="约 800MB">
+                <div class="model-card" data-model="translategemma:12b" data-size="约 8GB">
                   <div class="model-card-info">
-                    <div class="model-card-name">Gemma 3 · 1B</div>
-                    <div class="model-card-meta">约 800MB · 多语言均衡</div>
+                    <div class="model-card-name">TranslateGemma · 12B · 最佳质量</div>
+                    <div class="model-card-meta">约 8GB · 高端机 / GPU</div>
                   </div>
                   <div class="model-card-actions">
-                    <button class="btn-test model-download-btn" data-model="gemma3:1b">下载</button>
-                    <button class="btn-test model-cancel-btn" data-model="gemma3:1b" style="display: none;">取消</button>
-                    <button class="btn-test model-copy-btn" data-model="gemma3:1b">复制命令</button>
+                    <button class="btn-test model-download-btn" data-model="translategemma:12b">下载</button>
+                    <button class="btn-test model-cancel-btn" data-model="translategemma:12b" style="display: none;">取消</button>
+                    <button class="btn-test model-copy-btn" data-model="translategemma:12b">复制命令</button>
                   </div>
                   <div class="model-card-progress" style="display: none;">
                     <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
@@ -237,7 +239,7 @@
               <option value="">点击下方刷新获取模型...</option>
             </select>
             <input type="text" id="localModel" placeholder="qwen3.5:0.8b">
-            <p class="hint yxt-note">推荐模型: <strong>qwen3.5:0.8b</strong>（轻量离线翻译）。Windows 可在 PowerShell 执行 <code>irm https://ollama.com/install.ps1 | iex</code> 安装 Ollama，或运行 <code>extension/setup-ollama.bat</code> 一键配置。注意：国内下载可能较慢；本地模型性能受机器配置限制，若运行不畅请在「通用设置」中开启「自动切换备选」并配置云端供应商。</p>
+            <p class="hint yxt-note">推荐分档：<strong>qwen3.5:0.8b</strong>（最快，约 1GB）/ <strong>translategemma:4b</strong>（推荐，约 3.3GB）/ <strong>translategemma:12b</strong>（最佳质量，约 8GB）。Windows 可运行 <code>extension/setup-ollama.bat</code>、macOS/Linux 运行 <code>./extension/setup-ollama.sh</code> 一键配置（支持参数指定模型）。注意：国内下载可能较慢；本地模型性能受机器配置限制，若运行不畅请在「通用设置」中开启「自动切换备选」并配置云端供应商。</p>
             <div class="button-group">
               <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
               <button class="btn-test" id="testLocalBtn">连接测试</button>
@@ -405,6 +407,31 @@
               <label class="form-label" for="autoCopy" style="margin: 0;">翻译后自动复制结果</label>
             </div>
           </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="hoverTranslate" checked>
+              <label class="form-label" for="hoverTranslate" style="margin: 0;">悬停段落翻译（按修饰键 + 鼠标悬停段落）</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="hoverModifier">悬停触发修饰键</label>
+            <select id="hoverModifier">
+              <option value="alt">Alt</option>
+              <option value="ctrl">Ctrl</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="dictMode" checked>
+              <label class="form-label" for="dictMode" style="margin: 0;">单词词典模式（划到或双击单词出词典卡片）</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="dictDblclick" checked>
+              <label class="form-label" for="dictDblclick" style="margin: 0;">双击单词直接查词典</label>
+            </div>
+          </div>
         </div>
         <div class="section">
           <h2 class="section-title">流式输出</h2>
@@ -413,6 +440,38 @@
               <input type="checkbox" id="enableStreaming" checked>
               <label class="form-label" for="enableStreaming" style="margin: 0;">启用流式翻译（实时显示逐字输出）</label>
             </div>
+          </div>
+        </div>
+        <div class="section">
+          <h2 class="section-title">译文显示与正文识别</h2>
+          <div class="form-group">
+            <label class="form-label" for="originalStyle">整页原文呈现样式</label>
+            <select id="originalStyle">
+              <option value="normal">双语对照（默认）</option>
+              <option value="fade">弱化原文</option>
+              <option value="blur">模糊原文（悬停还原）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="inputTranslate">
+              <label class="form-label" for="inputTranslate" style="margin: 0;">输入框翻译（允许翻译 input/textarea 选中文本并插入译文）</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-group">
+              <input type="checkbox" id="smartContentDetection">
+              <label class="form-label" for="smartContentDetection" style="margin: 0;">正文区域识别（整页翻译只翻正文，跳过导航/侧栏/页脚）</label>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <h2 class="section-title">双档案对照</h2>
+          <div class="form-group">
+            <label class="form-label" for="compareProfileId">对照翻译档案（划词时用该档案再译并钉到对照浮窗）</label>
+            <select id="compareProfileId">
+              <option value="">不启用对照</option>
+            </select>
           </div>
         </div>
         <details class="section advanced-section" id="advancedSiteSection">

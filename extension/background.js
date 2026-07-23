@@ -335,7 +335,9 @@ let config = {
   // F5 输入框翻译
   inputTranslate: false,
   // F6 正文区域识别（整页翻译只翻正文区）
-  smartContentDetection: false
+  smartContentDetection: false,
+  // F4b：双档案对照--对照档案 ID（为空则不对照）
+  compareProfileId: ''
 };
 
 let cache = new Map();        // key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
@@ -3069,6 +3071,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       lookupWord(request.text, sourceLang, targetLang)
         .then(result => sendResponse({ success: true, ...result }))
         .catch(error => sendResponse(failResponse(error)));
+      return;
+    }
+
+    else if (request.action === 'translateWithProfile') {
+      // F4b：双档案对照--用指定 profileId 翻译同一文本，结果在对照浮窗展示
+      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+      const targetLang = request.targetLang || config.targetLang || 'zh';
+      const context = request.context || null;
+      const profileId = request.profileId || '';
+      const profile = (config.profiles || []).find((p) => p.id === profileId);
+      if (!profile) {
+        sendResponse({ success: false, error: '对照档案不存在' });
+        return;
+      }
+      const override = {
+        provider: profile.provider,
+        apiKey: profile.apiKey,
+        apiEndpoint: profile.apiEndpoint,
+        model: profile.model,
+        localModel: profile.localModel,
+        customProvider: profile.customProvider || { name: '', endpoint: '', apiKey: '', format: 'openai', model: '' }
+      };
+      translateWithCloud(request.text, sourceLang, targetLang, context, override)
+        .then((text) => sendResponse({ success: true, text, engine: profile.provider }))
+        .catch((error) => sendResponse(failResponse(error)));
       return;
     }
 

@@ -61,7 +61,9 @@ class YuxTransContent {
       // F6 正文区域识别：整页翻译只翻正文区，跳过导航/侧栏/页脚
       smartContentDetection: false,
       // F5 输入框翻译：input/textarea 内选中文本允许翻译，浮窗提供"插入译文"按钮
-      inputTranslate: false
+      inputTranslate: false,
+      // F4b：双档案对照--对照档案 ID（为空则不对照）
+      compareProfileId: ''
     };
     this.init();
   }
@@ -100,6 +102,7 @@ class YuxTransContent {
         this.config.originalStyle = ['normal', 'fade', 'blur'].includes(response.originalStyle) ? response.originalStyle : 'normal';
         this.config.inputTranslate = !!response.inputTranslate;
         this.config.smartContentDetection = !!response.smartContentDetection;
+        this.config.compareProfileId = response.compareProfileId || '';
         // 站点级双语偏好覆盖全局
         const host = (location.hostname || '').toLowerCase();
         if (this.helpers.resolveSiteBilingualMode) {
@@ -502,6 +505,37 @@ class YuxTransContent {
   }
 
   /**
+   * F4b：双档案对照--用对照档案翻译同一文本，结果显示在钉住的对照浮窗
+   * 复用 showPopup 骨架；主浮窗若未 pin 则自动 pin 后再开对照浮窗
+   */
+  translateWithCompareProfile(text, sourceLang, targetLang, context) {
+    const profileId = this.config.compareProfileId;
+    if (!profileId) return;
+    // 主浮窗钉住（保留主译文），再开对照浮窗
+    if (this.popup && this.popup.dataset.pinned !== '1') this.pinPopup();
+    // 对照浮窗：在主浮窗左侧偏移定位
+    const baseX = this.popup ? parseFloat(this.popup.style.left) - 340 : 100;
+    const baseY = this.popup ? parseFloat(this.popup.style.top) : 100;
+    this.showPopup(Math.max(16, baseX), baseY, text);
+    if (!this.popup) return;
+    // 标记为对照浮窗
+    this.popup.dataset.compare = '1';
+    const titleEl = this.popup.querySelector('.yuxtrans-popup-title');
+    if (titleEl) titleEl.textContent = 'YuxTrans · 对照';
+
+    chrome.runtime.sendMessage(
+      { action: 'translateWithProfile', text, sourceLang, targetLang, context, profileId },
+      (response) => {
+        if (response && response.success) {
+          this.updatePopup(response.text, false, response.engine || 'compare', text);
+        } else {
+          this.updatePopup((response && response.error) || '对照翻译失败', false, 'error', text);
+        }
+      }
+    );
+  }
+
+  /**
    * F5：取 input/textarea 当前选中文本
    */
   _getInputSelection(inputEl) {
@@ -732,6 +766,10 @@ class YuxTransContent {
 
         if (response && response.success) {
           this.updatePopup(response.text, response.cached, response.engine, text);
+          // F4b：双档案对照--主翻译成功后用对照档案再译，结果钉到对照浮窗
+          if (this.config.compareProfileId) {
+            this.translateWithCompareProfile(text, sourceLang, targetLang, context);
+          }
         } else {
           const userError = response?.userError;
           let errorMsg;

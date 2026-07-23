@@ -11,6 +11,7 @@ const PROVIDER_NAMES = {
   groq: 'Groq',
   moonshot: 'Moonshot',
   siliconflow: 'SiliconFlow',
+  google: '谷歌免费翻译',
   local: 'Ollama',
   custom: '自定义'
 };

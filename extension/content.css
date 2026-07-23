@@ -187,6 +187,11 @@ code {
   border-left-color: var(--yxt-warning);
 }
 
+/* F4b：对照浮窗左边线用黄昏紫，区别于主浮窗与 pin 浮窗 */
+.yuxtrans-popup[data-compare="1"] {
+  border-left-color: var(--yxt-dusk);
+}
+
 .yuxtrans-popup-header {
   display: flex;
   align-items: center;

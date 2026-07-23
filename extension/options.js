@@ -76,6 +76,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const autoFallbackInput = getById('autoFallback');
   const enableStreamingInput = getById('enableStreaming');
   const offlineModeInput = getById('offlineMode');
+  // F1-F6 新配置元素
+  const hoverTranslateInput = getById('hoverTranslate');
+  const hoverModifierSelect = getById('hoverModifier');
+  const dictModeInput = getById('dictMode');
+  const dictDblclickInput = getById('dictDblclick');
+  const originalStyleSelect = getById('originalStyle');
+  const inputTranslateInput = getById('inputTranslate');
+  const smartContentDetectionInput = getById('smartContentDetection');
+  // F4b：双档案对照
+  const compareProfileIdSelect = getById('compareProfileId');
   const glossaryCountEl = getById('glossaryCount');
   const importGlossaryInput = getById('importGlossaryInput');
   const clearGlossaryBtn = getById('clearGlossaryBtn');
@@ -301,6 +311,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
     if (enableStreamingInput) enableStreamingInput.checked = config.enableStreaming !== false;
     if (offlineModeInput) offlineModeInput.checked = !!config.offlineMode;
+    // F1-F6 配置回填
+    if (hoverTranslateInput) hoverTranslateInput.checked = config.hoverTranslate !== false;
+    if (hoverModifierSelect) hoverModifierSelect.value = config.hoverModifier === 'ctrl' ? 'ctrl' : 'alt';
+    if (dictModeInput) dictModeInput.checked = config.dictMode !== false;
+    if (dictDblclickInput) dictDblclickInput.checked = config.dictDblclick !== false;
+    if (originalStyleSelect) originalStyleSelect.value = ['normal', 'fade', 'blur'].includes(config.originalStyle) ? config.originalStyle : 'normal';
+    if (inputTranslateInput) inputTranslateInput.checked = !!config.inputTranslate;
+    if (smartContentDetectionInput) smartContentDetectionInput.checked = !!config.smartContentDetection;
+    // F4b：对照档案下拉从 profiles 填充，回填当前值
+    if (compareProfileIdSelect) {
+      const profiles = Array.isArray(config.profiles) ? config.profiles : [];
+      const activeId = config.activeProfileId || '';
+      compareProfileIdSelect.innerHTML = '<option value="">不启用对照</option>' +
+        profiles
+          .filter((p) => p.id !== activeId) // 排除当前激活档案（无需与自身对照）
+          .map((p) => {
+            const name = PROVIDER_NAMES[p.provider] || p.provider;
+            const model = p.model || p.localModel || '';
+            const sel = p.id === config.compareProfileId ? ' selected' : '';
+            return `<option value="${p.id}"${sel}>${name}${model ? ' · ' + model : ''}</option>`;
+          })
+          .join('');
+    }
     if (glossaryCountEl) glossaryCountEl.textContent = String((config.glossary || []).length);
     renderActiveConfig();
   }
@@ -670,14 +703,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const provider = providerSelect.value;
     const isLocal = provider === 'local';
     const isCustom = provider === 'custom';
-    if (apiKeyGroup) apiKeyGroup.style.display = (isLocal || isCustom) ? 'none' : 'block';
-    if (endpointGroup) endpointGroup.style.display = (isLocal || isCustom) ? 'none' : 'block';
-    if (modelSelectGroup) modelSelectGroup.style.display = (isLocal || isCustom) ? 'none' : 'block';
+    // F7：谷歌免费接口零配置（免 Key / 端点 / 模型选择），与 local/custom 一样隐藏配置字段
+    const isGoogle = provider === 'google';
+    const isNoConfig = isLocal || isCustom || isGoogle;
+    if (apiKeyGroup) apiKeyGroup.style.display = isNoConfig ? 'none' : 'block';
+    if (endpointGroup) endpointGroup.style.display = isNoConfig ? 'none' : 'block';
+    if (modelSelectGroup) modelSelectGroup.style.display = isNoConfig ? 'none' : 'block';
     if (localModelGroup) localModelGroup.style.display = isLocal ? 'block' : 'none';
     if (customProviderSection) customProviderSection.style.display = isCustom ? 'block' : 'none';
     const activeProfile = getActiveProfile(config);
     const selectedModel = activeProfile?.model || config?.model || '';
-    if (!isLocal && !isCustom) loadModelOptions(provider, selectedModel);
+    if (!isLocal && !isCustom && !isGoogle) loadModelOptions(provider, selectedModel);
   }
 
   providerSelect?.addEventListener('change', updateProviderUI);
@@ -954,7 +990,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       model = modelSelect.value || '';
     }
 
-    if (!apiKey && provider !== 'local') {
+    // F7：谷歌免费接口免 Key
+    if (!apiKey && provider !== 'local' && provider !== 'google') {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
@@ -1023,7 +1060,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKey = apiKeyInput.value.trim();
     const endpoint = apiEndpointInput.value.trim() || defaults.endpoints[provider];
 
-    if (!apiKey && provider !== 'local') {
+    // F7：谷歌免费接口免 Key
+    if (!apiKey && provider !== 'local' && provider !== 'google') {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
@@ -1139,11 +1177,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const provider = providerSelect.value;
     const isLocal = provider === 'local';
     const isCustom = provider === 'custom';
+    // F7：谷歌免费接口零配置，无需模型
+    const isGoogle = provider === 'google';
     const modelId = isLocal
       ? localModelInput.value.trim()
-      : (isCustom ? getCustomModelValue() : (modelSelect.value || ''));
+      : (isCustom ? getCustomModelValue() : (isGoogle ? 'gtx' : (modelSelect.value || '')));
 
-    if (!modelId) {
+    if (!modelId && !isGoogle) {
       showStatus(isLocal ? '请填写本地模型名称' : '请先选择一个模型', 'error');
       return;
     }
@@ -1151,9 +1191,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const profile = {
       provider,
       label: `${PROVIDER_NAMES[provider] || provider} - ${modelId || 'default'}`,
-      apiKey: isLocal || isCustom ? '' : apiKeyInput.value.trim(),
-      apiEndpoint: isLocal || isCustom ? '' : apiEndpointInput.value.trim(),
-      model: isLocal ? '' : modelId,
+      apiKey: isLocal || isCustom || isGoogle ? '' : apiKeyInput.value.trim(),
+      apiEndpoint: isLocal || isCustom || isGoogle ? '' : apiEndpointInput.value.trim(),
+      model: isLocal || isGoogle ? '' : modelId,
       localModel: isLocal ? modelId : '',
       customProvider: isCustom
         ? {
@@ -1296,7 +1336,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
         autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
         enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
-        offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false
+        offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
+        // F1-F6 配置收集
+        hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,
+        hoverModifier: getVal(hoverModifierSelect) === 'ctrl' ? 'ctrl' : 'alt',
+        dictMode: dictModeInput ? getChecked(dictModeInput) : true,
+        dictDblclick: dictDblclickInput ? getChecked(dictDblclickInput) : true,
+        originalStyle: ['normal', 'fade', 'blur'].includes(getVal(originalStyleSelect)) ? getVal(originalStyleSelect) : 'normal',
+        inputTranslate: inputTranslateInput ? getChecked(inputTranslateInput) : false,
+        smartContentDetection: smartContentDetectionInput ? getChecked(smartContentDetectionInput) : false,
+        compareProfileId: compareProfileIdSelect ? (getVal(compareProfileIdSelect) || '') : ''
       };
 
       const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
