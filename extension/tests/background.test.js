@@ -394,3 +394,110 @@ test('generateCacheKey 词典模式独立缓存键（dict 段）', () => {
   assert.notStrictEqual(dictKey, normalKey);
   assert.ok(dictKey.includes(':dict:'));
 });
+
+// ===== 整页流式翻译（SSE）相关 =====
+
+/**
+ * 构造一个按行吐出 SSE 数据的假 fetch 响应
+ */
+function fakeSseResponse(sseLines) {
+  const encoder = new TextEncoder();
+  let idx = 0;
+  return {
+    ok: true,
+    status: 200,
+    text: async () => '',
+    body: {
+      getReader: () => ({
+        read: async () => (idx < sseLines.length
+          ? { done: false, value: encoder.encode(sseLines[idx++]) }
+          : { done: true, value: undefined })
+      })
+    }
+  };
+}
+
+test('translateWithStream：SSE chunk 聚合为完整译文并逐段推送', async () => {
+  const pushed = [];
+  const originalTabsSend = chrome.tabs.sendMessage;
+  chrome.tabs.sendMessage = async (tabId, msg) => { pushed.push({ tabId, msg }); };
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => fakeSseResponse([
+    'data: {"message":{"content":"你"}}\n\n',
+    'data: {"message":{"content":"好"}}\n\n',
+    'data: {"message":{"content":"，世界"}}\n\n',
+    'data: [DONE]\n\n'
+  ]);
+
+  try {
+    const fullText = await bg.translateWithStream(
+      'Hello, world', 'en', 'zh', 42, null,
+      { provider: 'local', model: 'qwen2', apiEndpoint: '', customProvider: {} },
+      'req-agg-1', null
+    );
+    // chunk 聚合结果正确
+    assert.strictEqual(fullText, '你好，世界');
+    // 每段 chunk 都携带 requestId 推送给发起标签页，fullText 为累积值
+    const chunks = pushed.filter((p) => p.msg.action === 'streamChunk');
+    assert.strictEqual(chunks.length, 3);
+    assert.deepStrictEqual(chunks.map((c) => c.msg.chunk), ['你', '好', '，世界']);
+    assert.deepStrictEqual(
+      chunks.map((c) => c.msg.fullText),
+      ['你', '你好', '你好，世界']
+    );
+    assert.ok(chunks.every((c) => c.msg.requestId === 'req-agg-1' && c.tabId === 42));
+  } finally {
+    global.fetch = originalFetch;
+    chrome.tabs.sendMessage = originalTabsSend;
+  }
+});
+
+test('translateWithStream：注册控制器到取消会话，cancel 时 abort 在途 SSE', async () => {
+  const sessionId = 'yxt-test-abort-1';
+  const originalFetch = global.fetch;
+  let fetchSignal = null;
+  // 永不结束的 reader：abort 后立即抛 AbortError（模拟真实 fetch/reader 行为）
+  global.fetch = async (url, opts) => {
+    fetchSignal = opts.signal;
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () => new Promise((resolve, reject) => {
+            const abortErr = () => {
+              const e = new Error('aborted');
+              e.name = 'AbortError';
+              reject(e);
+            };
+            if (opts.signal.aborted) { abortErr(); return; }
+            opts.signal.addEventListener('abort', abortErr);
+          })
+        })
+      }
+    };
+  };
+
+  try {
+    const pending = bg.translateWithStream(
+      'Long paragraph', 'en', 'zh', 7, null,
+      { provider: 'local', model: 'qwen2', apiEndpoint: '', customProvider: {} },
+      'req-abort-1', sessionId
+    ).catch((e) => e);
+
+    // 等待 fetch 发出
+    await new Promise((r) => setTimeout(r, 10));
+    assert.ok(fetchSignal, 'fetch 应已发出');
+
+    const aborted = bg.cancelTranslationSession(sessionId);
+    assert.ok(aborted >= 1, '流式控制器应注册进取消会话');
+
+    const err = await pending;
+    assert.ok(err instanceof Error);
+    // AbortError 被映射为友好的超时提示
+    assert.ok(err.message.includes('超时'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

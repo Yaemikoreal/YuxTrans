@@ -1350,7 +1350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
       if (res?.success) {
-        showStatus('通用设置已保存', 'success');
+        showStatus('翻译偏好已保存', 'success');
         config = { ...config, ...activeConfig };
         renderActiveConfig();
       } else {

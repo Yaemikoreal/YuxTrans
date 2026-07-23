@@ -1940,7 +1940,7 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
  * 流式翻译请求（SSE）
  * 通过 chrome.tabs.sendMessage 逐字推送到 content script
  */
-async function translateWithStream(text, sourceLang, targetLang, tabId, context = null, providerOverride = null, requestId = null) {
+async function translateWithStream(text, sourceLang, targetLang, tabId, context = null, providerOverride = null, requestId = null, sessionId = null) {
   const p = resolveProviderConfig(providerOverride);
   // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
   const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
@@ -1965,6 +1965,8 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, context 
   const { headers, body } = buildRequest(prompt, true, p);
 
   const controller = new AbortController();
+  // 接入整页取消会话：用户取消整页流式翻译时 abort 在途 SSE（与批量路径对齐，避免继续消耗配额）
+  registerSessionController(sessionId, controller);
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2); // 流式给更多时间
 
   try {
@@ -2965,6 +2967,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     else if (request.action === 'translateStream') {
+      // 整页取消后不再发起新的流式请求（与 translateBatchInternal 的会话检查对齐）
+      if (isSessionCancelled(request.sessionId || null)) {
+        sendResponse(failResponse(new Error('翻译已取消')));
+        return;
+      }
       const streamStart = performance.now();
       const sourceLang = request.sourceLang || config.sourceLang || 'auto';
       let targetLang = request.targetLang || config.targetLang || 'zh';
@@ -3009,7 +3016,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
 
-      translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, context, null, request.requestId || null)
+      translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, context, null, request.requestId || null, request.sessionId || null)
         .then(async (fullText) => {
           await setToCache(cacheKey, fullText);
           recordUsage(false, 1, streamTokens);
@@ -3475,6 +3482,7 @@ if (typeof module !== 'undefined' && module.exports) {
     resolveTargetLanguage,
     resolveSourceLanguage,
     isProviderAvailable,
+    translateWithStream,
     splitIntoCharBatches,
     buildBatchPrompt,
     buildTranslationPrompt,

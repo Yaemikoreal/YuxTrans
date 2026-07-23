@@ -192,7 +192,8 @@ body {
 .section-title {
   font-family: var(--yxt-font-cjk);
   font-size: var(--yxt-text-xl);
-  margin-bottom: var(--yxt-space-4);
+  /* 规范 §5.3：章节标题底部 12px 间距 */
+  margin-bottom: var(--yxt-space-3);
   color: var(--yxt-text);
   font-weight: var(--yxt-font-medium);
   display: flex;
@@ -228,6 +229,11 @@ body {
   color: var(--yxt-text-secondary);
   margin-top: var(--yxt-space-2);
   line-height: 1.6;
+}
+
+/* 连续堆放的说明文字收紧间距 */
+.hint + .hint {
+  margin-top: var(--yxt-space-1);
 }
 
 /* 行内代码：像铅字印刷的等宽小字 */
@@ -266,7 +272,7 @@ input[type="number"],
 select,
 textarea {
   width: 100%;
-  padding: 10px 0;
+  padding: var(--yxt-space-2) 0;
   border: none;
   border-bottom: 1px solid var(--yxt-annotation-50);
   border-radius: 0;
@@ -319,13 +325,15 @@ select {
 /* ===== 复选框与单选 ===== */
 .checkbox-group {
   display: flex;
-  align-items: center;
+  /* 与 .style-option 同一基线：长标签换行时文本左缘对齐，控件不悬浮居中 */
+  align-items: flex-start;
   gap: var(--yxt-space-2);
 }
 
 .checkbox-group input[type="checkbox"] {
   width: 14px;
   height: 14px;
+  margin-top: 2px;
   accent-color: var(--yxt-dusk);
   cursor: pointer;
   border-radius: var(--yxt-radius-sm);
@@ -347,7 +355,7 @@ select {
   display: flex;
   align-items: center;
   gap: var(--yxt-space-2);
-  padding: 10px 14px;
+  padding: var(--yxt-space-2) var(--yxt-space-3);
   background: var(--yxt-bg);
   border: 1px solid var(--yxt-border);
   border-radius: var(--yxt-radius-md);
@@ -365,15 +373,244 @@ select {
   background: var(--yxt-bg-hover);
 }
 
+/* 选中态与 .style-option 统一：暮瞳竖线 + 微光底色 */
+.radio-group label:has(input:checked) {
+  position: relative;
+  background: var(--yxt-accent-soft);
+  border-color: var(--yxt-dusk-40);
+}
+
+.radio-group label:has(input:checked)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--yxt-space-2);
+  bottom: var(--yxt-space-2);
+  width: 2px;
+  background: var(--yxt-dusk);
+  border-radius: var(--yxt-radius-sm);
+}
+
 .radio-group input {
   accent-color: var(--yxt-dusk);
   width: 14px;
   height: 14px;
 }
 
+/* ===== 翻译偏好 tab：语义块 / 小节 / 设置行 ===== */
+
+/* 块级分区：暮瞳竖线只保留给块标题（.section-title::before） */
+.pref-block {
+  padding: var(--yxt-space-5) 0;
+  border-bottom: 1px solid var(--yxt-border-strong);
+}
+
+.pref-block:first-of-type {
+  padding-top: var(--yxt-space-2);
+}
+
+.pref-block:last-of-type {
+  border-bottom: none;
+}
+
+/* 块内小节：规范 §3.2 小标题 13-14px / 500 */
+.pref-subtitle {
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-base);
+  font-weight: var(--yxt-font-medium);
+  color: var(--yxt-text);
+  margin-bottom: var(--yxt-space-3);
+}
+
+.pref-group {
+  margin-top: var(--yxt-space-5);
+}
+
+.pref-group:first-of-type {
+  margin-top: 0;
+}
+
+/* 块内小节间距由 .pref-group 承担，小节内最后一个 form-group 不再叠加间距 */
+.pref-group .form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* 设置行原型：左标签 + 描述，右控件 */
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--yxt-space-4);
+  padding: var(--yxt-space-3) 0;
+  border-top: 1px solid var(--yxt-divider);
+}
+
+.pref-group .setting-row:first-of-type,
+.pref-details-body .setting-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.setting-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-row .form-label {
+  margin-bottom: 0;
+}
+
+.setting-desc {
+  margin-top: 2px;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-secondary);
+  line-height: 1.5;
+}
+
+/* 子选项：缩进 + 批注弱化色表达从属关系 */
+.setting-row--sub {
+  border-top: none;
+  padding-top: 0;
+  margin-top: calc(-1 * var(--yxt-space-2));
+  margin-left: var(--yxt-space-6);
+  padding-left: var(--yxt-space-3);
+  border-left: 2px solid var(--yxt-border);
+}
+
+.setting-row--sub .form-label {
+  color: var(--yxt-text-secondary);
+}
+
+/* 行内右侧控件：收为内容宽度，不再撑满整行 */
+.setting-control {
+  width: auto;
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.setting-control--num {
+  width: 96px;
+  min-width: 0;
+  text-align: right;
+}
+
+/* setting-row 右侧控件须用内容/固定宽度：全局 input[type=number|text] 的 width:100%（优先级 0,1,1）
+   会压过 .setting-control（0,1,0），叠加 flex-shrink:0 后左侧标签被挤成竖排，故在此用更高优先级压回 */
+.setting-row .setting-control { flex: 0 0 auto; width: auto; }
+.setting-row .setting-control--num { flex: 0 0 96px; width: 96px; }
+
+/* 块内说明文字与其后设置行之间的节奏 */
+.pref-group > .hint {
+  margin-bottom: var(--yxt-space-3);
+}
+
+/* details 折叠区：自定义暮瞳色系展开指示器 */
+.pref-summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: var(--yxt-space-2);
+  margin-bottom: 0;
+  transition: color var(--yxt-transition-fast);
+}
+
+.pref-summary::-webkit-details-marker {
+  display: none;
+}
+
+.pref-summary::before {
+  content: '';
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--yxt-annotation);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform var(--yxt-transition-fast);
+}
+
+.pref-summary:hover {
+  color: var(--yxt-accent-hover);
+}
+
+details[open] > .pref-summary::before {
+  transform: rotate(90deg);
+}
+
+details[open] > .pref-summary {
+  color: var(--yxt-text);
+}
+
+/* 展开后标题到控件 16px */
+.pref-details-body {
+  margin-top: var(--yxt-space-4);
+}
+
+.pref-details-body .form-group {
+  margin-bottom: var(--yxt-space-3);
+}
+
+/* 危险操作区：虚线隔离 + 弱化危险色 */
+.danger-zone {
+  margin-top: var(--yxt-space-6);
+  padding-top: var(--yxt-space-4);
+  border-top: 1px dashed var(--yxt-error);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--yxt-error);
+  border: 1px solid var(--yxt-error);
+  flex-shrink: 0;
+}
+
+.btn-danger:hover {
+  background: var(--yxt-error-soft);
+}
+
+.glossary-count {
+  font-weight: var(--yxt-font-medium);
+  color: var(--yxt-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* tab 底部动作条：语义上保存整个「翻译偏好」tab */
+.tab-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--yxt-space-3);
+  padding: var(--yxt-space-3) var(--yxt-space-4);
+  /* 抵消 .main-content 内边距，让动作条贴齐折页底边 */
+  margin: 0 calc(-1 * var(--yxt-space-8)) calc(-1 * var(--yxt-space-8));
+  background: var(--yxt-paper-95);
+  border-top: 1px solid var(--yxt-border-strong);
+  backdrop-filter: var(--yxt-backdrop);
+  -webkit-backdrop-filter: var(--yxt-backdrop);
+}
+
+.tab-action-note {
+  margin-right: auto;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-tertiary);
+}
+
+/* 行内按钮组（设置行右侧）：取消默认上边距（选择器需压过后文的 .button-group） */
+.setting-row .button-group--inline {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
 /* ===== 按钮 ===== */
 button {
-  padding: 10px 20px;
+  padding: var(--yxt-space-2) var(--yxt-space-4);
   border: none;
   border-radius: var(--yxt-radius-md);
   font-family: var(--yxt-font-sans);
@@ -414,7 +651,7 @@ label.btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
+  padding: var(--yxt-space-2) var(--yxt-space-4);
   border-radius: var(--yxt-radius-md);
   font-size: var(--yxt-text-sm);
   font-weight: var(--yxt-font-normal);
@@ -429,7 +666,7 @@ label.btn-secondary {
   background: var(--yxt-bg-tertiary);
   color: var(--yxt-text-secondary);
   font-size: var(--yxt-text-xs);
-  padding: 8px 14px;
+  padding: var(--yxt-space-2) var(--yxt-space-3);
   border: 1px solid var(--yxt-border);
   border-radius: var(--yxt-radius-md);
 }
@@ -479,7 +716,7 @@ label.btn-secondary {
   font-size: var(--yxt-text-2xl);
   font-weight: var(--yxt-font-medium);
   color: var(--yxt-text);
-  margin-bottom: 2px;
+  margin-bottom: var(--yxt-space-1);
   font-variant-numeric: tabular-nums;
 }
 
@@ -629,7 +866,7 @@ label.btn-secondary {
   font-size: var(--yxt-text-sm);
   font-weight: var(--yxt-font-medium);
   color: var(--yxt-text);
-  margin-bottom: 2px;
+  margin-bottom: var(--yxt-space-1);
 }
 
 .style-hint {
@@ -1064,6 +1301,11 @@ label.btn-secondary {
   .tab.active::after { display: none; }
   .main-content { padding: var(--yxt-space-4); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  /* 三卡看板保持一行，避免 2+1 寡行 */
+  .stats-grid.stats-3 { grid-template-columns: repeat(3, 1fr); }
+  .tab-action-bar {
+    margin: 0 calc(-1 * var(--yxt-space-4)) calc(-1 * var(--yxt-space-4));
+  }
 }
 
 @media (max-width: 520px) {
@@ -1086,6 +1328,16 @@ label.btn-secondary {
   }
   .radio-group label { width: 100%; }
   .section-title { font-size: var(--yxt-text-lg); }
+  .stats-grid.stats-3 { grid-template-columns: 1fr; }
+  /* 窄屏：右侧下拉控件折到标签下方整行排布 */
+  .setting-row { flex-wrap: wrap; gap: var(--yxt-space-2); }
+  .setting-control { width: 100%; min-width: 0; }
+  .tab-action-bar {
+    flex-wrap: wrap;
+    margin: 0 calc(-1 * var(--yxt-space-3)) calc(-1 * var(--yxt-space-3));
+  }
+  .tab-action-note { flex-basis: 100%; margin: 0 0 var(--yxt-space-1); }
+  .tab-action-bar .btn-primary { flex: 1; }
 }
 
 /* ===== 首次安装三步引导 ===== */

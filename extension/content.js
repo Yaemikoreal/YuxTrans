@@ -27,6 +27,7 @@ class YuxTransContent {
     this._isProcessingAdded = false;
     this._pageSessionId = null; // 当前整页/动态翻译会话 id，用于 SW 侧取消
     this._pageSessionCounter = 0;
+    this._streamReqSeq = 0; // 整页流式段落 requestId 自增序号（streamChunk 按此路由到对应 tempSpan）
     this._viewportObserver = null; // belowFold 视口感知：入视口才提交翻译
     this._viewportCleanup = null; // belowFold 取消回调（放弃未提交项）
     // F1 悬停段落翻译状态
@@ -602,6 +603,9 @@ class YuxTransContent {
       return;
     }
 
+    // 整页段落流式的过期 chunk（取消/完成后 streamingNodes 已清理）：直接忽略，避免污染划词弹窗
+    if (requestId && requestId !== 'popup') return;
+
     // 2. 划词弹窗流式（兼容无 requestId 的旧逻辑）
     if (!this.popup) return;
     const targetEl = this.popup.querySelector('.yuxtrans-target');
@@ -797,9 +801,21 @@ class YuxTransContent {
   }
 
   /**
-   * 流式翻译单个段落（用于整页首屏逐段渲染）
+   * 流式翻译单个段落（整页流式路径的最小单元，逐段渲染）
+   * 过程：插入临时 span → SW 经 streamChunk 消息按 requestId 推送 fullText 实时刷新 →
+   * 最终响应到达后移除临时 span，由 applyTranslation 落为双语/仅译文节点。
+   * 缓存写入由 SW 侧 translateStream 处理器负责（术语表 → 缓存 → setToCache，
+   * 与划词流式同一约定），内容脚本不重复写缓存。
+   * @param {object} nodeInfo - { text, node, isInViewport }
+   * @param {string} requestId - 段落级唯一请求标识（streamChunk 按此路由到对应 tempSpan）
+   * @returns {Promise<{success: boolean, text?: string, cached?: boolean, error?: string}>}
    */
   async translateStreamForNode(nodeInfo, requestId) {
+    // 取消后不再发起新请求，避免继续消耗配额
+    if (this.pageTranslationState.cancelRequested || !this.pageTranslationState.isTranslating) {
+      return { success: false, error: '翻译已取消' };
+    }
+
     const { text, node } = nodeInfo;
     const parent = node.parentElement;
     if (!parent) return { success: false, error: '父节点丢失' };
@@ -821,11 +837,13 @@ class YuxTransContent {
     const targetLang = this.config.targetLang || 'zh';
 
     return new Promise((resolve) => {
+      // SW 侧流式超时为 REQUEST_TIMEOUT_MS * 2（60s），这里略宽于它，
+      // 确保失败由 SW 回报（可走非流式故障转移），而非内容脚本先超时丢弃结果
       const timeout = setTimeout(() => {
         this.pageTranslationState.streamingNodes.delete(requestId);
         if (tempSpan.parentNode) tempSpan.remove();
         resolve({ success: false, error: '流式翻译超时' });
-      }, 25000);
+      }, 65000);
 
       chrome.runtime.sendMessage(
         {
@@ -835,7 +853,9 @@ class YuxTransContent {
           targetLang,
           // 整页翻译的段落流式请求不再携带页面标题等上下文，避免模型把任意片段偏向页面标题。
           context: null,
-          requestId
+          requestId,
+          // 接入整页取消链路：用户取消时 SW abort 在途 SSE（与 translateBatch 对齐）
+          sessionId: this._pageSessionId || null
         },
         (response) => {
           clearTimeout(timeout);
@@ -843,8 +863,13 @@ class YuxTransContent {
           if (tempSpan.parentNode) tempSpan.remove();
 
           if (response && response.success) {
-            this.applyTranslation(nodeInfo, response.text);
-            resolve({ success: true, translated: response.text, cached: response.cached });
+            // 已取消/已恢复原文时不再落地译文，避免覆盖用户恢复后的页面状态
+            const cancelled = this.pageTranslationState.cancelRequested ||
+              !this.pageTranslationState.isTranslating;
+            if (!cancelled) {
+              this.applyTranslation(nodeInfo, response.text);
+            }
+            resolve({ success: !cancelled, text: response.text, cached: response.cached });
           } else {
             resolve({ success: false, error: response?.error || '流式翻译失败' });
           }
@@ -1270,14 +1295,69 @@ class YuxTransContent {
     const isLocal = this.config.provider === 'local';
     const { concurrency: configConcurrency } = this.config || { concurrency: 10 };
 
-    // 动态调整：本地模型强制串行且减小分片，云端模型维持高并发
-    const concurrency = isLocal ? 1 : (options.concurrency || configConcurrency);
+    // 流式模式：整页翻译 enableStreaming 开启时逐段走 translateStream（SSE）
+    const streaming = !!options.streaming;
+
+    // 动态调整：本地模型强制串行且减小分片，云端模型维持高并发。
+    // 流式模式每条请求是一个 SSE 长连接（存活时间远长于批量短请求），并发过高会迅速
+    // 堆满连接并触发供应商 429；SW 侧自适应速率上限为 10 并发（RATE_LIMIT_CONFIG.MAX_CONCURRENT），
+    // 故整页流式云端固定 4 并发（与首屏 viewportConcurrency 持平，并为划词流式等请求留余量），
+    // 本地 Ollama 与批量路径一致保持串行。
+    const concurrency = isLocal
+      ? 1
+      : streaming
+        ? (options.concurrency || 4)
+        : (options.concurrency || configConcurrency);
     const BATCH_SIZE = isLocal
       ? 5
       : (options.batchSize || this.config.batchSize || 20);
-    
+
     const results = new Array(items.length);
     let completed = 0;
+
+    // 流式路径：不打包，每个段落一个 worker 任务，逐段 SSE 渲染
+    if (streaming) {
+      const queue = items.map((_, i) => i);
+
+      const worker = async () => {
+        while (queue.length > 0 && this.pageTranslationState.isTranslating && !this.pageTranslationState.cancelRequested) {
+          const globalIdx = queue.shift();
+          const item = items[globalIdx];
+          const requestId = 'yxt-page-stream-' + (++this._streamReqSeq);
+          let mapped;
+          try {
+            // translateStreamForNode 内部已完成临时 span 渲染与最终 applyTranslation
+            const res = await this.translateStreamForNode(item.nodeInfo, requestId);
+            if (res && res.success) {
+              results[globalIdx] = { success: true, translated: res.text, cached: res.cached };
+              mapped = { success: true, text: res.text, cached: res.cached };
+            } else {
+              const err = (res && res.error) || '流式翻译失败';
+              results[globalIdx] = { success: false, error: err };
+              mapped = { success: false, error: err };
+            }
+            // 与批量路径对齐：逐项回调即时统计/渲染（applyTranslation 幂等，重复调用无副作用）
+            if (onBatchResult) {
+              onBatchResult([globalIdx], [item], [mapped]);
+            }
+          } catch (error) {
+            results[globalIdx] = { success: false, error: error.message };
+          } finally {
+            completed++;
+            if (onProgress) {
+              onProgress(completed, items.length);
+            }
+          }
+        }
+      };
+
+      const workers = [];
+      for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+      return results;
+    }
 
     // 分块打包
     const batches = [];
@@ -1585,6 +1665,8 @@ class YuxTransContent {
       const isLocal = this.config.provider === 'local';
       const viewportBatchSize = isLocal ? 3 : 10;
       const viewportConcurrency = isLocal ? 2 : 4;
+      // enableStreaming 开启时整页走流式路径（逐段 SSE 渲染）；关闭时批量路径保持不变
+      const useStreaming = this.config.enableStreaming !== false;
 
       if (viewportItems.length > 0 && this.pageTranslationState.isTranslating) {
         let lastViewportCompleted = 0;
@@ -1606,7 +1688,9 @@ class YuxTransContent {
               }
             });
           },
-          { batchSize: viewportBatchSize, concurrency: viewportConcurrency }
+          useStreaming
+            ? { streaming: true }
+            : { batchSize: viewportBatchSize, concurrency: viewportConcurrency }
         );
         // 记录失败项
         viewportItems.forEach((item) => {
@@ -1638,7 +1722,11 @@ class YuxTransContent {
         });
       };
       if (belowFoldItems.length > 0 && this.pageTranslationState.isTranslating) {
-        await this._translateBelowFoldViaViewport(belowFoldItems, belowFoldOnBatchResult);
+        await this._translateBelowFoldViaViewport(
+          belowFoldItems,
+          belowFoldOnBatchResult,
+          useStreaming ? { streaming: true } : null
+        );
       }
 
       // 取消场景：restoreOriginalTexts 已恢复原文，跳过应用结果与完成收尾
@@ -2151,9 +2239,10 @@ class YuxTransContent {
    * 取代一次性全提交以节省配额；2s 超时后剩余项回退一次性提交避免 await 卡死。
    * @param {Array} items belowFold 去重后的待译项
    * @param {Function} onBatchResult 每个 batch 完成回调
+   * @param {object|null} batchOptions 透传给 translateBatchParallel 的选项（如 { streaming: true }）
    * @returns {Promise<void>}
    */
-  _translateBelowFoldViaViewport(items, onBatchResult) {
+  _translateBelowFoldViaViewport(items, onBatchResult, batchOptions = null) {
     return new Promise((resolve) => {
       if (!items || items.length === 0) { resolve(); return; }
 
@@ -2200,7 +2289,7 @@ class YuxTransContent {
         activeBatches++;
         try {
           if (!this.pageTranslationState.cancelRequested && this.pageTranslationState.isTranslating) {
-            await this.translateBatchParallel(batch, null, onBatchResult);
+            await this.translateBatchParallel(batch, null, onBatchResult, batchOptions || {});
           }
         } catch (e) { /* 单批异常不中断整体 */ }
         activeBatches--;
@@ -2268,11 +2357,13 @@ class YuxTransContent {
         items.push({ text: ni.text, nodeInfo: ni });
       }
       if (items.length === 0) return;
+      // 动态增量翻译与整页主路径同一开关：enableStreaming 开启时逐段流式渲染
+      const useStreaming = this.config.enableStreaming !== false;
       await this.translateBatchParallel(items, null, (_idx, nodes, results) => {
         results.forEach((res, i) => {
           if (res && res.success) this.applyTranslation(nodes[i].nodeInfo, res.text);
         });
-      });
+      }, useStreaming ? { streaming: true } : {});
     } catch (e) {
       console.error('[YuxTrans] 动态内容翻译异常:', e);
     } finally {
@@ -2308,4 +2399,9 @@ class YuxTransContent {
   }
 }
 
-new YuxTransContent();
+// 浏览器环境直接实例化注入；Node 测试环境仅导出类（与 background.js 导出模式一致）
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { YuxTransContent };
+} else {
+  new YuxTransContent();
+}
