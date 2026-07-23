@@ -1,6 +1,6 @@
 # 云端 API 供应商配置指南
 
-YuxTrans 浏览器扩展 v0.3.0 支持以下翻译服务：
+YuxTrans 浏览器扩展 v0.5.0 支持以下翻译服务：
 
 ---
 
@@ -15,6 +15,7 @@ YuxTrans 浏览器扩展 v0.3.0 支持以下翻译服务：
 | Groq | `groq` | openai | `llama-3.3-70b-versatile` | 极速推理 |
 | Moonshot | `moonshot` | openai | `moonshot-v1-8k` | 长文本支持 |
 | SiliconFlow | `siliconflow` | openai | `Qwen/Qwen2.5-7B-Instruct` | 多模型选择 |
+| 谷歌免费翻译 | `google` | google (translate_a/single) | `gtx` | 免 Key，开箱即用 |
 | 本地 Ollama | `local` | ollama | 自定义 | 离线、隐私 |
 | 自定义 | `custom` | openai / anthropic / qwen | 自定义 | OpenAI 兼容 API |
 
@@ -31,11 +32,28 @@ YuxTrans 浏览器扩展 v0.3.0 支持以下翻译服务：
 
 ### 本地 Ollama
 
-确保 Ollama 已启动（默认 `http://localhost:11434`）。推荐轻量模型：
+确保 Ollama 已启动（默认 `http://localhost:11434`）。推荐模型分档（可按机器配置选择）：
+
+| 档位 | 模型 | 约大小 | 适用 |
+|------|------|--------|------|
+| 最快 | `qwen3.5:0.8b` | 约 1GB | 低配 / 纯 CPU |
+| 推荐 | `translategemma:4b` | 约 3.3GB | 专用翻译模型 |
+| 最佳质量 | `translategemma:12b` | 约 8GB | 高端机 / GPU |
 
 ```bash
-ollama pull qwen3.5:0.8b
+ollama pull qwen3.5:0.8b          # 或 translategemma:4b / translategemma:12b
 ```
+
+也可使用扩展自带的脚本（支持参数指定模型）：
+
+```bash
+extension/setup-ollama.bat translategemma:4b   # Windows
+./extension/setup-ollama.sh translategemma:4b  # macOS / Linux
+```
+
+### 谷歌免费翻译
+
+`google` 供应商走谷歌免费接口（`translate.googleapis.com`），**无需 API Key**，开箱即用。适合无配置快速体验，但翻译质量与可控性低于云端 LLM，且无词典模式结构化输出能力（词典卡片会降级为纯文本）。
 
 ### 自定义供应商
 

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-23
+
+### Added
+
+- **F1 悬停段落翻译** - 按修饰键（默认 Alt，可选 Ctrl）+ 鼠标悬停段落，300ms 后在段落后插入译文块；虚线描边提示、× 关闭、已译段落不重复触发；`hoverTranslate`/`hoverModifier` 配置项；纯函数 `isHoverParagraphCandidate`。
+- **F2 单词词典模式** - 划到单词或双击单词直出词典卡片（词 / 音标 / 词性义项 / 双语例句）；`buildDictionaryPrompt` 严格 JSON schema；`lookupWord` action + 独立 `dict` 缓存键（绕过 12 字符门槛与译文校验）；解析降级链（JSON 失败回退纯文本）；纯函数 `isSingleWord`。
+- **F3 译文显示样式** - 整页双语原文可弱化（`fade`）或模糊（`blur`，悬停还原）；`originalStyle` 配置实时生效；补全 `--yxt-text-xs/sm`、`--yxt-ink-25` 未定义令牌。
+- **F4 浮窗钉住** - 钉住当前浮窗使其不被新划词覆盖，便于结果对照；`pinnedPopups` 多浮窗管理；暖色左边线视觉区分。
+- **F5 输入框翻译** - `inputTranslate` 开关下 input/textarea 选中文本可翻译，浮窗「插入」按钮将译文回填输入框（触发 input 事件兼容前端框架）。
+- **F6 正文区域识别** - `smartContentDetection` 开关下整页翻译只翻正文根（`main`/`article` 或文本密度最高块），跳过导航/侧栏/页脚。
+- **F7 谷歌免费翻译接口** - `google` provider，`translate.googleapis.com` 免 Key GET 请求 + 嵌套数组解析；providers-core 免 Key可用判定；manifest `host_permissions` 同步。
+- **F8 Ollama 推荐模型分档** - 三档（最快 / 推荐 / 最佳质量）；`setup-ollama.bat/.sh` 模型名参数化（默认 qwen3.5:0.8b，`%1`/`$1` 覆盖），结尾打印三档建议。
+- **配置实时同步** - content 侧 `chrome.storage.onChanged` 监听，options 保存后即时生效无需刷新页面。
+
+### Changed
+
+- `translateWithCloud` 新增 `options`（promptOverride + jsonMode）支持词典模式复用请求路径；`setToCache` 新增 `skipValidation` 参数供词典缓存绕过译文校验。
+- 扩展单测增至 73 项（新增 F1/F2/F7 纯函数与解析逻辑用例）。
+
 ## [Unreleased]
 
 ### Added
