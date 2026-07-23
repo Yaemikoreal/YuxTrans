@@ -1052,7 +1052,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return false;
       }
     } catch (err) {
-      showStatus('网路请求失败', 'error');
+      showStatus('网络请求失败', 'error');
       return false;
     } finally {
       btnEl.disabled = false;
