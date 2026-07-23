@@ -125,9 +125,10 @@ npm test                          # 等价：node --test extension/tests/*.test.
 
 扩展配置通过 `chrome.storage` 持久化，`options.js` 提供设置界面，支持：
 
-- 云端供应商（qwen / openai / deepseek / anthropic / groq / moonshot / siliconflow / custom）+ 本地 Ollama
+- 云端供应商（qwen / openai / deepseek / anthropic / groq / moonshot / siliconflow / google / custom）+ 本地 Ollama（google 为免 Key 免费接口）
 - 源语言 / 目标语言 / 翻译风格（普通 / 学术 / 技术 / 文学）
 - 缓存限额（默认 200MB）、触发模式、双语模式、站点黑白名单等
+- F1-F8 行为开关：悬停翻译、单词词典、原文显示样式、浮窗钉住、双档案对照、输入框翻译、正文区域识别
 
 默认云端供应商：`qwen`，模型 `qwen-turbo`；默认本地模型通过 `http://localhost:11434/api/chat` 访问 Ollama。
 
