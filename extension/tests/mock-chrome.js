@@ -86,7 +86,12 @@ global.chrome = {
 };
 
 // background.js 部分逻辑依赖 navigator.onLine / fetch / indexedDB
-global.navigator = global.navigator || { onLine: true };
+// Node 21+ 全局 navigator 为只读 accessor，直接赋值无效，用 defineProperty 强制覆盖
+try {
+  Object.defineProperty(global, 'navigator', { value: { onLine: true }, configurable: true, writable: true });
+} catch (e) {
+  global.navigator = global.navigator || { onLine: true };
+}
 
 // 避免测试时触发真实网络请求或定时器
 global.fetch = async () => ({ ok: false, status: 0, text: async () => '' });

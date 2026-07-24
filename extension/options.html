@@ -99,10 +99,12 @@
         </div>
       </div>
 
-      <nav class="tabs">
-        <button class="tab active" data-tab="profiles">服务档案</button>
-        <button class="tab" data-tab="general">翻译偏好</button>
-        <button class="tab" data-tab="diagnostics">诊断排障</button>
+      <nav class="tabs" aria-label="设置模块">
+        <button class="tab active" data-tab="profiles" data-zone="profiles">服务档案</button>
+        <button class="tab" data-tab="preference" data-zone="preference">翻译偏好</button>
+        <button class="tab" data-tab="interaction" data-zone="interaction">交互与显示</button>
+        <button class="tab" data-tab="data" data-zone="data">数据与存储</button>
+        <button class="tab" data-tab="diagnostics" data-zone="diagnostics">诊断排障</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -303,23 +305,18 @@
         </div>
       </div>
 
-      <!-- 2. 翻译偏好（三语义块：档案与入门 / 翻译行为 / 数据与存储 + 底部动作条） -->
-      <div class="tab-content" id="tab-general">
-
-        <!-- 块一：档案与入门 -->
-        <section class="pref-block">
-          <h2 class="section-title">档案与入门</h2>
-
+      <!-- 2. 翻译偏好（Preference Module：译什么） -->
+      <div class="tab-content" id="tab-preference" data-module="preference">
+        <section class="pref-block" data-zone="preference">
+          <h2 class="section-title">当前档案</h2>
           <div class="pref-group" id="activeConfigSection">
             <h3 class="pref-subtitle">当前使用</h3>
-            <!-- ActiveConfig 可点击跳转到「服务档案」 -->
             <div class="active-config-card" id="activeConfigCard">
               <div class="active-config-name" id="activeProfileName">--</div>
               <div class="active-config-detail" id="activeProfileDetail">--</div>
             </div>
           </div>
-
-          <div class="pref-group" id="quickStartSection">
+          <div class="pref-group" id="quickStartSection" hidden>
             <h3 class="pref-subtitle">快速开始</h3>
             <div class="step-flow" aria-label="上手三步">
               <div class="step-flow-item">
@@ -336,22 +333,20 @@
               </div>
             </div>
             <p class="hint" id="firstRunHint" hidden></p>
+          </div>
+          <div class="pref-group">
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="offlineMode">离线模式</label>
                 <p class="setting-desc">仅本地模型 + 缓存，禁止云端请求</p>
               </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="offlineMode">
-              </div>
+              <label class="paper-toggle"><input type="checkbox" id="offlineMode"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
           </div>
         </section>
 
-        <!-- 块二：翻译行为 -->
-        <section class="pref-block">
-          <h2 class="section-title">翻译行为</h2>
-
+        <section class="pref-block" data-zone="preference">
+          <h2 class="section-title">语言与风格</h2>
           <div class="pref-group">
             <h3 class="pref-subtitle">语言偏好</h3>
             <div class="input-row">
@@ -384,7 +379,6 @@
               </div>
             </div>
           </div>
-
           <div class="pref-group">
             <h3 class="pref-subtitle">翻译风格</h3>
             <div class="style-grid">
@@ -419,8 +413,35 @@
             </div>
           </div>
 
+          <div class="pref-group" id="stylePromptEditor">
+            <h3 class="pref-subtitle">风格提示词 · <span id="stylePromptStyleLabel">日常模式</span></h3>
+            <p class="hint">追加在系统翻译指令中的风格说明（英文效果通常更好）。可按当前选中风格单独编辑；保存翻译偏好时一并写入。留空表示该风格不加额外说明。</p>
+            <div class="form-group">
+              <label class="form-label" for="stylePromptText">提示词内容</label>
+              <textarea id="stylePromptText" class="style-prompt-textarea" rows="4" maxlength="2000" placeholder="例如：Use a concise, journalistic tone suitable for news headlines."></textarea>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <p class="setting-desc" id="stylePromptStatus">使用内置默认</p>
+              </div>
+              <div class="button-group button-group--inline">
+                <button type="button" class="btn-secondary" id="resetStylePromptBtn">恢复该风格默认</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="tab-action-bar">
+          <p class="tab-action-note">仅保存本页：语言、风格、风格提示词与离线模式</p>
+          <button class="btn-primary" id="savePreferenceBtn" type="button">保存翻译偏好</button>
+        </div>
+      </div>
+
+      <!-- 3. 交互与显示（Interaction Module） -->
+      <div class="tab-content" id="tab-interaction" data-module="interaction">
+        <section class="pref-block" data-zone="interaction">
+          <h2 class="section-title">触发与输出</h2>
           <div class="pref-group">
-            <h3 class="pref-subtitle">划词翻译</h3>
             <div class="setting-row">
               <div class="setting-info">
                 <span class="form-label">触发方式</span>
@@ -433,63 +454,11 @@
             </div>
             <div class="setting-row">
               <div class="setting-info">
-                <label class="form-label" for="autoCopy">自动复制</label>
-                <p class="setting-desc">翻译后自动复制结果</p>
-              </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="autoCopy">
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="hoverTranslate">悬停段落翻译</label>
-                <p class="setting-desc">按修饰键 + 鼠标悬停段落即译</p>
-              </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="hoverTranslate" checked>
-              </div>
-            </div>
-            <!-- hoverModifier 是悬停段落翻译的子选项 -->
-            <div class="setting-row setting-row--sub">
-              <div class="setting-info">
-                <label class="form-label" for="hoverModifier">悬停触发修饰键</label>
-              </div>
-              <select id="hoverModifier" class="setting-control">
-                <option value="alt">Alt</option>
-                <option value="ctrl">Ctrl</option>
-              </select>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="dictMode">单词词典模式</label>
-                <p class="setting-desc">划到或双击单词时弹出词典卡片</p>
-              </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="dictMode" checked>
-              </div>
-            </div>
-            <!-- dictDblclick 是词典模式的子选项 -->
-            <div class="setting-row setting-row--sub">
-              <div class="setting-info">
-                <label class="form-label" for="dictDblclick">双击单词直接查词典</label>
-              </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="dictDblclick" checked>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
                 <label class="form-label" for="enableStreaming">流式输出</label>
                 <p class="setting-desc">实时显示逐字输出</p>
               </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="enableStreaming" checked>
-              </div>
+              <label class="paper-toggle"><input type="checkbox" id="enableStreaming" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
-          </div>
-
-          <div class="pref-group">
-            <h3 class="pref-subtitle">译文显示与正文识别</h3>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="originalStyle">整页原文呈现样式</label>
@@ -502,26 +471,60 @@
             </div>
             <div class="setting-row">
               <div class="setting-info">
+                <label class="form-label" for="hoverTranslate">悬停段落翻译</label>
+                <p class="setting-desc">按修饰键 + 鼠标悬停段落即译</p>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="hoverTranslate" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label class="form-label" for="dictMode">单词词典模式</label>
+                <p class="setting-desc">划到或双击单词时弹出词典卡片</p>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="dictMode" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+          </div>
+        </section>
+
+        <details class="pref-group pref-advanced" id="interactionAdvancedSection">
+          <summary class="pref-subtitle pref-summary">更多交互选项</summary>
+          <div class="pref-details-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <label class="form-label" for="autoCopy">自动复制</label>
+                <p class="setting-desc">翻译后自动复制结果</p>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="autoCopy"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+            <div class="setting-row setting-row--sub" id="hoverModifierRow">
+              <div class="setting-info">
+                <label class="form-label" for="hoverModifier">悬停触发修饰键</label>
+              </div>
+              <select id="hoverModifier" class="setting-control">
+                <option value="alt">Alt</option>
+                <option value="ctrl">Ctrl</option>
+              </select>
+            </div>
+            <div class="setting-row setting-row--sub" id="dictDblclickRow">
+              <div class="setting-info">
+                <label class="form-label" for="dictDblclick">双击单词直接查词典</label>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="dictDblclick" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
                 <label class="form-label" for="inputTranslate">输入框翻译</label>
                 <p class="setting-desc">允许翻译 input/textarea 选中文本并插入译文</p>
               </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="inputTranslate">
-              </div>
+              <label class="paper-toggle"><input type="checkbox" id="inputTranslate"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="smartContentDetection">正文区域识别</label>
                 <p class="setting-desc">整页翻译只翻正文，跳过导航/侧栏/页脚</p>
               </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="smartContentDetection">
-              </div>
+              <label class="paper-toggle"><input type="checkbox" id="smartContentDetection"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
-          </div>
-
-          <div class="pref-group">
-            <h3 class="pref-subtitle">双档案对照</h3>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="compareProfileId">对照翻译档案</label>
@@ -532,14 +535,19 @@
               </select>
             </div>
           </div>
-        </section>
+        </details>
 
-        <!-- 块三：数据与存储 -->
-        <section class="pref-block">
-          <h2 class="section-title">数据与存储</h2>
+        <div class="tab-action-bar">
+          <p class="tab-action-note">仅保存本页：触发、显示与进阶交互</p>
+          <button class="btn-primary" id="saveInteractionBtn" type="button">保存交互与显示</button>
+        </div>
+      </div>
 
+      <!-- 4. 数据与存储（Data Module） -->
+      <div class="tab-content" id="tab-data" data-module="data">
+        <section class="pref-block" data-zone="data">
+          <h2 class="section-title">术语表</h2>
           <div class="pref-group">
-            <h3 class="pref-subtitle">术语表</h3>
             <p class="hint">导入 CSV（原文,译文）或 JSON 数组。命中术语表时跳过模型，强制使用固定译名。</p>
             <div class="setting-row">
               <div class="setting-info">
@@ -554,16 +562,16 @@
               </div>
             </div>
           </div>
+        </section>
 
+        <section class="pref-block" data-zone="data">
+          <h2 class="section-title">存储管理</h2>
           <div class="pref-group">
-            <h3 class="pref-subtitle">存储管理</h3>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="cacheEnabled">开启全局翻译缓存</label>
               </div>
-              <div class="checkbox-group">
-                <input type="checkbox" id="cacheEnabled" checked>
-              </div>
+              <label class="paper-toggle"><input type="checkbox" id="cacheEnabled" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -573,7 +581,6 @@
               <input type="number" id="maxCacheMB" class="setting-control setting-control--num" value="200" min="10" max="1000">
             </div>
             <p class="hint">说明：为避免短词近似命中，源文少于 12 个字符的句子默认不写入缓存；命中前还会做质量校验。</p>
-
             <div class="storage-usage-container">
               <div class="storage-usage-header">
                 <span class="stat-card-label">物理空间占用</span>
@@ -584,75 +591,68 @@
               </div>
             </div>
             <div class="button-group">
-              <button class="btn-secondary" id="exportConfigBtn">导出配置</button>
+              <button class="btn-secondary" id="exportConfigBtn" type="button">导出配置</button>
               <label class="btn-secondary">
                 导入配置<input type="file" id="importConfigInput" accept=".json" style="display:none">
               </label>
             </div>
           </div>
-
-          <details class="pref-group" id="advancedSiteSection">
-            <summary class="pref-subtitle pref-summary">高级：网站规则与故障转移</summary>
-            <div class="pref-details-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="form-label" for="siteRule">黑白名单模式</label>
-                </div>
-                <select id="siteRule" class="setting-control">
-                  <option value="all">全站启用</option>
-                  <option value="whitelist">仅白名单</option>
-                  <option value="blacklist">排除黑名单</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="siteList">域名列表 (每行一个)</label>
-                <textarea id="siteList" placeholder="google.com&#10;github.com"></textarea>
-              </div>
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="form-label" for="autoDetectLang">智能检测页面语言</label>
-                  <p class="setting-desc">不触发翻译同语种内容</p>
-                </div>
-                <div class="checkbox-group">
-                  <input type="checkbox" id="autoDetectLang" checked>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="form-label" for="autoFallback">自动切换备选</label>
-                  <p class="setting-desc">主供应商失败时自动切换（本地 ⟷ 云端）</p>
-                </div>
-                <div class="checkbox-group">
-                  <input type="checkbox" id="autoFallback" checked>
-                </div>
-              </div>
-            </div>
-          </details>
-
-          <!-- 危险操作区：与常规设置隔离，弱化样式 -->
-          <div class="pref-group danger-zone">
-            <h3 class="pref-subtitle">危险操作</h3>
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="form-label">清除本地数据</span>
-                <p class="setting-desc">清空翻译缓存与统计计数，此操作不可恢复</p>
-              </div>
-              <button class="btn-danger" id="clearCacheBtn">清除本地数据</button>
-            </div>
-          </div>
         </section>
 
-        <!-- 底部动作条：保存整个「翻译偏好」tab 的全部设置 -->
+        <details class="pref-group" id="advancedSiteSection">
+          <summary class="pref-subtitle pref-summary">高级：网站规则与故障转移</summary>
+          <div class="pref-details-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <label class="form-label" for="siteRule">黑白名单模式</label>
+              </div>
+              <select id="siteRule" class="setting-control">
+                <option value="all">全站启用</option>
+                <option value="whitelist">仅白名单</option>
+                <option value="blacklist">排除黑名单</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="siteList">域名列表 (每行一个)</label>
+              <textarea id="siteList" placeholder="google.com&#10;github.com"></textarea>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label class="form-label" for="autoDetectLang">智能检测页面语言</label>
+                <p class="setting-desc">不触发翻译同语种内容</p>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="autoDetectLang" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label class="form-label" for="autoFallback">自动切换备选</label>
+                <p class="setting-desc">主供应商失败时自动切换（本地 ⟷ 云端）</p>
+              </div>
+              <label class="paper-toggle"><input type="checkbox" id="autoFallback" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+            </div>
+          </div>
+        </details>
+
+        <div class="pref-group danger-zone">
+          <h3 class="pref-subtitle">危险操作</h3>
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="form-label">清除本地数据</span>
+              <p class="setting-desc">清空翻译缓存与统计计数，此操作不可恢复</p>
+            </div>
+            <button class="btn-danger" id="clearCacheBtn" type="button">清除本地数据</button>
+          </div>
+        </div>
+
         <div class="tab-action-bar">
-          <p class="tab-action-note">保存本 tab 的全部设置（语言、风格、划词、显示与存储）</p>
-          <button class="btn-primary" id="saveBtn">保存翻译偏好</button>
+          <p class="tab-action-note">仅保存本页：缓存、站点规则与故障转移（术语表导入即时生效）</p>
+          <button class="btn-primary" id="saveDataBtn" type="button">保存数据设置</button>
         </div>
       </div>
 
-      <!-- 3. 诊断数据 -->
-      <div class="tab-content" id="tab-diagnostics">
-        <!-- 只读看板：从「翻译偏好」移入，避免打断设置页节奏 -->
-        <div class="section">
+      <!-- 5. 诊断排障（只读） -->
+      <div class="tab-content" id="tab-diagnostics" data-module="diagnostics">
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">翻译数据概览</h2>
           <div class="stats-grid stats-3">
             <div class="stat-card">
@@ -750,7 +750,7 @@
         </div>
       </div>
 
-      <div id="status" class="status"></div>
+      <div id="status" class="status" aria-live="polite"></div>
     </main>
   </div>
 

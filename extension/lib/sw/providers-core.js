@@ -44,6 +44,16 @@
   }
 
   /**
+   * 是否为免配置供应商（无需 API Key / 端点 / 模型选择）
+   * local=Ollama、custom=自定义端点（凭据内嵌）、google=免费接口
+   * @param {string} provider
+   * @returns {boolean}
+   */
+  function isNoConfigProvider(provider) {
+    return provider === 'local' || provider === 'custom' || provider === 'google';
+  }
+
+  /**
    * 生成档案 ID
    * @param {string} provider
    * @param {string} model
@@ -59,6 +69,7 @@
   SW.getDefaultModel = getDefaultModel;
   SW.supportsJsonMode = supportsJsonMode;
   SW.isProviderAvailable = isProviderAvailable;
+  SW.isNoConfigProvider = isNoConfigProvider;
   SW.makeProfileId = makeProfileId;
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -66,6 +77,7 @@
       getDefaultModel,
       supportsJsonMode,
       isProviderAvailable,
+      isNoConfigProvider,
       makeProfileId,
       JSON_MODE_PROVIDERS
     };

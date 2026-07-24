@@ -31,6 +31,13 @@
     local: []
   };
 
+  /** 内置风格 id 顺序（与设置页一致） */
+  SW.STYLE_IDS = ['normal', 'academic', 'technical', 'literary'];
+
+  /**
+   * 各翻译风格的默认风格提示（注入到系统翻译指令中的 Style 段）。
+   * 用户可在 ActiveConfig.stylePrompts 中覆盖；缺省键使用此处默认。
+   */
   SW.STYLE_PROMPTS = {
     normal: '',
     academic: 'Use an academic and formal style with precise terminology.',

@@ -7,20 +7,90 @@
   if (!SW) return;
 
   /**
+   * 解析某风格生效的风格提示词（用户覆盖优先，否则内置默认）
+   * @param {string} [style]
+   * @param {object|null|undefined} [customMap] - ActiveConfig.stylePrompts
+   * @returns {string}
+   */
+  function resolveStylePrompt(style, customMap) {
+    const key = style || 'normal';
+    const defaults = SW.STYLE_PROMPTS || {};
+    if (customMap && Object.prototype.hasOwnProperty.call(customMap, key)
+        && typeof customMap[key] === 'string') {
+      return customMap[key];
+    }
+    return defaults[key] || '';
+  }
+
+  /**
+   * 短哈希（缓存 style 段用，避免自定义提示词撞默认缓存）
+   * @param {string} s
+   * @returns {string}
+   */
+  function _stylePromptHash(s) {
+    let h = 2166136261;
+    const str = String(s || '');
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36).slice(0, 8);
+  }
+
+  /**
+   * 缓存键中的 style 段：默认提示用风格 id；自定义提示附加短哈希
+   * dict 等非风格键原样返回
+   * @param {string} [style]
+   * @param {object|null|undefined} [customMap]
+   * @returns {string}
+   */
+  function styleSegmentForCache(style, customMap) {
+    const key = style || 'normal';
+    if (key === 'dict') return 'dict';
+    const effective = resolveStylePrompt(key, customMap);
+    const defaults = SW.STYLE_PROMPTS || {};
+    const def = defaults[key] || '';
+    if (effective === def) return key;
+    // 点号避免与键内冒号分段冲突
+    return `${key}.${_stylePromptHash(effective)}`;
+  }
+
+  /**
+   * 清洗用户风格提示词映射：仅保留已知风格、截断长度；与默认相同的键不写出（表示用默认）
+   * @param {object|null|undefined} input
+   * @returns {object}
+   */
+  function sanitizeStylePrompts(input) {
+    const ids = SW.STYLE_IDS || ['normal', 'academic', 'technical', 'literary'];
+    const defaults = SW.STYLE_PROMPTS || {};
+    const out = {};
+    if (!input || typeof input !== 'object') return out;
+    const maxLen = 2000;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (typeof input[id] !== 'string') continue;
+      const v = input[id].slice(0, maxLen);
+      const def = defaults[id] || '';
+      if (v !== def) out[id] = v;
+    }
+    return out;
+  }
+
+  /**
    * 构建翻译 Prompt（无全局 config 依赖）
    * @param {string} text
    * @param {string} sourceLang
    * @param {string} targetLang
    * @param {string} [translateStyle]
    * @param {object|null} [context]
+   * @param {object|null} [customStylePrompts] - ActiveConfig.stylePrompts
    * @returns {string}
    */
-  function buildTranslationPrompt(text, sourceLang, targetLang, translateStyle, context) {
+  function buildTranslationPrompt(text, sourceLang, targetLang, translateStyle, context, customStylePrompts) {
     const langNames = SW.LANG_NAMES || {};
-    const stylePrompts = SW.STYLE_PROMPTS || {};
     const targetName = langNames[targetLang] || targetLang;
     const sourceName = sourceLang === 'auto' ? null : (langNames[sourceLang] || sourceLang);
-    const styleHint = stylePrompts[translateStyle || 'normal'] || '';
+    const styleHint = resolveStylePrompt(translateStyle || 'normal', customStylePrompts);
 
     let prompt = 'You are a professional translator. Translate the following text';
     if (sourceName) {
@@ -51,6 +121,9 @@ STRICT OUTPUT RULES:
     return prompt;
   }
 
+  SW.resolveStylePrompt = resolveStylePrompt;
+  SW.styleSegmentForCache = styleSegmentForCache;
+  SW.sanitizeStylePrompts = sanitizeStylePrompts;
   SW.buildTranslationPrompt = buildTranslationPrompt;
 
   /**
@@ -90,6 +163,12 @@ ${word}`;
   SW.buildDictionaryPrompt = buildDictionaryPrompt;
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buildTranslationPrompt, buildDictionaryPrompt };
+    module.exports = {
+      buildTranslationPrompt,
+      buildDictionaryPrompt,
+      resolveStylePrompt,
+      styleSegmentForCache,
+      sanitizeStylePrompts
+    };
   }
 })(typeof self !== 'undefined' ? self : typeof globalThis !== 'undefined' ? globalThis : this);

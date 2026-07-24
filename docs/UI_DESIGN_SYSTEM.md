@@ -116,6 +116,14 @@
 - 默认：`1px solid rgba(44, 40, 37, 0.08)`（纸张边缘厚度）
 - 激活：`1px solid rgba(184, 165, 196, 0.4)`（暮瞳微光渗透）
 
+### 4.5 设置页专属：氛围层与分区点缀（ADR 0005）
+
+仅 **Options（系统层小册子）** 适用，不默认套用到 Popup / 划词浮层。
+
+- **Options Atmosphere（D1）**：静态极淡纸纹 + 单层 CSS 径向光晕缓慢漂移（`transform`，约 30s）；`prefers-reduced-motion: reduce` 时静止。禁止视频、Canvas 粒子、重滤镜动画。
+- **Zone Accent（E1）**：五个模块 tab / 块标题使用极低饱和分区色（profiles / preference / interaction / data / diagnostics），只装饰导航与标题竖线，不改变正文大面积书页底，不抬高全局品牌主色饱和度。
+- Token：`--yxt-zone-*`、`--yxt-atmosphere-glow` / `--yxt-atmosphere-warm`（见 `design-tokens.css`）。
+
 ---
 
 ## 5. 核心场景设计标注

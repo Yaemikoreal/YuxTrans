@@ -18,6 +18,47 @@ body {
   color: var(--yxt-text);
   min-height: 100vh;
   padding: var(--yxt-space-8);
+  position: relative;
+  isolation: isolate;
+}
+
+/* D1：单层缓漂光晕 + 静态纸纹（Options Atmosphere） */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 42% at 28% 22%, var(--yxt-atmosphere-glow), transparent 68%),
+    radial-gradient(ellipse 40% 36% at 78% 72%, var(--yxt-atmosphere-warm), transparent 70%);
+  transform: translate3d(0, 0, 0);
+  animation: yxt-atmosphere-drift 32s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}
+
+@keyframes yxt-atmosphere-drift {
+  from { transform: translate3d(-1.6%, -1%, 0); }
+  to { transform: translate3d(1.8%, 1.4%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+    will-change: auto;
+  }
 }
 
 .container {
@@ -32,6 +73,8 @@ body {
   border: 1px solid var(--yxt-border);
   overflow: hidden;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== 侧边导航 ===== */
@@ -126,6 +169,94 @@ body {
   height: 16px;
   background: var(--yxt-dusk);
   border-radius: var(--yxt-radius-sm);
+}
+
+/* E1：分区点缀色（导航 chrome，非正文大面积） */
+.tab[data-zone="profiles"].active {
+  background: var(--yxt-zone-profiles-soft);
+}
+.tab[data-zone="profiles"].active::after {
+  background: var(--yxt-zone-profiles);
+}
+.tab[data-zone="preference"].active {
+  background: var(--yxt-zone-preference-soft);
+}
+.tab[data-zone="preference"].active::after {
+  background: var(--yxt-zone-preference);
+}
+.tab[data-zone="interaction"].active {
+  background: var(--yxt-zone-interaction-soft);
+}
+.tab[data-zone="interaction"].active::after {
+  background: var(--yxt-zone-interaction);
+}
+.tab[data-zone="data"].active {
+  background: var(--yxt-zone-data-soft);
+}
+.tab[data-zone="data"].active::after {
+  background: var(--yxt-zone-data);
+}
+.tab[data-zone="diagnostics"].active {
+  background: var(--yxt-zone-diagnostics-soft);
+}
+.tab[data-zone="diagnostics"].active::after {
+  background: var(--yxt-zone-diagnostics);
+}
+
+.pref-block[data-zone="profiles"] .section-title::before,
+.section[data-zone="profiles"] .section-title::before {
+  background: var(--yxt-zone-profiles);
+}
+.pref-block[data-zone="preference"] .section-title::before,
+.section[data-zone="preference"] .section-title::before {
+  background: var(--yxt-zone-preference);
+}
+.pref-block[data-zone="interaction"] .section-title::before,
+.section[data-zone="interaction"] .section-title::before {
+  background: var(--yxt-zone-interaction);
+}
+.pref-block[data-zone="data"] .section-title::before,
+.section[data-zone="data"] .section-title::before {
+  background: var(--yxt-zone-data);
+}
+.pref-block[data-zone="diagnostics"] .section-title::before,
+.section[data-zone="diagnostics"] .section-title::before {
+  background: var(--yxt-zone-diagnostics);
+}
+
+.setting-row.is-disabled,
+.setting-row.is-disabled .form-label,
+.setting-row.is-disabled .setting-desc {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.pref-advanced {
+  margin: var(--yxt-space-4) 0 var(--yxt-space-6);
+}
+
+/* 风格提示词编辑区 */
+.style-prompt-textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: var(--yxt-space-3) !important;
+  border: 1px solid var(--yxt-border) !important;
+  border-radius: var(--yxt-radius-md) !important;
+  border-bottom: 1px solid var(--yxt-border) !important;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-sm);
+  line-height: 1.55;
+  background: var(--yxt-bg) !important;
+}
+
+.style-prompt-textarea:focus {
+  border-color: var(--yxt-dusk) !important;
+}
+
+#stylePromptStatus.is-custom {
+  color: var(--yxt-zone-preference, var(--yxt-text-secondary));
+  font-weight: 500;
 }
 
 .sidebar-footer {
@@ -303,14 +434,37 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* 密集表单组（自定义供应商 5 字段连排 / 首次引导表单）：完整描边强化边界感，
+   稀疏区保留下划线编辑感；focus 时暮瞳描边。 */
+#customProviderSection input[type="text"],
+#customProviderSection input[type="password"],
+#customProviderSection input[type="number"],
+#customProviderSection select,
+#customProviderSection textarea,
+.first-run-card input[type="text"],
+.first-run-card input[type="password"],
+.first-run-card select {
+  padding: var(--yxt-space-2) var(--yxt-space-3);
+  border: 1px solid var(--yxt-border);
+  border-radius: var(--yxt-radius-md);
+}
+
+#customProviderSection input:focus,
+#customProviderSection select:focus,
+#customProviderSection textarea:focus,
+.first-run-card input:focus,
+.first-run-card select:focus {
+  border-color: var(--yxt-dusk);
+}
+
 select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 2px center;
-  padding-right: 18px;
+  background-position: right 4px center;
+  padding-right: 22px;
 }
 
 .input-row {
@@ -334,7 +488,7 @@ select {
   width: 14px;
   height: 14px;
   margin-top: 2px;
-  accent-color: var(--yxt-dusk);
+  accent-color: var(--yxt-ink);
   cursor: pointer;
   border-radius: var(--yxt-radius-sm);
 }
@@ -392,7 +546,7 @@ select {
 }
 
 .radio-group input {
-  accent-color: var(--yxt-dusk);
+  accent-color: var(--yxt-ink);
   width: 14px;
   height: 14px;
 }
@@ -621,18 +775,17 @@ button {
 }
 
 .btn-primary {
-  background: var(--yxt-paper);
-  color: var(--yxt-ink);
-  border: 1px solid var(--yxt-ink-15);
+  background: var(--yxt-ink);
+  color: var(--yxt-paper);
+  border: none;
 }
 
 .btn-primary:hover {
-  background: var(--yxt-paper-warm);
-  border-color: var(--yxt-ink-25);
+  background: var(--yxt-ink-80);
 }
 
 .btn-primary:active {
-  background: var(--yxt-paper-stack);
+  background: var(--yxt-ink-60);
 }
 
 .btn-secondary {
@@ -728,12 +881,12 @@ label.btn-secondary {
   letter-spacing: 0.02em;
 }
 
-/* ===== 浮动状态提示 ===== */
+/* ===== 浮动状态提示（与 popup/content toast 收敛：统一底部居中） ===== */
 .status {
   position: fixed;
-  top: 24px;
+  bottom: 24px;
   left: 50%;
-  transform: translateX(-50%) translateY(-20px);
+  transform: translateX(-50%) translateY(20px);
   z-index: 20000;
   padding: 10px 24px;
   border-radius: var(--yxt-radius-lg);
@@ -841,7 +994,7 @@ label.btn-secondary {
 
 .style-option input[type="radio"] {
   width: 16px; height: 16px; margin-top: 2px;
-  accent-color: var(--yxt-dusk);
+  accent-color: var(--yxt-ink);
 }
 
 .style-option:has(input:checked) {
@@ -969,6 +1122,7 @@ label.btn-secondary {
   background: var(--yxt-bg);
   border: 1px solid var(--yxt-border);
   border-radius: var(--yxt-radius-lg);
+  cursor: pointer;
   transition: all var(--yxt-transition-fast);
 }
 
@@ -979,6 +1133,13 @@ label.btn-secondary {
 .model-card.installed {
   background: var(--yxt-success-soft);
   border-color: var(--yxt-success);
+}
+
+/* F8：选中态（radio 语义）--dusk 紫边框高亮，区别于 installed 的成功绿；
+   selected 与 installed 可叠加（绿背景 + 紫边框） */
+.model-card.selected {
+  border-color: var(--yxt-dusk-40);
+  box-shadow: 0 0 0 1px var(--yxt-dusk-40);
 }
 
 .model-card-info {
@@ -1024,7 +1185,7 @@ label.btn-secondary {
 
 .model-progress-bar {
   height: 100%;
-  background: var(--yxt-dusk);
+  background: var(--yxt-ink-60);
   transition: width var(--yxt-transition-normal);
 }
 
@@ -1039,11 +1200,26 @@ label.btn-secondary {
 }
 
 /* ===== 档案管理 ===== */
-.model-list-empty {
-  padding: var(--yxt-space-5);
+.model-list-empty,
+.yxt-empty {
+  padding: var(--yxt-space-8) var(--yxt-space-5);
   text-align: center;
   color: var(--yxt-text-secondary);
   font-size: var(--yxt-text-sm);
+}
+
+/* 空态：极简墨线书签，让"无"也是书房的一部分 */
+.model-list-empty::before,
+.yxt-empty::before {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto var(--yxt-space-3);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12v18l-6-4-6 4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.6;
 }
 
 .model-list-item {
@@ -1119,7 +1295,7 @@ label.btn-secondary {
 
 .progress-bar {
   height: 100%;
-  background: var(--yxt-dusk);
+  background: var(--yxt-ink-60);
   transition: width var(--yxt-transition-normal);
 }
 
@@ -1372,13 +1548,13 @@ label.btn-secondary {
 
 .first-run-header h2 {
   font-size: var(--yxt-text-xl);
-  font-weight: 650;
+  font-weight: var(--yxt-font-medium);
   color: var(--yxt-text);
   margin-bottom: var(--yxt-space-1);
 }
 
 .first-run-sub {
-  color: var(--yxt-text-muted);
+  color: var(--yxt-text-tertiary);
   font-size: var(--yxt-text-sm);
   margin-bottom: var(--yxt-space-4);
 }
@@ -1397,8 +1573,8 @@ label.btn-secondary {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--yxt-text-muted);
+  font-weight: var(--yxt-font-medium);
+  color: var(--yxt-text-tertiary);
   background: var(--yxt-bg);
   border: 1px solid var(--yxt-border);
 }
@@ -1418,7 +1594,7 @@ label.btn-secondary {
 
 .first-run-pane-title {
   font-size: var(--yxt-text-base);
-  font-weight: 600;
+  font-weight: var(--yxt-font-medium);
   margin-bottom: var(--yxt-space-3);
 }
 
@@ -1448,7 +1624,7 @@ label.btn-secondary {
 
 .first-run-path-card span {
   font-size: var(--yxt-text-sm);
-  color: var(--yxt-text-muted);
+  color: var(--yxt-text-tertiary);
   line-height: 1.4;
 }
 
@@ -1468,19 +1644,34 @@ label.btn-secondary {
 }
 
 .first-run-trial-src {
-  font-weight: 600;
+  font-weight: var(--yxt-font-medium);
   margin-bottom: 6px;
 }
 
 .first-run-trial-dst {
-  color: var(--yxt-text-muted);
+  color: var(--yxt-text-tertiary);
   font-size: var(--yxt-text-sm);
   min-height: 1.5em;
   white-space: pre-wrap;
 }
 
 .first-run-trial-dst.ok {
+  position: relative;
   color: var(--yxt-text);
+  border-color: var(--yxt-success);
+  background: var(--yxt-success-soft);
+}
+
+/* 第一次成功：克制的小仪式--右下角「译」字印章 */
+.first-run-trial-dst.ok::after {
+  content: '译';
+  position: absolute;
+  right: var(--yxt-space-2);
+  bottom: var(--yxt-space-1);
+  font-family: var(--yxt-font-cjk);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-success);
+  opacity: 0.7;
 }
 
 .first-run-trial-dst.err {
@@ -1601,4 +1792,28 @@ label.btn-secondary {
   .first-run-footer { flex-direction: column; align-items: stretch; }
   .first-run-footer-right { width: 100%; }
   .first-run-footer-right button { flex: 1; }
+}
+
+/* ===== 无障碍：键盘焦点环（设置页全局，输入控件 outline:none 后唯一可见焦点） ===== */
+button:focus-visible,
+.tab:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-test:focus-visible,
+.btn-danger:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: var(--yxt-shadow-glow);
+}
+
+/* ===== 无障碍：尊重用户的减少动效偏好（扩展自有页面，全局关闭装饰动画） ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

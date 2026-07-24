@@ -83,12 +83,20 @@ test('providers-core：默认模型与 JSON mode', () => {
   assert.strictEqual(SW.makeProfileId('qwen', 'qwen-turbo', ''), 'qwen:qwen-turbo');
 });
 
-test('lang：检测与同语种翻转', () => {
+test('lang：检测与同语种跳过', () => {
   assert.strictEqual(SW.detectLanguage('这是中文句子'), 'zh');
   assert.strictEqual(SW.detectLanguage('Hello world'), 'en');
   assert.strictEqual(SW.resolveSourceLanguage('こんにちは', 'auto'), 'ja');
-  assert.strictEqual(SW.flipTargetIfSameLanguage('zh', 'zh'), 'en');
+  // 同语种不再翻向对照语言：统一返回 targetLang
+  assert.strictEqual(SW.flipTargetIfSameLanguage('zh', 'zh'), 'zh');
   assert.strictEqual(SW.flipTargetIfSameLanguage('en', 'zh'), 'zh');
+  // 目标语言归一化：zh-CN / zh-TW -> zh
+  assert.strictEqual(SW.normalizeTargetLang('zh-CN'), 'zh');
+  assert.strictEqual(SW.normalizeTargetLang('en'), 'en');
+  // 同语言跳过判定
+  assert.strictEqual(SW.isSameAsTargetLanguage('你好世界', 'zh'), true);
+  assert.strictEqual(SW.isSameAsTargetLanguage('Hello world', 'zh'), false);
+  assert.strictEqual(SW.isSameAsTargetLanguage('Hello world', 'en'), true);
 });
 
 test('message-actions：注册与归类', () => {
@@ -113,6 +121,39 @@ test('translate-core：Prompt 含目标语与规则', () => {
   });
   assert.ok(withCtx.includes('Page context'));
   assert.ok(withCtx.includes('Docs'));
+});
+
+test('resolveStylePrompt / styleSegmentForCache / sanitizeStylePrompts', () => {
+  assert.strictEqual(SW.resolveStylePrompt('academic', null), SW.STYLE_PROMPTS.academic);
+  assert.strictEqual(SW.resolveStylePrompt('academic', {}), SW.STYLE_PROMPTS.academic);
+  assert.strictEqual(
+    SW.resolveStylePrompt('academic', { academic: 'Write like a peer-reviewed paper.' }),
+    'Write like a peer-reviewed paper.'
+  );
+  // 空字符串覆盖也是合法自定义
+  assert.strictEqual(SW.resolveStylePrompt('academic', { academic: '' }), '');
+
+  assert.strictEqual(SW.styleSegmentForCache('academic', null), 'academic');
+  assert.strictEqual(SW.styleSegmentForCache('dict', { academic: 'x' }), 'dict');
+  const customSeg = SW.styleSegmentForCache('academic', { academic: 'Custom tone please.' });
+  assert.ok(customSeg.startsWith('academic.'), customSeg);
+  assert.notStrictEqual(customSeg, 'academic');
+
+  const cleaned = SW.sanitizeStylePrompts({
+    academic: SW.STYLE_PROMPTS.academic,
+    technical: 'Keep APIs untranslated.',
+    garbage: 'nope',
+    literary: 'x'.repeat(3000)
+  });
+  assert.ok(!('academic' in cleaned), '与默认相同不写入');
+  assert.ok(!('garbage' in cleaned));
+  assert.strictEqual(cleaned.technical, 'Keep APIs untranslated.');
+  assert.strictEqual(cleaned.literary.length, 2000);
+
+  const withCustom = SW.buildTranslationPrompt('Hi', 'en', 'zh', 'literary', null, {
+    literary: 'Poetic and sparse.'
+  });
+  assert.ok(withCustom.includes('Poetic and sparse.'));
 });
 
 test('scheduler：相同 cacheKey 的并发请求合并为一次执行', async () => {

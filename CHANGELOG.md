@@ -5,57 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-07-23
-
-### Added
-
-- **F1 悬停段落翻译** - 按修饰键（默认 Alt，可选 Ctrl）+ 鼠标悬停段落，300ms 后在段落后插入译文块；虚线描边提示、× 关闭、已译段落不重复触发；`hoverTranslate`/`hoverModifier` 配置项；纯函数 `isHoverParagraphCandidate`。
-- **F2 单词词典模式** - 划到单词或双击单词直出词典卡片（词 / 音标 / 词性义项 / 双语例句）；`buildDictionaryPrompt` 严格 JSON schema；`lookupWord` action + 独立 `dict` 缓存键（绕过 12 字符门槛与译文校验）；解析降级链（JSON 失败回退纯文本）；纯函数 `isSingleWord`。
-- **F3 译文显示样式** - 整页双语原文可弱化（`fade`）或模糊（`blur`，悬停还原）；`originalStyle` 配置实时生效；补全 `--yxt-text-xs/sm`、`--yxt-ink-25` 未定义令牌。
-- **F4 浮窗钉住** - 钉住当前浮窗使其不被新划词覆盖，便于结果对照；`pinnedPopups` 多浮窗管理；暖色左边线视觉区分。
-- **F4b 双档案对照** - `translateWithProfile` action 用指定档案再译同一文本，对照浮窗（黄昏紫边线）并排展示；`compareProfileId` 从已存档案下拉选择。
-- **F5 输入框翻译** - `inputTranslate` 开关下 input/textarea 选中文本可翻译，浮窗「插入」按钮将译文回填输入框（触发 input 事件兼容前端框架）。
-- **F6 正文区域识别** - `smartContentDetection` 开关下整页翻译只翻正文根（`main`/`article` 或文本密度最高块），跳过导航/侧栏/页脚。
-- **F7 谷歌免费翻译接口** - `google` provider，`translate.googleapis.com` 免 Key GET 请求 + 嵌套数组解析；providers-core 免 Key可用判定；manifest `host_permissions` 同步。
-- **F8 Ollama 推荐模型分档** - 三档（最快 / 推荐 / 最佳质量）；`setup-ollama.bat/.sh` 模型名参数化（默认 qwen3.5:0.8b，`%1`/`$1` 覆盖），结尾打印三档建议。
-- **配置实时同步** - content 侧 `chrome.storage.onChanged` 监听，options 保存后即时生效无需刷新页面。
-
-### Changed
-
-- `translateWithCloud` 新增 `options`（promptOverride + jsonMode）支持词典模式复用请求路径；`setToCache` 新增 `skipValidation` 参数供词典缓存绕过译文校验。
-- 扩展单测增至 73 项（新增 F1/F2/F7 纯函数与解析逻辑用例）。
-
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-24
+
+> **稳定版（Stable）** — 浏览器扩展为唯一产品形态；相对 0.4.1 完成阅读交互增强、整页流式与配额治理、设置页信息架构重构、可自定义风格提示词与发布前质量门禁。建议从 `v0.5.0-beta.1` 升级至本版本。  
+> 自动化验证：`npm test` **91 pass / 0 fail**（双跑一致）；MV3 结构与 Options 五模块门禁通过。
+
+### Highlights（本版一览）
+
+1. **阅读交互升级（F1–F8）** — 悬停译段、单词词典、原文弱化/模糊、浮窗钉住与双档案对照、输入框回填、正文区识别、谷歌免 Key、Ollama 分档推荐。
+2. **整页翻译更省、更可控** — 段落级 SSE 流式渲染、会话取消 abort、视口优先（belowFold）、同 key 去重调度、批量滑动窗口上下文。
+3. **设置页可维护** — 五模块顶栏 + 分栏保存；风格提示词可编辑/恢复默认；书房氛围层与分区点缀色。
+4. **工程收敛** — Service Worker `lib/sw/*` 纯函数拆分；移除 Python 包与桌面端；单测覆盖核心路径；ADR 0005 记录 Options IA。
+
 ### Added
 
-- **品牌 Logo 适配** — 以 `logo/logo.png` 生成 `extension/icons` 16/32/48/128；Popup/Options 展示品牌标；`scripts/generate_extension_icons.py` 可重生成。
-- **首次安装三步引导** — 设置页向导：选本地/云端 → 配置 Key 或检测 Ollama → 试译 Hello。
-- **Service Worker 模块拆分** — `extension/lib/sw/`：`constants` / `cache-keys` / `providers-core` / `lang` / `message-actions` / `translate-core`（`importScripts` 加载）。
-- **UI 纯策略 helpers** — `formatUserErrorCompact`、`pageControlCompletedActions`、`shouldCollapsePopupStats`。
+#### 阅读与交互（F1–F8）
 
-- **整页翻译用户取消链路** - `cancelTranslate` action + SW 会话级 AbortController：恢复原文/重入时 abort 在途请求并阻止后续批次，停止翻译后不再继续消耗配额。
-- **belowFold 视口感知翻译** - 非首屏节点注册 IntersectionObserver（200px 预加载区），入视口才提交批次取代一次性全提交，节省未浏览内容的配额；2s 超时回退避免卡死。
-- **在途翻译去重调度器** - `lib/sw/scheduler.js`：相同 cacheKey 的并发请求共享一次结果（划词+整页+动态同文本不重复请求），优先级分级（划词 > 视口 > 批次）。
-- **批量翻译滑动窗口上下文** - 上一批末尾原文+译文透传到下一批 prompt（标记勿重译），提升跨段指代与连贯性。
-- **内联标签占位符保护工具** - `lib/sw/placeholders.js`：`extractPlaceholders`/`restorePlaceholders` 将 HTML 标签替换为 `<t n="N">` 占位并按序还原。
+- **F1 悬停段落翻译** — 修饰键（默认 Alt，可选 Ctrl）+ 悬停段落，300ms 后在段落后插入译文；描边提示、关闭、已译不重复；`hoverTranslate` / `hoverModifier`。
+- **F2 单词词典模式** — 划词/双击单词出词典卡片（音标 / 词性 / 义项 / 双语例句）；`lookupWord` + 独立 `dict` 缓存键；`isSingleWord` / 严格 JSON prompt。
+- **F3 译文显示样式** — 整页原文 `normal` / `fade` / `blur`（模糊可悬停还原）；`originalStyle` 实时生效。
+- **F4 浮窗钉住** — 钉住后不被新划词覆盖，支持多浮窗对照。
+- **F4b 双档案对照** — `translateWithProfile` 用对照档案再译并排展示；`compareProfileId`。
+- **F5 输入框翻译** — 翻译 input/textarea 选区并可「插入」回填（触发 `input` 事件）。
+- **F6 正文区域识别** — 整页优先正文根，跳过导航/侧栏/页脚。
+- **F7 谷歌免费翻译** — `google` provider（免 Key）；manifest `host_permissions` 同步。
+- **F8 Ollama 推荐模型分档** — 最快 / 推荐 / 最佳质量；`setup-ollama.bat/.sh` 参数化模型名。
+- **配置实时同步** — content 监听 `chrome.storage.onChanged`，设置保存后无需刷页。
+
+#### 整页 / 流式 / 配额
+
+- **整页流式翻译** — `enableStreaming` 开启时按段落 SSE 边译边显；失败段落可标记；重复文本去重请求。
+- **整页取消链路** — `cancelTranslate` + 会话级 `AbortController`，停止后不再烧配额。
+- **belowFold 视口感知** — IntersectionObserver 预加载区，入视口再译；超时回退防卡死。
+- **在途去重调度器** — `lib/sw/scheduler.js`：同 cacheKey 合并一次执行（优先级：划词 > 视口 > 批次）。
+- **批量滑动窗口上下文** — 上一批末尾原文+译文注入下一批（明确勿重译）。
+- **内联标签占位符** — `lib/sw/placeholders.js` 提取/还原 HTML 标签。
+
+#### 设置页与品牌
+
+- **五模块 Options IA（ADR 0005）** — 服务档案 · 翻译偏好 · 交互与显示 · 数据与存储 · 诊断排障；可写模块分栏保存。
+- **风格提示词可定制** — 按 normal/academic/technical/literary 编辑并保存；一键恢复默认；仅存与默认不同的覆盖；缓存 style 段带短哈希防误命中。
+- **设置页氛围与分区点缀** — D1 缓漂光晕 + 纸纹（尊重 `prefers-reduced-motion`）；E1 低饱和分区色。
+- **首次安装三步引导** — 本地/云端 → 配置 → 试译 Hello。
+- **品牌 Logo** — `logo/logo.png` → icons 16/32/48/128；Popup/Options 展示。
+
+#### 架构与可测性
+
+- **SW 模块拆分** — `extension/lib/sw/`：`constants` / `cache-keys` / `providers-core` / `lang` / `message-actions` / `translate-core` / `scheduler` / `placeholders`。
+- **product-helpers** — 触发模式、术语表、离线门禁、分栏字段表、`eventTargetClosest`、上手区可见性等纯函数 + 单测。
 
 ### Changed
 
-- 扩展单测覆盖首次引导门禁与 SW 模块；`npm test` 覆盖 `extension/tests/*.test.js`。
-- **缓存键编入 prompt 版本与模型** - `CACHE_KEY_VERSION` 升至 v3，键内含 `PROMPT_VERSION` + 当前模型 slug，prompt 规则或模型变更后旧缓存自然失效，修复术语表/模型切换后旧译文误命中；顺手清理 `yuxtrans-spin` 关键帧与 spinner 样式残骸。
-- **书房衬纸 UI 落地（P0–P1）** — 铅字 paper-toggle；Popup 用量折叠；整页控制条主次分离；设置侧栏任务化中文；状态色/模态走 design tokens；暗色阴影去纯黑胶囊风格。
-
-### Removed
-
-- **归档 Python 桌面客户端与孤岛工具** - 删除 `yuxtrans/desktop/`、六个零调用方 utils（memory / style / terminology / text_processing / startup / setup_wizard）、冗余 `setup.py`、孤儿 `benchmark/` 与 `test-options.js` + jsdom 依赖；Python 包仅保留 engine + cache 作最小可复用库，浏览器扩展为主产品。
-- 误导性安装脚本 `install.sh` / `install.bat`（宣传已不存在的 `yuxtrans --help` CLI 与桌面端 entry point）。
-- **移除 Python 包** — 删除 `yuxtrans/`、`tests/`、`examples/`、`benchmark/` 及 `pyproject.toml` / `requirements.txt` / `pytest.ini`，项目聚焦浏览器扩展；安卓端设计与实现计划留存于 `docs/superpowers/`，作为后续版本 roadmap 选项之一。
+- **缓存键 v3** — 编入 `PROMPT_VERSION` + 模型 slug；风格自定义后 style 段隔离。
+- **词典缓存校验** — `style=dict` 跳过译文专有启发式，保留版本/非空校验。
+- **书房衬纸 UI** — paper-toggle、Popup 用量折叠、整页控制条主次分离、design tokens 统一状态色/阴影。
+- **交互与显示默认/进阶** — 高频五件套默认露出，低频进「更多交互选项」；父子开关灰显。
+- 扩展单测由约 73 项增至 **91** 项（流式、模块保存、风格提示词、事件 target 安全等）。
 
 ### Fixed
 
-- 修复 `cloud.translate_stream` 用普通 `for` 遍历 httpx 异步生成器导致运行时 `TypeError`（改 `async for`）。
-- 修复 `router.preload` 将同步 `_preload_popular()` 返回值（None）塞入 `asyncio.gather` 导致 `TypeError`（改为直接调用同步预热、仅 gather 异步协程）。
+- **飞书等多维表格划词崩溃** — `mouseup`/`mousedown` 的 `e.target` 为 Text 节点时无 `.closest`；统一 `resolveEventElement` / `eventTargetClosest`。
+- **设置页完全不可用** — `firstRunPendingFlag` 暂时性死区（TDZ）导致初始化抛错；声明提前。
+- 清理旋转 spinner 等与书房气质冲突的加载样式残骸。
+
+### Removed
+
+- **Python 包与桌面端** — 删除 `yuxtrans/`、旧 pytest/examples/benchmark、误导性 `install.sh`/`install.bat`；产品唯一路径为浏览器扩展。
+- 安卓端仍为 roadmap（`docs/superpowers/`），本版不交付。
+
+### Upgrade notes（从 0.4.x / 0.5.0-beta.1）
+
+1. 在 `chrome://extensions` **重新加载**已解压扩展（或加载本 Release 的 zip）。
+2. 原 API Key / 档案 / 缓存一般保留；若风格提示词或模型变更后译文异常，可在「数据与存储」按需清缓存。
+3. 设置项已拆至五个 Tab：请分别在「翻译偏好 / 交互与显示 / 数据与存储」点击各页保存。
+4. 推荐自测：划词、整页流式开/关、取消整页、词典、悬停译段、自定义风格提示词、飞书类复杂页无控制台 `closest` 报错。
 
 ## [0.4.1] - 2026-07-22
 
@@ -283,7 +308,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Yaemikoreal/YuxTrans/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Yaemikoreal/YuxTrans/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.3.0

@@ -8,6 +8,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 
+// 提供与运行时一致的 helpers（manifest 中 product-helpers.js 先于 content.js 加载，
+// content.js 构造时读取全局 YuxTransHelpers；测试环境同步注入）
+global.YuxTransHelpers = require('../lib/product-helpers.js');
+
 // ===== 最小化 DOM mock =====
 
 class FakeClassList {

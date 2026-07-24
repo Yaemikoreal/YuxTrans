@@ -242,7 +242,124 @@ test('isHoverParagraphCandidate 判定悬停段落候选', () => {
   assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 50, inExcluded: false, alreadyDone: true }), false);
   // 文本长度边界
   assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 2, inExcluded: false, alreadyDone: false }), false); // 过短
-  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 1501, inExcluded: false, alreadyDone: false }), false); // 过长
+  // 超长（>1500）仍作为候选，由调用方截断并标记（spec：超长截断并标记）
+  assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 1501, inExcluded: false, alreadyDone: false }), true);
   assert.strictEqual(H.isHoverParagraphCandidate({ tagName: 'P', textLen: 1500, inExcluded: false, alreadyDone: false }), true); // 上限
   assert.strictEqual(H.isHoverParagraphCandidate(null), false);
+  // HOVER_BLOCK_TAGS 白名单导出（content.js 与纯函数共用同一份，避免双份维护）
+  assert.ok(Array.isArray(H.HOVER_BLOCK_TAGS));
+  assert.ok(H.HOVER_BLOCK_TAGS.includes('P'));
+  assert.ok(H.HOVER_BLOCK_TAGS.includes('BLOCKQUOTE'));
+});
+
+test('popupTitleText 语言对 + 供应商短名', () => {
+  assert.strictEqual(H.popupTitleText('deepseek', 'en', 'zh'), 'EN -> 中 · DeepSeek');
+  assert.strictEqual(H.popupTitleText('local', 'auto', 'zh'), '自动 -> 中 · 本地');
+  assert.strictEqual(H.popupTitleText('anthropic', 'en', 'ja'), 'EN -> 日 · Claude');
+  // 对照浮窗：无 provider，仅语言对
+  assert.strictEqual(H.popupTitleText(null, 'en', 'zh'), 'EN -> 中');
+  // 无语言对时回退 provider 或品牌名
+  assert.strictEqual(H.popupTitleText('qwen', '', ''), 'Qwen');
+  assert.strictEqual(H.popupTitleText(null, '', ''), 'YuxTrans');
+});
+
+test('OPTIONS_TAB_IDS 为五模块顶栏顺序', () => {
+  assert.deepStrictEqual([...H.OPTIONS_TAB_IDS], [
+    'profiles',
+    'preference',
+    'interaction',
+    'data',
+    'diagnostics'
+  ]);
+});
+
+test('isOptionsModuleWritable 仅 preference/interaction/data', () => {
+  assert.strictEqual(H.isOptionsModuleWritable('preference'), true);
+  assert.strictEqual(H.isOptionsModuleWritable('interaction'), true);
+  assert.strictEqual(H.isOptionsModuleWritable('data'), true);
+  assert.strictEqual(H.isOptionsModuleWritable('profiles'), false);
+  assert.strictEqual(H.isOptionsModuleWritable('diagnostics'), false);
+});
+
+test('pickModuleConfig 按模块切片且不串字段', () => {
+  const values = {
+    sourceLang: 'en',
+    targetLang: 'zh',
+    translateStyle: 'academic',
+    stylePrompts: { academic: 'Custom academic' },
+    offlineMode: true,
+    triggerMode: 'icon',
+    enableStreaming: false,
+    originalStyle: 'fade',
+    hoverTranslate: true,
+    dictMode: false,
+    autoCopy: true,
+    hoverModifier: 'ctrl',
+    dictDblclick: false,
+    inputTranslate: true,
+    smartContentDetection: true,
+    compareProfileId: 'p2',
+    cacheEnabled: false,
+    maxCacheMB: 300,
+    siteRule: 'whitelist',
+    siteList: ['a.com'],
+    autoDetectLang: false,
+    autoFallback: false,
+    noise: 'drop-me'
+  };
+  const pref = H.pickModuleConfig('preference', values);
+  assert.deepStrictEqual(Object.keys(pref).sort(), ['offlineMode', 'sourceLang', 'stylePrompts', 'targetLang', 'translateStyle'].sort());
+  assert.strictEqual(pref.sourceLang, 'en');
+  assert.strictEqual(pref.offlineMode, true);
+  assert.deepStrictEqual(pref.stylePrompts, { academic: 'Custom academic' });
+  assert.ok(!('triggerMode' in pref));
+  assert.ok(!('noise' in pref));
+
+  const inter = H.pickModuleConfig('interaction', values);
+  assert.strictEqual(inter.triggerMode, 'icon');
+  assert.strictEqual(inter.compareProfileId, 'p2');
+  assert.ok(!('sourceLang' in inter));
+  assert.ok(!('maxCacheMB' in inter));
+  assert.strictEqual(Object.keys(inter).length, H.OPTIONS_MODULE_KEYS.interaction.length);
+
+  const data = H.pickModuleConfig('data', values);
+  assert.strictEqual(data.maxCacheMB, 300);
+  assert.deepStrictEqual(data.siteList, ['a.com']);
+  assert.ok(!('translateStyle' in data));
+  assert.deepStrictEqual(H.pickModuleConfig('diagnostics', values), {});
+  assert.deepStrictEqual(H.pickModuleConfig('preference', null), {});
+});
+
+test('shouldShowOptionsQuickStart G1 可见性', () => {
+  assert.strictEqual(H.shouldShowOptionsQuickStart({ firstRunPending: true, profiles: [{ id: 'a' }], activeProfileId: 'a' }), true);
+  assert.strictEqual(H.shouldShowOptionsQuickStart({ profiles: [], activeProfileId: '' }), true);
+  assert.strictEqual(H.shouldShowOptionsQuickStart({ profiles: [{ id: 'a' }], activeProfileId: '' }), true);
+  assert.strictEqual(H.shouldShowOptionsQuickStart({ profiles: [{ id: 'a' }], activeProfileId: 'missing' }), true);
+  assert.strictEqual(H.shouldShowOptionsQuickStart({ profiles: [{ id: 'a' }], activeProfileId: 'a' }), false);
+});
+
+test('resolveEventElement / eventTargetClosest 兼容 Text 节点 target', () => {
+  // 模拟飞书等：mouseup target 为 TEXT_NODE，无 closest
+  const parent = {
+    nodeType: 1,
+    closest(sel) {
+      return sel === '.yuxtrans-popup' ? parent : null;
+    }
+  };
+  const textNode = {
+    nodeType: 3,
+    parentElement: parent,
+    parentNode: parent
+  };
+  assert.strictEqual(H.resolveEventElement(textNode), parent);
+  assert.strictEqual(H.eventTargetClosest(textNode, '.yuxtrans-popup'), parent);
+  assert.strictEqual(H.eventTargetClosest(textNode, '.other'), null);
+
+  // 已是 Element
+  assert.strictEqual(H.resolveEventElement(parent), parent);
+  // 非法 target 不抛错
+  assert.strictEqual(H.resolveEventElement(null), null);
+  assert.strictEqual(H.resolveEventElement(undefined), null);
+  assert.strictEqual(H.eventTargetClosest({ nodeType: 3 }, '.x'), null);
+  assert.strictEqual(H.eventTargetClosest({ foo: 1 }, '.x'), null);
 });

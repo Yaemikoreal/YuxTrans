@@ -133,7 +133,7 @@ code {
   flex: 1;
   padding: var(--yxt-space-2) var(--yxt-space-1);
   border: none;
-  border-bottom: 1px solid var(--yxt-text-secondary);
+  border-bottom: 1px solid var(--yxt-annotation-50);
   border-radius: 0;
   background: transparent;
   color: var(--yxt-text);
@@ -144,10 +144,10 @@ code {
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 2px center;
-  padding-right: 18px;
+  background-position: right 4px center;
+  padding-right: 22px;
   transition: border-color var(--yxt-transition-fast);
 }
 
@@ -162,29 +162,28 @@ code {
   color: var(--yxt-text-tertiary);
 }
 
-/* ===== Main action（与 options 主按钮同一纸质语言） ===== */
+/* ===== Main action（墨实心主按钮：暗色下 ink/paper 自动反转，一行媒体查询都不用加） ===== */
 .action-btn {
   width: 100%;
   padding: 10px 12px;
-  background: var(--yxt-paper);
-  color: var(--yxt-ink);
-  border: 1px solid var(--yxt-ink-15);
+  background: var(--yxt-ink);
+  color: var(--yxt-paper);
+  border: none;
   border-radius: var(--yxt-radius-md);
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-base);
   font-weight: var(--yxt-font-medium);
   cursor: pointer;
-  transition: background var(--yxt-transition-fast), border-color var(--yxt-transition-fast);
+  transition: background var(--yxt-transition-fast);
   margin-bottom: var(--yxt-space-4);
 }
 
 .action-btn:hover {
-  background: var(--yxt-paper-warm);
-  border-color: var(--yxt-ink-25);
+  background: var(--yxt-ink-80);
 }
 
 .action-btn:active {
-  background: var(--yxt-paper-stack);
+  background: var(--yxt-ink-60);
 }
 
 .action-btn:focus-visible {
@@ -222,10 +221,14 @@ code {
   color: var(--yxt-text-tertiary);
   font-size: 10px;
   margin-right: 2px;
+  display: inline-block;
+  transition: transform var(--yxt-transition-fast);
 }
 
+/* 用同一个字形旋转，避免 ▸/▾ 两个字符宽度不同导致抖动 */
 .stats-details[open] .stats-summary::before {
-  content: '▾';
+  content: '▸';
+  transform: rotate(90deg);
 }
 
 .stats-summary-meta {
@@ -356,60 +359,7 @@ code {
   transform: translateX(100%);
 }
 
-/* 铅字嵌入式开关（非 iOS 胶囊） */
-.paper-toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.paper-toggle input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  pointer-events: none;
-}
-
-.paper-toggle-track {
-  display: block;
-  width: 28px;
-  height: 16px;
-  box-sizing: border-box;
-  background: var(--yxt-paper);
-  border: 1px solid var(--yxt-ink-15);
-  border-radius: var(--yxt-radius-md);
-  position: relative;
-  transition: background var(--yxt-transition-fast), border-color var(--yxt-transition-fast);
-}
-
-.paper-toggle-thumb {
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 12px;
-  height: 12px;
-  border-radius: var(--yxt-radius-sm);
-  background: var(--yxt-ink);
-  transition: transform var(--yxt-transition-fast), background var(--yxt-transition-fast);
-}
-
-.paper-toggle input:checked + .paper-toggle-track {
-  background: var(--yxt-dusk-20);
-  border-color: var(--yxt-dusk-40);
-}
-
-.paper-toggle input:checked + .paper-toggle-track .paper-toggle-thumb {
-  transform: translateX(12px);
-  background: var(--yxt-ink);
-}
-
-.paper-toggle input:focus-visible + .paper-toggle-track {
-  box-shadow: var(--yxt-shadow-glow);
-}
+/* 铅字嵌入式开关 .paper-toggle 已移至 design-tokens.css，三端（popup / options）共享同一拨杆 */
 
 /* ===== Toast ===== */
 .toast {
@@ -443,4 +393,22 @@ code {
   color: var(--yxt-error);
   border-color: var(--yxt-error-soft);
   background: var(--yxt-error-soft);
+}
+
+/* ===== 无障碍：键盘焦点环（options / popup 全局按钮统一） ===== */
+button:focus-visible,
+.icon-btn:focus-visible,
+.mode-toggle-btn:focus-visible,
+.model-select:focus-visible {
+  outline: none;
+  box-shadow: var(--yxt-shadow-glow);
+}
+
+/* ===== 无障碍：尊重用户的减少动效偏好（扩展自有页面，全局关闭装饰动画） ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -67,39 +67,55 @@
   }
 
   /**
-   * 同语种时翻转到对照语言（纯逻辑，不含配置开关）
+   * 目标语言归一化：'zh-CN'/'zh-TW' -> 'zh'，便于与 detectLanguage 结果比较
+   * @param {string} targetLang
+   * @returns {string}
+   */
+  function normalizeTargetLang(targetLang) {
+    const t = String(targetLang || '');
+    if (t.startsWith('zh')) return 'zh';
+    return t;
+  }
+
+  /**
+   * 同语种时不再翻向对照语言：用户只期望翻译为单一目标语言，
+   * 已是目标语言的文本应由调用方跳过，而非翻向对照语言。
+   * 保留函数签名向后兼容，统一返回 targetLang。
    * @param {string} detected
    * @param {string} targetLang
    * @returns {string}
    */
   function flipTargetIfSameLanguage(detected, targetLang) {
-    if (!detected || detected === 'unknown') return targetLang;
-    const normalizedTarget = String(targetLang || '').startsWith('zh') ? 'zh' : targetLang;
-    if (detected !== normalizedTarget) return targetLang;
-    const oppositeMap = {
-      zh: 'en',
-      ja: 'zh',
-      ko: 'zh',
-      en: 'zh',
-      ru: 'en',
-      ar: 'en',
-      th: 'en',
-      vi: 'en'
-    };
-    return oppositeMap[detected] || 'en';
+    return targetLang;
+  }
+
+  /**
+   * 文本是否已是目标语言（按 Unicode 脚本检测）
+   * @param {string} text
+   * @param {string} targetLang
+   * @returns {boolean}
+   */
+  function isSameAsTargetLanguage(text, targetLang) {
+    const detected = detectLanguage(text);
+    if (!detected || detected === 'unknown') return false;
+    return detected === normalizeTargetLang(targetLang);
   }
 
   SW.SCRIPT_RANGES = SCRIPT_RANGES;
   SW.detectLanguage = detectLanguage;
   SW.resolveSourceLanguage = resolveSourceLanguage;
+  SW.normalizeTargetLang = normalizeTargetLang;
   SW.flipTargetIfSameLanguage = flipTargetIfSameLanguage;
+  SW.isSameAsTargetLanguage = isSameAsTargetLanguage;
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       SCRIPT_RANGES,
       detectLanguage,
       resolveSourceLanguage,
-      flipTargetIfSameLanguage
+      normalizeTargetLang,
+      flipTargetIfSameLanguage,
+      isSameAsTargetLanguage
     };
   }
 })(typeof self !== 'undefined' ? self : typeof globalThis !== 'undefined' ? globalThis : this);

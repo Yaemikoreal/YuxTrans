@@ -73,6 +73,35 @@ class YuxTransContent {
     this.createStyles();
     this.bindEvents();
     this.loadConfig();
+    this._detectHostDarkTheme();
+  }
+
+  /**
+   * 宿主页暗色探测：系统为亮色、但宿主页面强制暗色时，注入的暖纸浮窗与灰墨译文会"隐身"。
+   * 探测 body/html 背景亮度，暗则给 documentElement 打 data-yxt-host-dark，
+   * 由 content.css 覆盖令牌为黄昏暗色（与系统暗色 prefers-color-scheme 互补）。
+   */
+  _detectHostDarkTheme() {
+    try {
+      const lum = this._bgLuminance(document.body) ?? this._bgLuminance(document.documentElement);
+      if (lum != null && lum < 0.5) {
+        document.documentElement.dataset.yxtHostDark = '1';
+      }
+    } catch (e) { /* getComputedStyle 不可用时静默忽略 */ }
+  }
+
+  /** 取元素背景色的相对亮度（0-1）；透明背景返回 null */
+  _bgLuminance(el) {
+    if (!el || typeof getComputedStyle !== 'function') return null;
+    const bg = getComputedStyle(el).backgroundColor;
+    const m = bg && bg.match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const parts = m[1].split(',').map((x) => parseFloat(x));
+    if (parts.length < 3) return null;
+    const alpha = parts.length > 3 ? parts[3] : 1;
+    if (alpha === 0) return null; // 透明，无法判定
+    const [r, g, b] = parts;
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   }
 
   async loadConfig() {
@@ -120,9 +149,49 @@ class YuxTransContent {
           this.config.batchSize = response.batchConfig.batchSize;
         }
       }
+      // 悬停翻译首次引导（仅在未展示过且 hoverTranslate 开启时显示）
+      this._maybeShowHoverGuide();
     } catch (e) {
       // 使用默认配置
     }
+  }
+
+  /**
+   * F1：悬停翻译首次新手引导--仅展示一次，用户首次触发悬停翻译或点击「知道了」后关闭
+   */
+  async _maybeShowHoverGuide() {
+    if (!this.config.hoverTranslate) return;
+    if (this._hoverGuideChecked) return;
+    this._hoverGuideChecked = true;
+    try {
+      const { hoverGuideShown } = await chrome.storage.local.get('hoverGuideShown');
+      if (hoverGuideShown) return;
+      this._showHoverGuide();
+    } catch (e) { /* storage 不可用时忽略 */ }
+  }
+
+  _showHoverGuide() {
+    if (this._hoverGuideEl) return;
+    const mod = this.config.hoverModifier === 'ctrl' ? 'Ctrl' : 'Alt';
+    const guide = document.createElement('div');
+    guide.className = 'yuxtrans-hover-guide';
+    guide.setAttribute('role', 'dialog');
+    guide.innerHTML = `
+      <div class="yuxtrans-hover-guide-title">悬停段落翻译已开启</div>
+      <div class="yuxtrans-hover-guide-text">按住 <kbd>${mod}</kbd> 键悬停任意段落，停留片刻即显示译文。可在设置中关闭此功能。</div>
+      <button type="button" class="yuxtrans-hover-guide-btn">知道了</button>
+    `;
+    document.body.appendChild(guide);
+    this._hoverGuideEl = guide;
+    guide.querySelector('.yuxtrans-hover-guide-btn').addEventListener('click', () => this._dismissHoverGuide());
+  }
+
+  _dismissHoverGuide() {
+    if (this._hoverGuideEl) {
+      this._hoverGuideEl.remove();
+      this._hoverGuideEl = null;
+    }
+    try { chrome.storage.local.set({ hoverGuideShown: true }); } catch (e) { /* ignore */ }
   }
 
   /**
@@ -230,6 +299,28 @@ class YuxTransContent {
   }
 
   /**
+   * 安全从事件 target 做 closest（文本节点 / 无 closest 宿主不抛错）
+   * @param {Event} e
+   * @param {string} selector
+   * @returns {Element|null}
+   */
+  _eventClosest(e, selector) {
+    const target = e && e.target;
+    if (this.helpers.eventTargetClosest) {
+      return this.helpers.eventTargetClosest(target, selector);
+    }
+    // helpers 未就绪时的兜底
+    if (!target) return null;
+    const el = target.nodeType === 1 ? target : (target.parentElement || null);
+    if (!el || typeof el.closest !== 'function') return null;
+    try {
+      return el.closest(selector);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
    * F1：mousemove 节流处理（120ms），按修饰键检测悬停段落
    */
   _handleHoverMouseMove(e) {
@@ -242,7 +333,11 @@ class YuxTransContent {
     }
     // 节流：120ms 内只处理一次
     if (this._hoverThrottleTimer) return;
-    const target = e.target;
+    // 文本节点无 nodeType===1：先规范为 Element，避免悬停在文字上整段失效
+    const raw = e.target;
+    const target = this.helpers.resolveEventElement
+      ? this.helpers.resolveEventElement(raw)
+      : (raw && raw.nodeType === 1 ? raw : (raw && raw.parentElement) || null);
     this._hoverThrottleTimer = setTimeout(() => {
       this._hoverThrottleTimer = null;
       this._resolveHoverTarget(target);
@@ -269,7 +364,7 @@ class YuxTransContent {
    */
   _resolveHoverParagraph(target) {
     if (!target || target.nodeType !== Node.ELEMENT_NODE) return null;
-    const blockTags = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TD', 'DD', 'DT', 'FIGCAPTION'];
+    const blockTags = this.helpers.HOVER_BLOCK_TAGS;
     let el = target;
     while (el && el !== document.body && !blockTags.includes(el.tagName)) {
       el = el.parentElement;
@@ -285,11 +380,9 @@ class YuxTransContent {
       el.classList.contains('yuxtrans-translated') ||
       el.classList.contains('yuxtrans-translated-bilingual');
     const text = (el.textContent || '').trim();
-    const isCandidate = this.helpers.isHoverParagraphCandidate
-      ? this.helpers.isHoverParagraphCandidate({
-          tagName: el.tagName, textLen: text.length, inExcluded, alreadyDone
-        })
-      : (!inExcluded && !alreadyDone && text.length >= 3 && text.length <= 1500);
+    const isCandidate = this.helpers.isHoverParagraphCandidate({
+      tagName: el.tagName, textLen: text.length, inExcluded, alreadyDone
+    });
     return isCandidate ? el : null;
   }
 
@@ -302,13 +395,25 @@ class YuxTransContent {
     el.classList.remove('yuxtrans-hover-target');
     this._hoverTarget = null;
     this._hoverTimer = null;
+    // 首次触发悬停翻译：关闭新手引导并标记已展示（让用户聚焦译文效果）
+    if (this._hoverGuideEl) this._dismissHoverGuide();
 
-    const text = (el.textContent || '').trim();
-    if (!text) return;
+    const rawText = (el.textContent || '').trim();
+    if (!rawText) return;
+    // 超长截断并标记（spec：>1500 字符截断到 1500，避免段落过长拖慢翻译）
+    const HOVER_MAX_LEN = 1500;
+    const truncated = rawText.length > HOVER_MAX_LEN;
+    const text = truncated ? rawText.slice(0, HOVER_MAX_LEN) : rawText;
 
     // 译文块容器：loading 复用现有省略号样式
     const block = document.createElement('div');
     block.className = 'yuxtrans-hover-translation';
+    if (truncated) {
+      const tag = document.createElement('div');
+      tag.className = 'yuxtrans-hover-truncated';
+      tag.textContent = '原文过长，已截断翻译';
+      block.appendChild(tag);
+    }
     const loading = document.createElement('span');
     loading.className = 'yuxtrans-loading';
     loading.innerHTML = '<span class="yuxtrans-loading-label">翻译中</span>';
@@ -326,9 +431,11 @@ class YuxTransContent {
 
     const sourceLang = this.config.sourceLang || 'auto';
     const targetLang = this.config.targetLang || 'zh';
-    // 段落普遍 >12 字符，缓存正常生效；走非流式 translate
+    // 段落普遍 >12 字符，缓存正常生效；走非流式 translate（spec：携带 requestId 便于未来流式升级路由）
+    this._hoverSeq = (this._hoverSeq || 0) + 1;
+    const requestId = 'hover-' + this._hoverSeq;
     chrome.runtime.sendMessage(
-      { action: 'translate', text, sourceLang, targetLang, context: this.getPageContext() },
+      { action: 'translate', text, sourceLang, targetLang, context: this.getPageContext(), requestId },
       (response) => {
         if (loading.parentNode) loading.remove();
         const span = document.createElement('span');
@@ -368,14 +475,12 @@ class YuxTransContent {
    */
   _handleDblClick(e) {
     if (!this.config.dictDblclick || !this.config.dictMode) return;
-    if (e.target.closest('.yuxtrans-popup, .yuxtrans-float-btn')) return;
+    if (this._eventClosest(e, '.yuxtrans-popup, .yuxtrans-float-btn')) return;
     this._lastInputElement = null;
     setTimeout(() => {
       const sel = window.getSelection().toString().trim();
       if (!sel) return;
-      const isWord = this.helpers.isSingleWord
-        ? this.helpers.isSingleWord(sel)
-        : (/^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(sel.trim()) && sel.trim().length <= 30 && !/\s/.test(sel.trim()));
+      const isWord = this.helpers.isSingleWord(sel);
       if (isWord) this.lookupWord(sel, e.clientX, e.clientY);
     }, 10);
   }
@@ -402,7 +507,7 @@ class YuxTransContent {
     const sourceLang = this.config.sourceLang || 'auto';
     const targetLang = this.config.targetLang || 'zh';
     chrome.runtime.sendMessage(
-      { action: 'lookupWord', text: word, sourceLang, targetLang, context: this.getPageContext() },
+      { action: 'lookupWord', text: word, sourceLang, targetLang, context: this.getPageContext(), requestId: 'popup' },
       (response) => {
         this.isTranslating = false;
         if (response && response.success) {
@@ -516,17 +621,20 @@ class YuxTransContent {
   translateWithCompareProfile(text, sourceLang, targetLang, context) {
     const profileId = this.config.compareProfileId;
     if (!profileId) return;
+    // 先记录主浮窗位置（pinPopup 内部会置 this.popup = null，须提前取值）
+    const mainPopup = this.popup;
+    const mainLeft = mainPopup ? parseFloat(mainPopup.style.left) : NaN;
+    const mainTop = mainPopup ? parseFloat(mainPopup.style.top) : NaN;
     // 主浮窗钉住（保留主译文），再开对照浮窗
-    if (this.popup && this.popup.dataset.pinned !== '1') this.pinPopup();
-    // 对照浮窗：在主浮窗左侧偏移定位
-    const baseX = this.popup ? parseFloat(this.popup.style.left) - 340 : 100;
-    const baseY = this.popup ? parseFloat(this.popup.style.top) : 100;
+    if (mainPopup && mainPopup.dataset.pinned !== '1') this.pinPopup();
+    // 对照浮窗：在主浮窗左侧偏移定位；无主浮窗时回退默认
+    const baseX = !isNaN(mainLeft) ? mainLeft - 340 : 100;
+    const baseY = !isNaN(mainTop) ? mainTop : 100;
     this.showPopup(Math.max(16, baseX), baseY, text);
     if (!this.popup) return;
     // 标记为对照浮窗
     this.popup.dataset.compare = '1';
-    const titleEl = this.popup.querySelector('.yuxtrans-popup-title');
-    if (titleEl) titleEl.textContent = 'YuxTrans · 对照';
+    this._updatePopupTitle('compare');
 
     chrome.runtime.sendMessage(
       { action: 'translateWithProfile', text, sourceLang, targetLang, context, profileId },
@@ -619,11 +727,11 @@ class YuxTransContent {
   }
 
   handleMouseUp(e) {
-    if (e.target.closest('.yuxtrans-popup, .yuxtrans-float-btn')) return;
+    if (this._eventClosest(e, '.yuxtrans-popup, .yuxtrans-float-btn')) return;
     if (!this.isSiteAllowed()) return;
 
     // F5：输入框翻译--input/textarea 选区不走 window.getSelection，单独处理
-    const inputEl = e.target.closest && e.target.closest('input, textarea');
+    const inputEl = this._eventClosest(e, 'input, textarea');
     if (inputEl) {
       if (!this.config.inputTranslate) return;
       const sel = this._getInputSelection(inputEl);
@@ -632,9 +740,7 @@ class YuxTransContent {
       // 跳过无翻译价值文本（纯数字/符号）
       if (!/[\p{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(sel)) return;
       // 单词走词典，否则普通翻译
-      const isWord = this.config.dictMode && (this.helpers.isSingleWord
-        ? this.helpers.isSingleWord(sel)
-        : (/^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(sel.trim()) && sel.trim().length <= 30 && !/\s/.test(sel.trim())));
+      const isWord = this.config.dictMode && this.helpers.isSingleWord(sel);
       if (isWord) this.lookupWord(sel, e.clientX, e.clientY);
       else this.translateText(sel, e.clientX, e.clientY);
       return;
@@ -685,7 +791,7 @@ class YuxTransContent {
   }
 
   handleMouseDown(e) {
-    if (!e.target.closest('.yuxtrans-popup') && !e.target.closest('.yuxtrans-float-btn')) {
+    if (!this._eventClosest(e, '.yuxtrans-popup') && !this._eventClosest(e, '.yuxtrans-float-btn')) {
       this.hidePopup();
     }
   }
@@ -728,9 +834,7 @@ class YuxTransContent {
     if (!this.isSiteAllowed()) return;
     // F2：单词词典模式--选中单个词时走词典卡片
     if (this.config.dictMode) {
-      const isWord = this.helpers.isSingleWord
-        ? this.helpers.isSingleWord(text)
-        : (/^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(text.trim()) && text.trim().length <= 30 && !/\s/.test(text.trim()));
+      const isWord = this.helpers.isSingleWord(text);
       if (isWord) {
         this.lookupWord(text, x, y);
         return;
@@ -914,7 +1018,7 @@ class YuxTransContent {
       <div class="yuxtrans-popup-footer">
         <span class="yuxtrans-status"><span class="yuxtrans-status-badge">准备</span></span>
         <div class="yuxtrans-popup-actions">
-          <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-pin-btn" title="钉住浮窗，不被新划词覆盖">钉住</button>
+          <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-pin-btn" title="钉住浮窗，不被新划词覆盖" aria-label="钉住浮窗"><svg class="yuxtrans-pin-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.042l-3.043 3.043-.022.531a2 2 0 0 1-.586 1.379l-1.414 1.414a.5.5 0 0 1-.707 0l-2.829-2.828-2.828 2.828a.5.5 0 1 1-.707-.707l2.828-2.829-2.828-2.828a.5.5 0 0 1 0-.707l1.414-1.414a2 2 0 0 1 1.379-.586l.531-.022 3.043-3.043a2.02 2.02 0 0 1-.042-.46c0-.431.107-1.023.588-1.503a.5.5 0 0 1 .353-.146z"/></svg></button>
           <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-insert-btn" hidden title="将译文插入输入框">插入</button>
           <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn">复制</button>
           <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" title="标记差译并清除缓存">差译</button>
@@ -925,6 +1029,9 @@ class YuxTransContent {
     document.body.appendChild(popup);
     this.popup = popup;
     this.popup.dataset.sourceText = sourceText;
+
+    // header 换真实信息：语言对 + 供应商（替换品牌噪音 YuxTrans）
+    this._updatePopupTitle();
 
     // 实际尺寸出来后，再定位并限制在可视区域
     requestAnimationFrame(() => {
@@ -950,6 +1057,11 @@ class YuxTransContent {
     // F4：钉住当前浮窗，使其不被新划词覆盖
     popup.querySelector('.yuxtrans-pin-btn').addEventListener('click', () => {
       this.pinPopup();
+    });
+
+    // 浮窗拖拽：按住 header 拖动（含已 pin 浮窗），拖拽不触发 mousedown 关闭
+    popup.querySelector('.yuxtrans-popup-header').addEventListener('mousedown', (e) => {
+      this._startPopupDrag(e, popup);
     });
 
     // 复制按钮只绑定一次
@@ -998,8 +1110,59 @@ class YuxTransContent {
     }
   }
 
+  /**
+   * 浮窗拖拽：按住 header 左键拖动，松开结束；约束在可视区域内
+   * 适用于当前浮窗与已 pin 浮窗（pin 后仍可自由移动）
+   */
+  _startPopupDrag(e, popup) {
+    if (e.button !== 0) return; // 仅左键
+    // 关闭按钮不触发拖拽
+    if (this._eventClosest(e, '.yuxtrans-popup-close')) return;
+    if (!popup) return;
+    e.preventDefault(); // 避免拖拽时选中文本
+
+    const rect = popup.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    // 切换为 fixed 定位以保证拖拽后位置稳定（showPopup 初始用 rAF 设 left/top）
+    popup.style.position = 'fixed';
+
+    const onMove = (ev) => {
+      const w = rect.width;
+      const h = rect.height;
+      const left = Math.max(0, Math.min(ev.clientX - offsetX, window.innerWidth - w));
+      const top = Math.max(0, Math.min(ev.clientY - offsetY, window.innerHeight - h));
+      popup.style.left = `${left}px`;
+      popup.style.top = `${top}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  /**
+   * 同步划词浮窗 header 真实信息：语言对 + 供应商（对照浮窗追加「对照」标记）
+   */
+  _updatePopupTitle(engine) {
+    if (!this.popup) return;
+    const titleEl = this.popup.querySelector('.yuxtrans-popup-title');
+    if (!titleEl || !this.helpers.popupTitleText) return;
+    const src = this.config.sourceLang || 'auto';
+    const tgt = this.config.targetLang || 'zh';
+    const base = this.helpers.popupTitleText(
+      engine === 'compare' ? null : this.config.provider, src, tgt
+    );
+    titleEl.textContent = engine === 'compare' ? `${base} · 对照` : base;
+  }
+
   updatePopup(translatedText, cached, engine, sourceText) {
     if (!this.popup) return;
+
+    // header 同步真实信息（语言对 + 供应商 / 对照）
+    this._updatePopupTitle(engine);
 
     const targetEl = this.popup.querySelector('.yuxtrans-target');
     targetEl.textContent = translatedText;
@@ -1588,7 +1751,10 @@ class YuxTransContent {
       await this.loadConfig();
 
       // 站点规则控制
-      if (!this.isSiteAllowed()) return;
+      if (!this.isSiteAllowed()) {
+        this._showPageToast('本站已禁用 YuxTrans 翻译');
+        return;
+      }
 
     // 防止重入：翻译进行中再次触发则取消在途批次并恢复已译原文
     if (this.pageTranslationState.isTranslating) {
@@ -1601,6 +1767,7 @@ class YuxTransContent {
     if (this.pageTranslationState.isTranslated) {
       this.restoreOriginalTexts();
       this.setPageControlRestoredState();
+      this._showPageToast('已恢复原文，再次点击可重新翻译');
       return;
     }
 
@@ -1608,6 +1775,7 @@ class YuxTransContent {
     const nodesInfo = this.collectTextNodes();
 
     if (nodesInfo.length === 0) {
+      this._showPageToast('未发现可翻译内容');
       return;
     }
 
@@ -1793,6 +1961,31 @@ class YuxTransContent {
 }
 
 /**
+ * 页面级轻量提示（2.5s 自动消失），用于整页翻译未启动等场景的用户反馈
+ */
+_showPageToast(message) {
+  if (!message) return;
+  // 复用已有 toast 则更新文本
+  let toast = document.querySelector('.yuxtrans-page-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'yuxtrans-page-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  // 重置动画
+  toast.classList.remove('is-hide');
+  toast.classList.add('is-show');
+  clearTimeout(this._pageToastTimer);
+  this._pageToastTimer = setTimeout(() => {
+    if (!toast) return;
+    toast.classList.remove('is-show');
+    toast.classList.add('is-hide');
+    setTimeout(() => toast && toast.remove(), 250);
+  }, 2500);
+}
+
+/**
  * 获取整页翻译控制条内的元素
  */
   pageControlElement(id) {
@@ -1911,8 +2104,15 @@ class YuxTransContent {
     if (bilingualBtn) {
       bilingualBtn.style.display = actionPlan.primary.includes('bilingual') ? 'inline-block' : 'none';
       bilingualBtn.textContent = isBilingual ? '仅译文' : '双语';
+      // 双语激活态指示（底部暮瞳小短线，见 content.css）
+      bilingualBtn.classList.toggle('is-active', isBilingual);
     }
-    if (closeBtn) closeBtn.style.display = actionPlan.primary.includes('close') ? 'inline-block' : 'none';
+    if (closeBtn) {
+      closeBtn.style.display = actionPlan.primary.includes('close') ? 'inline-block' : 'none';
+      // 关闭降级为 × 图标
+      closeBtn.textContent = '×';
+      closeBtn.setAttribute('aria-label', '关闭控制条');
+    }
     if (moreEl) moreEl.style.display = actionPlan.secondary.length ? 'inline-block' : 'none';
     if (retryBtn) {
       retryBtn.style.display = actionPlan.secondary.includes('retry') ? 'block' : 'none';
@@ -1962,6 +2162,12 @@ class YuxTransContent {
         this.hidePageControl();
       });
     }
+
+    // 完成 5 秒后收成小 chip，把页面还给读者（hover/focus 临时展开）
+    if (this._pageCollapseTimer) clearTimeout(this._pageCollapseTimer);
+    this._pageCollapseTimer = setTimeout(() => {
+      if (this.pageControl) this.pageControl.classList.add('is-collapsed');
+    }, 5000);
   }
 
   /**
@@ -2093,6 +2299,9 @@ class YuxTransContent {
           if (node.nextSibling) parent.insertBefore(span, node.nextSibling);
           else parent.appendChild(span);
           data.bilingualNode = span;
+          // hover 译文联动高亮所在原文块（配对：originalTexts node <-> bilingualNode）
+          span.addEventListener('mouseenter', () => parent.classList.add('yuxtrans-pair-hover'));
+          span.addEventListener('mouseleave', () => parent.classList.remove('yuxtrans-pair-hover'));
         }
         parent.classList.remove('yuxtrans-translated');
         parent.classList.add('yuxtrans-translated-bilingual');
@@ -2386,6 +2595,10 @@ class YuxTransContent {
   }
 
   hidePageControl() {
+    if (this._pageCollapseTimer) {
+      clearTimeout(this._pageCollapseTimer);
+      this._pageCollapseTimer = null;
+    }
     if (this.pageControl) {
       this.pageControl.remove();
       this.pageControl = null;

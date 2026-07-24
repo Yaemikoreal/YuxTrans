@@ -425,7 +425,7 @@
     if (state.path === 'local') {
       return {
         provider: 'local',
-        localModel: state.localModel || 'qwen3.5:0.8b',
+        localModel: state.localModel || 'translategemma:4b',
         apiKey: '',
         model: '',
         apiEndpoint: '',
@@ -452,6 +452,133 @@
   }
 
   /**
+   * 将事件 target 规范为可调用 closest 的 Element。
+   * 飞书多维表格等复杂编辑器上 mouseup/mousedown 的 target 常为 Text 节点，无 closest。
+   * @param {*} target - event.target
+   * @returns {object|null} Element-like 或 null
+   */
+  function resolveEventElement(target) {
+    if (!target || typeof target !== 'object') return null;
+    // ELEMENT_NODE = 1
+    if (target.nodeType === 1) {
+      return typeof target.closest === 'function' ? target : null;
+    }
+    // TEXT_NODE / COMMENT_NODE 等：上溯到父元素
+    const parent = target.parentElement || (target.parentNode && target.parentNode.nodeType === 1
+      ? target.parentNode
+      : null);
+    if (parent && typeof parent.closest === 'function') return parent;
+    // 无 nodeType 但已有 closest（部分 mock / 宿主对象）
+    if (typeof target.closest === 'function') return target;
+    return null;
+  }
+
+  /**
+   * 安全版 Element.closest：从事件 target 解析元素后再匹配选择器
+   * @param {*} target - event.target
+   * @param {string} selector
+   * @returns {object|null}
+   */
+  function eventTargetClosest(target, selector) {
+    const el = resolveEventElement(target);
+    if (!el || typeof el.closest !== 'function' || !selector) return null;
+    try {
+      return el.closest(selector);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
+   * Options 顶栏五个模块 id（与 data-tab 一致）
+   * @type {readonly string[]}
+   */
+  const OPTIONS_TAB_IDS = Object.freeze([
+    'profiles',
+    'preference',
+    'interaction',
+    'data',
+    'diagnostics'
+  ]);
+
+  /**
+   * 各可写模块写入 ActiveConfig 的字段表（分栏保存用）
+   * profiles / diagnostics 不在此表
+   */
+  const OPTIONS_MODULE_KEYS = Object.freeze({
+    preference: Object.freeze(['sourceLang', 'targetLang', 'translateStyle', 'offlineMode', 'stylePrompts']),
+    interaction: Object.freeze([
+      'triggerMode',
+      'enableStreaming',
+      'originalStyle',
+      'hoverTranslate',
+      'dictMode',
+      'autoCopy',
+      'hoverModifier',
+      'dictDblclick',
+      'inputTranslate',
+      'smartContentDetection',
+      'compareProfileId'
+    ]),
+    data: Object.freeze([
+      'cacheEnabled',
+      'maxCacheMB',
+      'siteRule',
+      'siteList',
+      'autoDetectLang',
+      'autoFallback'
+    ])
+  });
+
+  /**
+   * 模块是否具备「保存本页」配置写入口（不含服务档案自身流）
+   * @param {string} moduleId
+   * @returns {boolean}
+   */
+  function isOptionsModuleWritable(moduleId) {
+    return Object.prototype.hasOwnProperty.call(OPTIONS_MODULE_KEYS, moduleId);
+  }
+
+  /**
+   * 从扁平值对象中只挑出某模块应写入的字段
+   * @param {string} moduleId - preference | interaction | data
+   * @param {object} values - 表单收集的完整候选字段
+   * @returns {object} 仅含本模块键的切片；未知模块返回 {}
+   */
+  function pickModuleConfig(moduleId, values) {
+    const keys = OPTIONS_MODULE_KEYS[moduleId];
+    if (!keys || !values || typeof values !== 'object') return {};
+    const out = {};
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (Object.prototype.hasOwnProperty.call(values, k)) {
+        out[k] = values[k];
+      }
+    }
+    return out;
+  }
+
+  /**
+   * G1：设置页「快速开始」三步是否显示
+   * @param {{ firstRunPending?: boolean, profiles?: array, activeProfileId?: string }} opts
+   * @returns {boolean}
+   */
+  function shouldShowOptionsQuickStart(opts) {
+    const o = opts || {};
+    if (o.firstRunPending) return true;
+    const profiles = Array.isArray(o.profiles) ? o.profiles : [];
+    if (profiles.length === 0) return true;
+    const activeId = o.activeProfileId || '';
+    if (!activeId) return true;
+    const active = profiles.find((p) => p && p.id === activeId);
+    if (!active) return true;
+    return false;
+  }
+
+  // F1：悬停段落翻译的块级元素白名单（content.js 与本函数共用同一份，避免双份维护）
+  const HOVER_BLOCK_TAGS = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TD', 'DD', 'DT', 'FIGCAPTION'];
+
+  /**
    * F1：判断元素是否为悬停段落翻译候选（纯函数，便于单测）
    * @param {object} opts - { tagName, textLen, inExcluded, alreadyDone }
    * @returns {boolean}
@@ -460,10 +587,9 @@
     if (!opts) return false;
     if (opts.inExcluded || opts.alreadyDone) return false;
     const textLen = typeof opts.textLen === 'number' ? opts.textLen : 0;
-    // 文本过短（无翻译价值）或过长（超长截断）均不作为候选
-    if (textLen < 3 || textLen > 1500) return false;
-    const blockTags = ['P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'TD', 'DD', 'DT', 'FIGCAPTION'];
-    return blockTags.includes(opts.tagName);
+    // 过短无翻译价值；超长（>1500）仍作为候选，由调用方截断并标记（spec：超长截断并标记）
+    if (textLen < 3) return false;
+    return HOVER_BLOCK_TAGS.includes(opts.tagName);
   }
 
   /**
@@ -480,6 +606,28 @@
     return /^\p{L}[\p{L}\p{M}'’-]*\p{L}$/u.test(s);
   }
 
+  /**
+   * 划词浮窗 header 真实信息：语言对 + 供应商短名（替换品牌噪音 "YuxTrans"）
+   * @param {string|null|undefined} provider - 供应商 id（qwen/deepseek/local...）
+   * @param {string} sourceLang - 源语言代码（auto/en/zh...）
+   * @param {string} targetLang - 目标语言代码
+   * @returns {string} 如 "EN -> 中 · DeepSeek"；无语言对时回退 provider 或 "YuxTrans"
+   */
+  function popupTitleText(provider, sourceLang, targetLang) {
+    const LANG = { auto: '自动', en: 'EN', zh: '中', ja: '日', ko: '韩', fr: '法', de: '德', es: '西', ru: '俄' };
+    const PROVIDER = {
+      qwen: 'Qwen', openai: 'OpenAI', deepseek: 'DeepSeek', anthropic: 'Claude',
+      groq: 'Groq', moonshot: 'Moonshot', siliconflow: 'SiliconFlow',
+      google: 'Google', local: '本地', custom: '自定义'
+    };
+    const src = LANG[sourceLang] || (sourceLang ? String(sourceLang).toUpperCase() : '');
+    const tgt = LANG[targetLang] || (targetLang ? String(targetLang).toUpperCase() : '');
+    const p = PROVIDER[provider] || (provider ? String(provider) : '');
+    if (!src && !tgt) return p || 'YuxTrans';
+    const pair = `${src} -> ${tgt}`;
+    return p ? `${pair} · ${p}` : pair;
+  }
+
   return {
     resolveTriggerAction,
     shouldShowFloatButton,
@@ -488,6 +636,8 @@
     resolveTranslateAction,
     isHoverParagraphCandidate,
     isSingleWord,
+    popupTitleText,
+    HOVER_BLOCK_TAGS,
     buildUserError,
     formatUserErrorText,
     formatUserErrorCompact,
@@ -505,6 +655,13 @@
     resolveFirstRunPath,
     canAdvanceFirstRunStep,
     buildFirstRunProfileDraft,
-    getFirstRunTrialText
+    getFirstRunTrialText,
+    OPTIONS_TAB_IDS,
+    OPTIONS_MODULE_KEYS,
+    isOptionsModuleWritable,
+    pickModuleConfig,
+    shouldShowOptionsQuickStart,
+    resolveEventElement,
+    eventTargetClosest
   };
 });

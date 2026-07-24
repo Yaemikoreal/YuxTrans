@@ -308,6 +308,8 @@ let config = {
   sourceLang: 'auto',
   targetLang: 'zh',
   translateStyle: 'normal',
+  // 用户自定义风格提示词（仅存与默认不同的键；键为 normal|academic|technical|literary）
+  stylePrompts: {},
   triggerMode: 'auto',
   autoCopy: false,
   showFloatBtn: true,
@@ -736,14 +738,13 @@ function getFromCache(key) {
   return value;
 }
 
-async function setToCache(key, value, skipValidation = false) {
+async function setToCache(key, value) {
   if (!config.cacheEnabled) return;
 
-  // F2：词典缓存（skipValidation=true）绕过校验--词典 JSON 非译文，且单词 <12 字符会被 too_short 误拦
-  if (!skipValidation) {
-    const validation = validateCacheEntry(key, value);
-    if (!validation.valid) return;
-  }
+  // 所有写入均经 Cache Validator；词典键（style='dict'）在 validateCacheEntry
+  // 内部分流跳过译文专有规则，不再需要通用 skipValidation 逃生口
+  const validation = validateCacheEntry(key, value);
+  if (!validation.valid) return;
 
   const entryBytes = key.length * 2 + value.length * 2;
   const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
@@ -949,6 +950,11 @@ function validateCacheEntry(key, value) {
   if (parsed.version !== CACHE_KEY_VERSION) {
     return { valid: false, rule: 'version_mismatch' };
   }
+  // 词典缓存（style 段为 'dict'）：仅过版本校验，跳过译文专有规则。
+  // 词典 JSON 非译文近似命中，单词普遍 <12 字符，不应被 too_short 等译文规则误拦。
+  if (parsed.style === 'dict') {
+    return { valid: true, rule: null };
+  }
   const sourceLang = parsed.sourceLang;
   const targetLang = parsed.targetLang;
   const normalizedSource = normalizeCacheKeyText(parsed.text);
@@ -1048,12 +1054,16 @@ async function cleanupInvalidCacheEntries() {
  */
 function generateCacheKey(text, sourceLang, targetLang, style = null) {
   const resolvedStyle = style || config.translateStyle || 'normal';
+  // 自定义风格提示词改变缓存 style 段，避免与默认提示下的旧译文误命中
+  const styleSeg = (resolvedStyle !== 'dict' && SW.styleSegmentForCache)
+    ? SW.styleSegmentForCache(resolvedStyle, config.stylePrompts)
+    : resolvedStyle;
   // 编入当前 model：不同模型译文各自独立缓存，避免切档案对比时读到旧模型缓存
   const pc = resolveProviderConfig();
   const model = pc.model || pc.localModel || '';
   return SW.generateCacheKey
-    ? SW.generateCacheKey(text, sourceLang, targetLang, resolvedStyle, model)
-    : `${CACHE_KEY_VERSION}:${SW.PROMPT_VERSION || 'p1'}:${SW.modelSlug ? SW.modelSlug(model) : (model || '_')}:${sourceLang}:${targetLang}:${resolvedStyle}:${normalizeCacheKeyText(text)}`;
+    ? SW.generateCacheKey(text, sourceLang, targetLang, styleSeg, model)
+    : `${CACHE_KEY_VERSION}:${SW.PROMPT_VERSION || 'p1'}:${SW.modelSlug ? SW.modelSlug(model) : (model || '_')}:${sourceLang}:${targetLang}:${styleSeg}:${normalizeCacheKeyText(text)}`;
 }
 
 // ===== 翻译会话取消管理 =====
@@ -1373,7 +1383,8 @@ function buildTranslationPrompt(text, sourceLang, targetLang, context) {
       sourceLang,
       targetLang,
       config.translateStyle || 'normal',
-      context
+      context,
+      config.stylePrompts || null
     );
   }
   return `Translate to ${targetLang}:\n${text}`;
@@ -1392,7 +1403,7 @@ function buildDictionaryPrompt(word, sourceLang, targetLang) {
 
 /**
  * F2：单词词典查询--结构化词典卡片（音标/义项/例句）
- * 独立缓存键（style 段复用为 'dict' mode），单词 <12 字符绕过缓存长度门槛
+ * 独立缓存键（style 段为 'dict'），单词 <12 字符由 Validator 内部分流放行
  * @param {string} word
  * @param {string} sourceLang
  * @param {string} targetLang
@@ -1426,8 +1437,8 @@ async function lookupWord(word, sourceLang = 'auto', targetLang = 'zh') {
     });
     // 解析降级链：JSON.parse -> 失败则 { word, senses: [], raw } 纯文本降级
     const dict = parseDictionaryResult(raw, word);
-    // 缓存：词典 JSON 非译文，skipValidation 绕过 validateCacheEntry（单词 <12 字符会被 too_short 误拦）
-    await setToCache(cacheKey, JSON.stringify(dict), true);
+    // 缓存：词典 JSON 非译文，由 validateCacheEntry 对 style='dict' 分流放行（单词 <12 字符不被 too_short 误拦）
+    await setToCache(cacheKey, JSON.stringify(dict));
     recordUsage(false, 1, tokens);
     recordMetric({
       action: 'lookupWord',
@@ -1777,7 +1788,8 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
   const endpoint = getEndpoint(p);
   const apiKey = getApiKey(p);
 
-  if (!apiKey && p.provider !== 'local' && p.provider !== 'custom' && p.provider !== 'google') {
+  // 免配置供应商（local/custom/google）无需 API Key
+  if (!apiKey && !isNoConfigProvider(p.provider)) {
     throw new Error('请先配置 API Key');
   }
   if (!endpoint && p.provider === 'custom') {
@@ -1940,7 +1952,8 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
  * 流式翻译请求（SSE）
  * 通过 chrome.tabs.sendMessage 逐字推送到 content script
  */
-async function translateWithStream(text, sourceLang, targetLang, tabId, context = null, providerOverride = null, requestId = null, sessionId = null) {
+async function translateWithStream(text, sourceLang, targetLang, tabId, options = {}) {
+  const { context = null, providerOverride = null, requestId = null, sessionId = null } = options;
   const p = resolveProviderConfig(providerOverride);
   // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
   const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
@@ -1953,12 +1966,34 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, context 
   const endpoint = getEndpoint(p);
   const apiKey = getApiKey(p);
 
-  if (!apiKey && p.provider !== 'local' && p.provider !== 'custom') {
+  // 免配置供应商（local/custom/google）无需 API Key
+  if (!apiKey && !isNoConfigProvider(p.provider)) {
     throw new Error('请先配置 API Key');
   }
 
   // 应用速率延迟
   await applyRateDelay();
+
+  // 同语言跳过：文本已是目标语言则推送原文并返回，不调 API（避免把中文翻成英文等互译混用）
+  if (isSameAsTargetLanguage(text, targetLang)) {
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* tab 可能已关闭 */ });
+    } else {
+      chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* popup 可能未打开 */ });
+    }
+    return text;
+  }
+
+  // F7：google 免费接口无 SSE，降级为一次性翻译并以单 chunk 推送（保持流式调用契约）
+  if (p.provider === 'google') {
+    const translated = await googleTranslate(text, sourceLang, targetLang, p);
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
+    } else {
+      chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* popup 可能未打开 */ });
+    }
+    return translated;
+  }
 
   const format = getFormat(p);
   const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
@@ -2102,6 +2137,18 @@ function resolveTargetLanguage(text, sourceLang, targetLang) {
 }
 
 /**
+ * 文本是否已是目标语言（同语言文本跳过翻译，避免中英互译混用）
+ * @param {string} text
+ * @param {string} targetLang
+ * @returns {boolean}
+ */
+function isSameAsTargetLanguage(text, targetLang) {
+  return SW.isSameAsTargetLanguage
+    ? SW.isSameAsTargetLanguage(text, targetLang)
+    : false;
+}
+
+/**
  * 当 sourceLang 为 auto 时，返回检测到的源语言代码（lang 模块）
  * @param {string} text
  * @param {string} sourceLang
@@ -2127,6 +2174,17 @@ function isProviderAvailable(providerConfig) {
   return SW.isProviderAvailable
     ? SW.isProviderAvailable(providerConfig)
     : !!(providerConfig && (providerConfig.provider === 'local' || providerConfig.apiKey));
+}
+
+/**
+ * 是否为免配置供应商（local/custom/google 无需 API Key）
+ * @param {string} provider
+ * @returns {boolean}
+ */
+function isNoConfigProvider(provider) {
+  return SW.isNoConfigProvider
+    ? SW.isNoConfigProvider(provider)
+    : (provider === 'local' || provider === 'custom' || provider === 'google');
 }
 
 /**
@@ -2196,6 +2254,22 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
       errorType: ''
     });
     return { text: glossaryHit, cached: true, engine: 'glossary' };
+  }
+
+  // 同语言跳过：文本已是目标语言则原样返回，不调 API（避免把中文翻成英文等互译混用）
+  if (isSameAsTargetLanguage(text, targetLang)) {
+    recordUsage(true, 1);
+    recordMetric({
+      action: 'translate',
+      provider: 'same-lang',
+      cached: true,
+      latencyMs: Math.round(performance.now() - start),
+      textLength: text?.length || 0,
+      tokens: 0,
+      success: true,
+      errorType: ''
+    });
+    return { text, cached: true, engine: 'same-lang' };
   }
 
   const cacheKey = generateCacheKey(text, sourceLang, targetLang);
@@ -2314,7 +2388,9 @@ function splitIntoCharBatches(items, maxChars = MAX_BATCH_CHARS) {
 function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context = null) {
   const targetName = LANG_NAMES[groupTargetLang] || groupTargetLang;
   const sourceName = groupSourceLang === 'auto' ? null : (LANG_NAMES[groupSourceLang] || groupSourceLang);
-  const styleHint = STYLE_PROMPTS[config.translateStyle] || '';
+  const styleHint = SW.resolveStylePrompt
+    ? SW.resolveStylePrompt(config.translateStyle, config.stylePrompts)
+    : (STYLE_PROMPTS[config.translateStyle] || '');
 
   let prompt = `You are a professional translator. Translate the following JSON array of strings`;
   if (sourceName) prompt += ` from ${sourceName}`;
@@ -2359,17 +2435,8 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     ? (resolveSourceLanguage(texts[0] || '', sourceLang))
     : sourceLang;
 
-  // 若整批源语言与用户设置的目标语言相同（如中文页 target=zh），按原策略翻向对照语言
-  let batchTargetLang = targetLang;
-  if (sourceLang === 'auto' && batchSourceLang !== 'unknown' && batchSourceLang !== 'auto') {
-    const normalizedTarget = targetLang.startsWith('zh') ? 'zh' : targetLang;
-    if (batchSourceLang === normalizedTarget) {
-      const oppositeMap = {
-        zh: 'en', ja: 'zh', ko: 'zh', en: 'zh', ru: 'en', ar: 'en', th: 'en', vi: 'en'
-      };
-      batchTargetLang = oppositeMap[batchSourceLang] || 'en';
-    }
-  }
+  // 同语种不再翻向对照语言：已是目标语言的文本在下方循环逐条跳过，避免中英互译混用
+  const batchTargetLang = targetLang;
 
   // 1. 筛出未命中的项（术语表 → 缓存 → miss）
   for (let i = 0; i < texts.length; i++) {
@@ -2381,6 +2448,12 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
     const glossaryHit = lookupGlossary(text);
     if (glossaryHit != null) {
       finalResults[i] = { text: glossaryHit, cached: true, engine: 'glossary', success: true };
+      recordUsage(true, 1);
+      continue;
+    }
+    // 同语言跳过：文本已是目标语言则原样返回，不调 API（避免把中文翻成英文等互译混用）
+    if (isSameAsTargetLanguage(text, batchTargetLang)) {
+      finalResults[i] = { text, cached: true, engine: 'same-lang', success: true };
       recordUsage(true, 1);
       continue;
     }
@@ -3016,7 +3089,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
 
-      translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, context, null, request.requestId || null, request.sessionId || null)
+      translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, {
+        context, providerOverride: null, requestId: request.requestId || null, sessionId: request.sessionId || null
+      })
         .then(async (fullText) => {
           await setToCache(cacheKey, fullText);
           recordUsage(false, 1, streamTokens);
@@ -3118,11 +3193,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     else if (request.action === 'getProviderDefaults') {
-      sendResponse({ success: true, endpoints: API_ENDPOINTS, models: DEFAULT_MODELS });
+      sendResponse({
+        success: true,
+        endpoints: API_ENDPOINTS,
+        models: DEFAULT_MODELS,
+        stylePrompts: { ...(STYLE_PROMPTS || {}) },
+        styleIds: SW.STYLE_IDS || ['normal', 'academic', 'technical', 'literary']
+      });
     }
 
     else if (request.action === 'setConfig') {
-      saveConfig(request.config)
+      const payload = { ...(request.config || {}) };
+      // 规范化用户风格提示词，避免脏键/超长写入
+      if (Object.prototype.hasOwnProperty.call(payload, 'stylePrompts')) {
+        payload.stylePrompts = SW.sanitizeStylePrompts
+          ? SW.sanitizeStylePrompts(payload.stylePrompts)
+          : (payload.stylePrompts || {});
+      }
+      saveConfig(payload)
         .then(() => sendResponse({ success: true }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return;
@@ -3481,7 +3569,9 @@ if (typeof module !== 'undefined' && module.exports) {
     detectLanguage,
     resolveTargetLanguage,
     resolveSourceLanguage,
+    isSameAsTargetLanguage,
     isProviderAvailable,
+    isNoConfigProvider,
     translateWithStream,
     splitIntoCharBatches,
     buildBatchPrompt,

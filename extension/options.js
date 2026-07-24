@@ -66,6 +66,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sourceLangSelect = getById('sourceLang');
   const targetLangSelect = getById('targetLang');
   const translateStyleRadios = getAll('input[name="translateStyle"]');
+  const stylePromptTextarea = getById('stylePromptText');
+  const stylePromptStyleLabel = getById('stylePromptStyleLabel');
+  const stylePromptStatusEl = getById('stylePromptStatus');
+  const resetStylePromptBtn = getById('resetStylePromptBtn');
+
+  /** 风格中文名 */
+  const STYLE_LABELS = {
+    normal: '日常模式',
+    academic: '学术模式',
+    technical: '技术模式',
+    literary: '文学模式'
+  };
+  /** 内置默认提示词（由 getProviderDefaults 覆盖） */
+  let defaultStylePrompts = {
+    normal: '',
+    academic: 'Use an academic and formal style with precise terminology.',
+    technical: 'Preserve technical accuracy, keep technical terms and code references intact.',
+    literary: 'Use literary elegance and artistic expression.'
+  };
+  /** 编辑草稿：四风格完整文案（含与默认相同者） */
+  let stylePromptsDraft = { ...defaultStylePrompts };
 
   // 5. 动作行为设置
   const triggerModeRadios = getAll('input[name="triggerMode"]');
@@ -111,12 +132,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const requestLogsContainer = getById('requestLogsContainer');
   const refreshRequestLogsBtn = getById('refreshRequestLogsBtn');
 
-  // 7. 辅助
-  const saveBtn = getById('saveBtn');
+  // 7. 辅助（分栏保存：各可写模块独立按钮）
+  const savePreferenceBtn = getById('savePreferenceBtn');
+  const saveInteractionBtn = getById('saveInteractionBtn');
+  const saveDataBtn = getById('saveDataBtn');
   const clearCacheBtn = getById('clearCacheBtn');
   const updateBtn = getById('updateBtn');
   const statusEl = getById('status');
   let statusTimeout = null;
+  const Helpers = (typeof YuxTransHelpers !== 'undefined') ? YuxTransHelpers : null;
+  /** @type {boolean} firstRunPending 缓存，供 G1 同步判断（须在 config 回填调用前初始化，避免 TDZ） */
+  let firstRunPendingFlag = false;
 
   // 工具：状态提示 (高级滑入效果 - 解决竞态冲突)
   function showStatus(message, type) {
@@ -236,9 +262,84 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (res?.success) {
       defaults.endpoints = res.endpoints || {};
       defaults.models = res.models || {};
+      if (res.stylePrompts && typeof res.stylePrompts === 'object') {
+        defaultStylePrompts = {
+          normal: res.stylePrompts.normal || '',
+          academic: res.stylePrompts.academic || '',
+          technical: res.stylePrompts.technical || '',
+          literary: res.stylePrompts.literary || ''
+        };
+        stylePromptsDraft = { ...defaultStylePrompts };
+      }
     }
   } catch (error) {
     console.error('[YuxTrans] 加载供应商默认配置失败:', error);
+  }
+
+  /**
+   * 当前选中的翻译风格 id
+   * @returns {string}
+   */
+  function getSelectedTranslateStyle() {
+    return document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal';
+  }
+
+  /**
+   * 将草稿中当前风格同步到 textarea（切换风格前应先 flush）
+   */
+  function flushStylePromptEditorToDraft() {
+    if (!stylePromptTextarea) return;
+    const style = getSelectedTranslateStyle();
+    stylePromptsDraft[style] = stylePromptTextarea.value.slice(0, 2000);
+  }
+
+  /**
+   * 按选中风格刷新提示词编辑器 UI
+   */
+  function refreshStylePromptEditor() {
+    const style = getSelectedTranslateStyle();
+    if (stylePromptStyleLabel) {
+      stylePromptStyleLabel.textContent = STYLE_LABELS[style] || style;
+    }
+    const text = Object.prototype.hasOwnProperty.call(stylePromptsDraft, style)
+      ? stylePromptsDraft[style]
+      : (defaultStylePrompts[style] || '');
+    if (stylePromptTextarea) stylePromptTextarea.value = text;
+    const isCustom = text !== (defaultStylePrompts[style] || '');
+    if (stylePromptStatusEl) {
+      stylePromptStatusEl.textContent = isCustom ? '已自定义（与内置默认不同）' : '使用内置默认';
+      stylePromptStatusEl.classList.toggle('is-custom', isCustom);
+    }
+  }
+
+  /**
+   * 从 config 填充风格提示词草稿（覆盖优先，缺省用默认）
+   * @param {object} cfg
+   */
+  function loadStylePromptsDraftFromConfig(cfg) {
+    const custom = (cfg && cfg.stylePrompts && typeof cfg.stylePrompts === 'object')
+      ? cfg.stylePrompts
+      : {};
+    stylePromptsDraft = {
+      normal: typeof custom.normal === 'string' ? custom.normal : defaultStylePrompts.normal,
+      academic: typeof custom.academic === 'string' ? custom.academic : defaultStylePrompts.academic,
+      technical: typeof custom.technical === 'string' ? custom.technical : defaultStylePrompts.technical,
+      literary: typeof custom.literary === 'string' ? custom.literary : defaultStylePrompts.literary
+    };
+  }
+
+  /**
+   * 导出待保存的 stylePrompts（完整四键，由 SW sanitize 去掉与默认相同者）
+   * @returns {object}
+   */
+  function collectStylePromptsForSave() {
+    flushStylePromptEditorToDraft();
+    return {
+      normal: String(stylePromptsDraft.normal || '').slice(0, 2000),
+      academic: String(stylePromptsDraft.academic || '').slice(0, 2000),
+      technical: String(stylePromptsDraft.technical || '').slice(0, 2000),
+      literary: String(stylePromptsDraft.literary || '').slice(0, 2000)
+    };
   }
 
   function getActiveProfile(cfg) {
@@ -254,7 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (providerSelect) providerSelect.value = fallback.provider || 'qwen';
     if (apiKeyInput) apiKeyInput.value = fallback.apiKey || '';
     if (apiEndpointInput) apiEndpointInput.value = fallback.apiEndpoint || '';
-    if (localModelInput) localModelInput.value = fallback.localModel || 'qwen3.5:0.8b';
+    if (localModelInput) localModelInput.value = fallback.localModel || 'translategemma:4b';
 
     const cp = fallback.customProvider || {};
     if (customNameInput) customNameInput.value = cp.name || '';
@@ -284,6 +385,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
     if (customModelManual) customModelManual.value = savedModel;
+    // F8：默认选中推荐模型卡（localModel 未设置时选中 translategemma:4b）
+    selectModelCard(localModelInput?.value?.trim() || 'translategemma:4b');
   }
 
   if (config) {
@@ -299,6 +402,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     translateStyleRadios.forEach((radio) => {
       radio.checked = radio.value === (config.translateStyle || 'normal');
     });
+    loadStylePromptsDraftFromConfig(config);
+    refreshStylePromptEditor();
 
     // 行为
     triggerModeRadios.forEach((radio) => {
@@ -336,10 +441,90 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (glossaryCountEl) glossaryCountEl.textContent = String((config.glossary || []).length);
     renderActiveConfig();
+    syncQuickStartVisibility();
+    syncInteractionSubcontrols();
   }
 
+  /**
+   * G1：按档案与 firstRun 状态显示/隐藏「快速开始」
+   */
+  function syncQuickStartVisibility() {
+    const section = getById('quickStartSection');
+    if (!section) return;
+    const show = Helpers?.shouldShowOptionsQuickStart
+      ? Helpers.shouldShowOptionsQuickStart({
+        firstRunPending: firstRunPendingFlag,
+        profiles: config?.profiles,
+        activeProfileId: config?.activeProfileId
+      })
+      : (!(config?.profiles || []).length || !config?.activeProfileId);
+    section.hidden = !show;
+  }
+
+  // 读取 firstRunPending 后刷新上手区
+  chrome.storage.local.get('firstRunPending', (fr) => {
+    firstRunPendingFlag = !!fr?.firstRunPending;
+    syncQuickStartVisibility();
+  });
+
+  /**
+   * B1：悬停/词典父开关关闭时灰显子选项
+   */
+  function syncInteractionSubcontrols() {
+    const hoverOn = hoverTranslateInput ? hoverTranslateInput.checked : true;
+    const dictOn = dictModeInput ? dictModeInput.checked : true;
+    if (hoverModifierSelect) {
+      hoverModifierSelect.disabled = !hoverOn;
+      const row = getById('hoverModifierRow');
+      if (row) row.classList.toggle('is-disabled', !hoverOn);
+    }
+    if (dictDblclickInput) {
+      dictDblclickInput.disabled = !dictOn;
+      const row = getById('dictDblclickRow');
+      if (row) row.classList.toggle('is-disabled', !dictOn);
+    }
+  }
+
+  hoverTranslateInput?.addEventListener('change', syncInteractionSubcontrols);
+  dictModeInput?.addEventListener('change', syncInteractionSubcontrols);
+
+  // 风格提示词：切换风格前写回草稿；输入时更新「已自定义」状态
+  translateStyleRadios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+      // 注意：change 触发时 checked 已是新风格，需用 data-prev 记录旧风格
+      // 这里改为：先用 textarea 当前值写到「上一次展示的风格」——在 refresh 前读 data-editing-style
+      const prev = stylePromptTextarea?.dataset?.editingStyle || 'normal';
+      if (stylePromptTextarea) {
+        stylePromptsDraft[prev] = stylePromptTextarea.value.slice(0, 2000);
+      }
+      if (stylePromptTextarea) stylePromptTextarea.dataset.editingStyle = getSelectedTranslateStyle();
+      refreshStylePromptEditor();
+    });
+  });
+  if (stylePromptTextarea) {
+    stylePromptTextarea.dataset.editingStyle = getSelectedTranslateStyle();
+    stylePromptTextarea.addEventListener('input', () => {
+      const style = getSelectedTranslateStyle();
+      stylePromptsDraft[style] = stylePromptTextarea.value.slice(0, 2000);
+      const isCustom = stylePromptsDraft[style] !== (defaultStylePrompts[style] || '');
+      if (stylePromptStatusEl) {
+        stylePromptStatusEl.textContent = isCustom ? '已自定义（与内置默认不同）' : '使用内置默认';
+        stylePromptStatusEl.classList.toggle('is-custom', isCustom);
+      }
+    });
+  }
+  resetStylePromptBtn?.addEventListener('click', () => {
+    const style = getSelectedTranslateStyle();
+    stylePromptsDraft[style] = defaultStylePrompts[style] || '';
+    if (stylePromptTextarea) stylePromptTextarea.value = stylePromptsDraft[style];
+    if (stylePromptStatusEl) {
+      stylePromptStatusEl.textContent = '使用内置默认';
+      stylePromptStatusEl.classList.remove('is-custom');
+    }
+    showStatus(`${STYLE_LABELS[style] || style} 已恢复默认提示词（需点保存生效）`, 'success');
+  });
+
   // 首次安装三步引导（A3：本地/云端 → 配置 → 试译）
-  const Helpers = (typeof YuxTransHelpers !== 'undefined') ? YuxTransHelpers : null;
 
   async function initFirstRunWizard() {
     const wizard = getById('firstRunWizard');
@@ -349,6 +534,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const fr = await chrome.storage.local.get('firstRunPending');
       shouldShow = !!fr.firstRunPending;
+      firstRunPendingFlag = shouldShow;
+      syncQuickStartVisibility();
     } catch (e) {
       shouldShow = false;
     }
@@ -363,7 +550,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       path: null,
       provider: 'qwen',
       apiKey: '',
-      localModel: 'qwen3.5:0.8b',
+      localModel: 'translategemma:4b',
       ollamaOk: false,
       trialOk: false
     };
@@ -385,7 +572,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function readStateFromDom() {
       state.provider = providerSel?.value || 'qwen';
       state.apiKey = apiKeyInputFr?.value || '';
-      state.localModel = localModelInputFr?.value?.trim() || 'qwen3.5:0.8b';
+      state.localModel = localModelInputFr?.value?.trim() || 'translategemma:4b';
     }
 
     function canAdvance() {
@@ -436,7 +623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (res.ok) {
           state.ollamaOk = true;
           if (ollamaStatus) {
-            ollamaStatus.textContent = '已检测到 Ollama。请确认模型已下载（默认 qwen3.5:0.8b）。';
+            ollamaStatus.textContent = '已检测到 Ollama。请确认模型已下载（默认 translategemma:4b）。';
           }
         } else {
           if (ollamaStatus) ollamaStatus.textContent = 'Ollama 响应异常，请确认服务已启动。';
@@ -514,6 +701,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (markDone) {
         try {
           await chrome.storage.local.set({ firstRunPending: false });
+          firstRunPendingFlag = false;
         } catch (e) {}
       }
       const hint = getById('firstRunHint');
@@ -527,6 +715,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         else if (typeof renderModelList === 'function') renderModelList();
       } catch (e) {}
       renderActiveConfig();
+      syncQuickStartVisibility();
     }
 
     wizard.querySelectorAll('.first-run-path-card').forEach((card) => {
@@ -830,6 +1019,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // F8：model-card 点击选中（radio 语义）--选中填入 localModelInput 并高亮对应卡
+  function selectModelCard(modelName) {
+    if (!modelName) return;
+    if (localModelInput) localModelInput.value = modelName;
+    document.querySelectorAll('.model-card').forEach((card) => {
+      const isSel = card.dataset.model === modelName;
+      card.classList.toggle('selected', isSel);
+      card.setAttribute('aria-checked', isSel ? 'true' : 'false');
+    });
+  }
+
+  document.querySelectorAll('.model-card').forEach((card) => {
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', 'false');
+    card.addEventListener('click', () => selectModelCard(card.dataset.model));
+  });
 
   const activePulls = new Map();
 
@@ -1287,6 +1493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateProviderUI();
         renderModelList();
         renderActiveConfig();
+        syncQuickStartVisibility();
         showStatus(`已切换至 ${record.label || record.id}`, 'success');
       } else {
         showStatus(`切换失败: ${res?.error || '未知错误'}`, 'error');
@@ -1317,42 +1524,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   loadModelList();
 
-  // ===== 保存 ActiveConfig（与供应商无关的通用设置） =====
-  saveBtn?.addEventListener('click', async () => {
+  // ===== 分栏保存 ActiveConfig（F1：仅写入本模块字段） =====
+  function collectAllModuleValues() {
+    const getVal = (el) => el?.value || '';
+    const getChecked = (el) => el?.checked || false;
+    return {
+      cacheEnabled: cacheEnabledInput ? getChecked(cacheEnabledInput) : true,
+      maxCacheMB: parseInt(getVal(maxCacheMBInput) || '200', 10),
+      sourceLang: getVal(sourceLangSelect) || 'auto',
+      targetLang: getVal(targetLangSelect) || 'zh',
+      translateStyle: document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal',
+      stylePrompts: collectStylePromptsForSave(),
+      triggerMode: document.querySelector('input[name="triggerMode"]:checked')?.value || 'auto',
+      autoCopy: getChecked(autoCopyCheckbox),
+      siteRule: getVal(siteRuleSelect) || 'all',
+      siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
+      autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
+      autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
+      enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
+      offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
+      hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,
+      hoverModifier: getVal(hoverModifierSelect) === 'ctrl' ? 'ctrl' : 'alt',
+      dictMode: dictModeInput ? getChecked(dictModeInput) : true,
+      dictDblclick: dictDblclickInput ? getChecked(dictDblclickInput) : true,
+      originalStyle: ['normal', 'fade', 'blur'].includes(getVal(originalStyleSelect)) ? getVal(originalStyleSelect) : 'normal',
+      inputTranslate: inputTranslateInput ? getChecked(inputTranslateInput) : false,
+      smartContentDetection: smartContentDetectionInput ? getChecked(smartContentDetectionInput) : false,
+      compareProfileId: compareProfileIdSelect ? (getVal(compareProfileIdSelect) || '') : ''
+    };
+  }
+
+  /**
+   * 保存指定模块切片
+   * @param {string} moduleId
+   * @param {string} successMsg
+   */
+  async function saveModuleConfig(moduleId, successMsg) {
     try {
-      const getVal = (el) => el?.value || '';
-      const getChecked = (el) => el?.checked || false;
-
-      const activeConfig = {
-        cacheEnabled: cacheEnabledInput ? getChecked(cacheEnabledInput) : true,
-        maxCacheMB: parseInt(getVal(maxCacheMBInput) || '200', 10),
-        sourceLang: getVal(sourceLangSelect) || 'auto',
-        targetLang: getVal(targetLangSelect) || 'zh',
-        translateStyle: document.querySelector('input[name="translateStyle"]:checked')?.value || 'normal',
-        triggerMode: document.querySelector('input[name="triggerMode"]:checked')?.value || 'auto',
-        autoCopy: getChecked(autoCopyCheckbox),
-        siteRule: getVal(siteRuleSelect) || 'all',
-        siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
-        autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
-        autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
-        enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
-        offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
-        // F1-F6 配置收集
-        hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,
-        hoverModifier: getVal(hoverModifierSelect) === 'ctrl' ? 'ctrl' : 'alt',
-        dictMode: dictModeInput ? getChecked(dictModeInput) : true,
-        dictDblclick: dictDblclickInput ? getChecked(dictDblclickInput) : true,
-        originalStyle: ['normal', 'fade', 'blur'].includes(getVal(originalStyleSelect)) ? getVal(originalStyleSelect) : 'normal',
-        inputTranslate: inputTranslateInput ? getChecked(inputTranslateInput) : false,
-        smartContentDetection: smartContentDetectionInput ? getChecked(smartContentDetectionInput) : false,
-        compareProfileId: compareProfileIdSelect ? (getVal(compareProfileIdSelect) || '') : ''
-      };
-
-      const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: activeConfig });
+      const all = collectAllModuleValues();
+      const slice = Helpers?.pickModuleConfig
+        ? Helpers.pickModuleConfig(moduleId, all)
+        : all;
+      if (!slice || !Object.keys(slice).length) {
+        showStatus('无可保存字段', 'error');
+        return;
+      }
+      const res = await chrome.runtime.sendMessage({ action: 'setConfig', config: slice });
       if (res?.success) {
-        showStatus('翻译偏好已保存', 'success');
-        config = { ...config, ...activeConfig };
+        showStatus(successMsg, 'success');
+        config = { ...config, ...slice };
         renderActiveConfig();
+        syncQuickStartVisibility();
       } else {
         showStatus(`保存失败: ${res?.error || '未知响应'}`, 'error');
       }
@@ -1360,6 +1582,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('[YuxTrans] Save Error:', err);
       showStatus(`运行异常: ${err.message}`, 'error');
     }
+  }
+
+  savePreferenceBtn?.addEventListener('click', async () => {
+    await saveModuleConfig('preference', '翻译偏好已保存');
+    // 保存后按服务端清洗结果刷新草稿（与默认相同的键会被去掉）
+    if (config) {
+      loadStylePromptsDraftFromConfig(config);
+      refreshStylePromptEditor();
+    }
+  });
+  saveInteractionBtn?.addEventListener('click', () => {
+    saveModuleConfig('interaction', '交互与显示已保存');
+  });
+  saveDataBtn?.addEventListener('click', () => {
+    saveModuleConfig('data', '数据设置已保存');
   });
 
   // ===== 术语表导入 / 清空 =====
@@ -1546,7 +1783,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .filter(m => !m.success)
         .slice(0, 10);
       if (failures.length === 0) {
-        metricsRecentErrorsEl.innerHTML = '<p class="hint">暂无失败记录</p>';
+        metricsRecentErrorsEl.innerHTML = '<div class="yxt-empty">暂无失败记录</div>';
       } else {
         metricsRecentErrorsEl.innerHTML = failures.map(m => {
           const time = new Date(m.timestamp).toLocaleString('zh-CN');
@@ -1592,7 +1829,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderRequestLogs(logs) {
     if (!requestLogsContainer) return;
     if (logs.length === 0) {
-      requestLogsContainer.innerHTML = '<p class="hint">暂无请求日志</p>';
+      requestLogsContainer.innerHTML = '<div class="yxt-empty">暂无请求日志</div>';
       return;
     }
 

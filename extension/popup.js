@@ -153,7 +153,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
       window.close();
     } catch (e) {
-      showToast('整页翻译触发失败，请刷新页面后重试', true);
+      // 区分 content script 未注入（系统页/PDF/未刷新）与其它错误
+      const notInjected = e && /Receiving end does not exist|Could not establish connection/i.test(e.message);
+      const msg = notInjected
+        ? '此页面无法翻译（系统页或扩展未就绪），请刷新普通网页后重试'
+        : '整页翻译触发失败，请刷新页面后重试';
+      showToast(msg, true);
     }
   });
 
@@ -177,6 +182,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     modeToggle?.setAttribute('data-active', isBilingual ? 'bilingual' : 'mono');
     modeMonoBtn?.classList.toggle('active', !isBilingual);
     modeBilingualBtn?.classList.toggle('active', isBilingual);
+    modeMonoBtn?.setAttribute('aria-pressed', String(!isBilingual));
+    modeBilingualBtn?.setAttribute('aria-pressed', String(isBilingual));
   }
 
   async function setBilingualMode(isBilingual) {
