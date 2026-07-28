@@ -60,7 +60,7 @@ const LOCAL_TIMEOUT_MS = SW.LOCAL_TIMEOUT_MS || 120000;
 const REQUEST_TIMEOUT_MS = SW.REQUEST_TIMEOUT_MS || 30000;
 const MAX_BATCH_CHARS = SW.MAX_BATCH_CHARS || 4000;
 const DEFAULT_BATCH_SIZE = SW.DEFAULT_BATCH_SIZE || 20;
-const CACHE_KEY_VERSION = SW.CACHE_KEY_VERSION || 'v2';
+const CACHE_KEY_VERSION = SW.CACHE_KEY_VERSION || 'v3';
 
 /**
  * 默认模型（providers 模块）
@@ -285,6 +285,15 @@ async function applyRateDelay() {
   }
 }
 
+/**
+ * 全局出站 API 并发闸门（信号量）：所有出站请求（单句 / 流式 / 批量）发送前必须 acquire。
+ * 上限在每次放行决策时动态读取 getRateLimitParams()，429 限速把 concurrentLimit
+ * 降下来后对主流量即时生效——这是自适应并发的真正全局上限。
+ * 与 content.js 自管并发（整页批量 50 / 流式 4）是叠加关系：content 只负责提交，
+ * 此处兜底。例如流式 4 路并发遇上限速到 1，流式段落会被闸门串行化——这是限速期的预期效果。
+ */
+const apiConcurrencyGate = SW.createConcurrencyGate(() => getRateLimitParams().maxConcurrent);
+
 // ===== 运行时状态 =====
 
 let config = {
@@ -310,7 +319,8 @@ let config = {
   translateStyle: 'normal',
   // 用户自定义风格提示词（仅存与默认不同的键；键为 normal|academic|technical|literary）
   stylePrompts: {},
-  triggerMode: 'auto',
+  triggerMode: 'modifier', // 'modifier'(默认 修饰键+划选) | 'auto' | 'icon' | 'contextMenu'
+  selectionModifier: 'ctrl', // 'ctrl' | 'alt' | 'shift'（triggerMode=modifier 时生效）
   autoCopy: false,
   showFloatBtn: true,
   bilingualMode: true,
@@ -1069,7 +1079,23 @@ function generateCacheKey(text, sourceLang, targetLang, style = null) {
 // ===== 翻译会话取消管理 =====
 // 整页/动态批量翻译分配 sessionId，用户取消时 abort 在途请求并阻止后续批次，
 // 避免停止翻译后继续消耗云端配额。
-const translationSessions = new Map(); // sessionId -> { cancelled, controllers }
+const translationSessions = new Map(); // sessionId -> { cancelled, controllers, createdAt }
+// 页面直接关闭（未发 cancel）的会话无人清理，超过该时长视为僵尸会话
+const SESSION_ZOMBIE_TTL_MS = 30 * 60 * 1000; // 30 分钟
+
+// 清扫超时僵尸会话：abort 其 AbortController 后从 Map 移除
+function sweepZombieSessions() {
+  const now = Date.now();
+  for (const [k, v] of translationSessions) {
+    if (now - (v.createdAt || 0) > SESSION_ZOMBIE_TTL_MS) {
+      for (const c of v.controllers) {
+        try { c.abort(); } catch (e) { /* 已 abort 忽略 */ }
+      }
+      v.controllers.clear();
+      translationSessions.delete(k);
+    }
+  }
+}
 
 function getTranslationSession(sessionId) {
   if (!sessionId) return null;
@@ -1081,7 +1107,9 @@ function getTranslationSession(sessionId) {
         if (v.cancelled) translationSessions.delete(k);
       }
     }
-    s = { cancelled: false, controllers: new Set() };
+    // 新会话创建时顺带清扫超时僵尸会话（页面未发 cancel 直接关闭的场景）
+    sweepZombieSessions();
+    s = { cancelled: false, controllers: new Set(), createdAt: Date.now() };
     translationSessions.set(sessionId, s);
   }
   return s;
@@ -1281,12 +1309,73 @@ function addOrUpdateProfile(profile) {
   }
   const idx = config.profiles.findIndex((p) => p.id === profile.id);
   if (idx >= 0) {
-    config.profiles[idx] = { ...config.profiles[idx], ...profile, savedAt: Date.now() };
+    const existing = config.profiles[idx];
+    const merged = { ...existing, ...profile, savedAt: Date.now() };
+    // 页面不再回显明文 Key：空字符串视为「不修改」，保留原 Key
+    if (!profile.apiKey && existing.apiKey) {
+      merged.apiKey = existing.apiKey;
+    }
+    const existingCp = existing.customProvider || {};
+    if (!profile.customProvider?.apiKey && existingCp.apiKey) {
+      merged.customProvider = { ...(profile.customProvider || {}), apiKey: existingCp.apiKey };
+    }
+    config.profiles[idx] = merged;
   } else {
     config.profiles.push({ ...profile, savedAt: Date.now() });
   }
   config.activeProfileId = profile.id;
   return profile.id;
+}
+
+/**
+ * 脱敏档案：不向外回吐明文 API Key，仅提供 hasApiKey 标志（getConfig / getProfiles 响应用）
+ * @param {object} profile
+ * @returns {object}
+ */
+function sanitizeProfileForClient(profile) {
+  if (!profile || typeof profile !== 'object') return profile;
+  const cp = profile.customProvider || {};
+  return {
+    ...profile,
+    apiKey: '',
+    hasApiKey: !!(profile.apiKey || cp.apiKey),
+    customProvider: {
+      name: cp.name || '',
+      endpoint: cp.endpoint || '',
+      apiKey: '',
+      hasApiKey: !!cp.apiKey,
+      format: cp.format || 'openai',
+      model: cp.model || ''
+    }
+  };
+}
+
+/**
+ * 构造对外（content script / 扩展页面）的脱敏配置，SW 内部 config 不受影响
+ * @returns {object}
+ */
+function buildSanitizedConfig() {
+  return {
+    ...config,
+    apiKey: '',
+    profiles: (config.profiles || []).map(sanitizeProfileForClient)
+  };
+}
+
+/**
+ * 页面表单不回显明文 Key：当请求未携带 apiKey 时，回退到已保存的同供应商档案 Key
+ * @param {string} provider
+ * @returns {string}
+ */
+function getStoredApiKeyForProvider(provider) {
+  if (!provider || provider === 'local') return '';
+  const profiles = config.profiles || [];
+  const active = getActiveProfile();
+  const match = (active && active.provider === provider)
+    ? active
+    : profiles.find((p) => p.provider === provider);
+  if (!match) return '';
+  return provider === 'custom' ? (match.customProvider?.apiKey || '') : (match.apiKey || '');
 }
 
 function removeProfile(profileId) {
@@ -1813,76 +1902,83 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
   // 应用速率延迟
   await applyRateDelay();
 
-  // F7：谷歌免费接口走专门请求路径（GET + 数组响应，非 OpenAI 格式）
-  if (p.provider === 'google') {
-    return googleTranslate(text, sourceLang, targetLang, p);
-  }
-
-  // F2：词典模式支持自定义 prompt + jsonMode（复用同一 fetch/限流/超时路径）
-  const prompt = options.promptOverride || buildTranslationPrompt(text, sourceLang, targetLang, context);
-  const { headers, body } = buildRequest(prompt, false, p, options.jsonMode === true);
-  const logStart = performance.now();
-
-  // AbortController 超时控制
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // 出站并发闸门：槽位持有至请求结束（含超时 abort / 出错），try/finally 保证释放不泄漏
+  await apiConcurrencyGate.acquire(options.priority);
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST', headers, body,
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    // 检测 rate limit (429)
-    if (!response.ok) {
-      const isRateLimit = response.status === 429;
-      updateRateLimitState(false, isRateLimit);
-      const errorText = await response.text();
-      throw new Error(
-        isRateLimit
-          ? ERROR_MESSAGES.RATE_LIMITED
-          : formatError(response.status, errorText)
-      );
+    // F7：谷歌免费接口走专门请求路径（GET + 数组响应，非 OpenAI 格式）
+    if (p.provider === 'google') {
+      return googleTranslate(text, sourceLang, targetLang, p);
     }
 
-    const data = await response.json();
-    const translated = parseResponse(data, getFormat(p), p);
+    // F2：词典模式支持自定义 prompt + jsonMode（复用同一 fetch/限流/超时路径）
+    const prompt = options.promptOverride || buildTranslationPrompt(text, sourceLang, targetLang, context);
+    const { headers, body } = buildRequest(prompt, false, p, options.jsonMode === true);
+    const logStart = performance.now();
 
-    // 成功，更新状态
-    updateRateLimitState(true);
+    // AbortController 超时控制
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    logRequest({
-      action: 'translate',
-      provider: p.provider,
-      model: getModel(p),
-      sourceLang,
-      targetLang,
-      prompt: truncateForLog(prompt),
-      response: truncateForLog(translated),
-      latencyMs: Math.round(performance.now() - logStart),
-      success: true
-    });
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST', headers, body,
+        signal: controller.signal
+      });
 
-    return translated.trim();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    const finalError = error.name === 'AbortError'
-      ? new Error('请求超时（30秒），请检查网络或更换模型')
-      : error;
-    logRequest({
-      action: 'translate',
-      provider: p.provider,
-      model: getModel(p),
-      sourceLang,
-      targetLang,
-      prompt: truncateForLog(prompt),
-      error: truncateForLog(finalError.message),
-      latencyMs: Math.round(performance.now() - logStart),
-      success: false
-    });
-    throw finalError;
+      clearTimeout(timeoutId);
+
+      // 检测 rate limit (429)
+      if (!response.ok) {
+        const isRateLimit = response.status === 429;
+        updateRateLimitState(false, isRateLimit);
+        const errorText = await response.text();
+        throw new Error(
+          isRateLimit
+            ? ERROR_MESSAGES.RATE_LIMITED
+            : formatError(response.status, errorText)
+        );
+      }
+
+      const data = await response.json();
+      const translated = parseResponse(data, getFormat(p), p);
+
+      // 成功，更新状态
+      updateRateLimitState(true);
+
+      logRequest({
+        action: 'translate',
+        provider: p.provider,
+        model: getModel(p),
+        sourceLang,
+        targetLang,
+        prompt: truncateForLog(prompt),
+        response: truncateForLog(translated),
+        latencyMs: Math.round(performance.now() - logStart),
+        success: true
+      });
+
+      return translated.trim();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const finalError = error.name === 'AbortError'
+        ? new Error('请求超时（30秒），请检查网络或更换模型')
+        : error;
+      logRequest({
+        action: 'translate',
+        provider: p.provider,
+        model: getModel(p),
+        sourceLang,
+        targetLang,
+        prompt: truncateForLog(prompt),
+        error: truncateForLog(finalError.message),
+        latencyMs: Math.round(performance.now() - logStart),
+        success: false
+      });
+      throw finalError;
+    }
+  } finally {
+    apiConcurrencyGate.release();
   }
 }
 
@@ -1953,7 +2049,7 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
  * 通过 chrome.tabs.sendMessage 逐字推送到 content script
  */
 async function translateWithStream(text, sourceLang, targetLang, tabId, options = {}) {
-  const { context = null, providerOverride = null, requestId = null, sessionId = null } = options;
+  const { context = null, providerOverride = null, requestId = null, sessionId = null, priority = SW.SCHEDULER_PRIORITY.NORMAL } = options;
   const p = resolveProviderConfig(providerOverride);
   // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
   const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
@@ -1974,120 +2070,127 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
   // 应用速率延迟
   await applyRateDelay();
 
-  // 同语言跳过：文本已是目标语言则推送原文并返回，不调 API（避免把中文翻成英文等互译混用）
-  if (isSameAsTargetLanguage(text, targetLang)) {
-    if (tabId) {
-      chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* tab 可能已关闭 */ });
-    } else {
-      chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* popup 可能未打开 */ });
-    }
-    return text;
-  }
-
-  // F7：google 免费接口无 SSE，降级为一次性翻译并以单 chunk 推送（保持流式调用契约）
-  if (p.provider === 'google') {
-    const translated = await googleTranslate(text, sourceLang, targetLang, p);
-    if (tabId) {
-      chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
-    } else {
-      chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* popup 可能未打开 */ });
-    }
-    return translated;
-  }
-
-  const format = getFormat(p);
-  const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
-  const { headers, body } = buildRequest(prompt, true, p);
-
-  const controller = new AbortController();
-  // 接入整页取消会话：用户取消整页流式翻译时 abort 在途 SSE（与批量路径对齐，避免继续消耗配额）
-  registerSessionController(sessionId, controller);
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2); // 流式给更多时间
+  // 出站并发闸门：SSE 流持有槽位直到流读完/出错/abort（会话取消经 finally 释放，不泄漏）
+  await apiConcurrencyGate.acquire(priority);
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST', headers, body,
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const isRateLimit = response.status === 429;
-      updateRateLimitState(false, isRateLimit);
-      const errorText = await response.text();
-      throw new Error(
-        isRateLimit
-          ? ERROR_MESSAGES.RATE_LIMITED
-          : formatError(response.status, errorText)
-      );
+    // 同语言跳过：文本已是目标语言则推送原文并返回，不调 API（避免把中文翻成英文等互译混用）
+    if (isSameAsTargetLanguage(text, targetLang)) {
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* tab 可能已关闭 */ });
+      } else {
+        chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* popup 可能未打开 */ });
+      }
+      return text;
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
+    // F7：google 免费接口无 SSE，降级为一次性翻译并以单 chunk 推送（保持流式调用契约）
+    if (p.provider === 'google') {
+      const translated = await googleTranslate(text, sourceLang, targetLang, p);
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
+      } else {
+        chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* popup 可能未打开 */ });
+      }
+      return translated;
+    }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const format = getFormat(p);
+    const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
+    const { headers, body } = buildRequest(prompt, true, p);
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    const controller = new AbortController();
+    // 接入整页取消会话：用户取消整页流式翻译时 abort 在途 SSE（与批量路径对齐，避免继续消耗配额）
+    registerSessionController(sessionId, controller);
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2); // 流式给更多时间
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST', headers, body,
+        signal: controller.signal
+      });
 
-        try {
-          const parsed = JSON.parse(data);
-          let chunk = '';
+      clearTimeout(timeoutId);
 
-          if (format === 'anthropic') {
-            chunk = parsed.delta?.text || '';
-          } else if (p.provider === 'local') {
-            chunk = parsed.message?.content || '';
-          } else {
-            chunk = parsed.choices?.[0]?.delta?.content || '';
-          }
+      if (!response.ok) {
+        const isRateLimit = response.status === 429;
+        updateRateLimitState(false, isRateLimit);
+        const errorText = await response.text();
+        throw new Error(
+          isRateLimit
+            ? ERROR_MESSAGES.RATE_LIMITED
+            : formatError(response.status, errorText)
+        );
+      }
 
-          if (chunk) {
-            fullText += chunk;
-            // 推送增量文本到页面或 Popup
-            if (tabId) {
-              chrome.tabs.sendMessage(tabId, {
-                action: 'streamChunk',
-                requestId,
-                chunk,
-                fullText
-              }).catch(() => { /* tab 可能已关闭 */ });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            let chunk = '';
+
+            if (format === 'anthropic') {
+              chunk = parsed.delta?.text || '';
+            } else if (p.provider === 'local') {
+              chunk = parsed.message?.content || '';
             } else {
-              chrome.runtime.sendMessage({
-                action: 'streamChunk',
-                requestId,
-                chunk,
-                fullText
-              }).catch(() => { /* popup 可能未打开 */ });
+              chunk = parsed.choices?.[0]?.delta?.content || '';
             }
+
+            if (chunk) {
+              fullText += chunk;
+              // 推送增量文本到页面或 Popup
+              if (tabId) {
+                chrome.tabs.sendMessage(tabId, {
+                  action: 'streamChunk',
+                  requestId,
+                  chunk,
+                  fullText
+                }).catch(() => { /* tab 可能已关闭 */ });
+              } else {
+                chrome.runtime.sendMessage({
+                  action: 'streamChunk',
+                  requestId,
+                  chunk,
+                  fullText
+                }).catch(() => { /* popup 可能未打开 */ });
+              }
+            }
+          } catch (e) {
+            // 忽略不可解析的行
           }
-        } catch (e) {
-          // 忽略不可解析的行
         }
       }
-    }
 
-    // 流式翻译成功，更新速率限制状态
-    updateRateLimitState(true);
+      // 流式翻译成功，更新速率限制状态
+      updateRateLimitState(true);
 
-    return fullText.trim();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error('请求超时，请检查网络或更换模型');
+      return fullText.trim();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('请求超时，请检查网络或更换模型');
+      }
+      throw error;
     }
-    throw error;
+  } finally {
+    apiConcurrencyGate.release();
   }
 }
 
@@ -2095,18 +2198,9 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
 
 /**
  * Unicode 脚本区间定义（用于轻量语言检测）
+ * 唯一来源为 lib/sw/lang.js（background 加载时必然已挂载，不再保留重复 fallback）
  */
-const SCRIPT_RANGES = SW.SCRIPT_RANGES || {
-  han: /[\u4e00-\u9fff\u3400-\u4dbf]/,
-  hiragana: /[\u3040-\u309f]/,
-  katakana: /[\u30a0-\u30ff]/,
-  hangul: /[\uac00-\ud7af\u1100-\u11ff]/,
-  cyrillic: /[\u0400-\u04ff]/,
-  arabic: /[\u0600-\u06ff]/,
-  thai: /[\u0e00-\u0e7f]/,
-  latin: /[\u0041-\u007a\u00c0-\u017f\u0100-\u024f]/,
-  vietnamese: /[\u00c0-\u00c3\u00c8-\u00ca\u00cc-\u00cf\u00d2-\u00d5\u00d9-\u00dd\u1ea0-\u1ef9]/
-};
+const SCRIPT_RANGES = SW.SCRIPT_RANGES;
 
 /**
  * 基于 Unicode 脚本检测语言（lang 模块）
@@ -2119,20 +2213,14 @@ function detectLanguage(text) {
 
 /**
  * 根据检测到的源语言，决定实际目标语言
- * 核心规则：避免「同语种互译」，自动翻向常用对照语种
+ * 同语种不再翻向对照语言：已是目标语言的文本由 isSameAsTargetLanguage 跳过，
+ * 统一返回用户设置的目标语言。
  * @param {string} text
  * @param {string} sourceLang
  * @param {string} targetLang
  * @returns {string}
  */
 function resolveTargetLanguage(text, sourceLang, targetLang) {
-  if (!config.autoDetectLang || sourceLang !== 'auto') {
-    return targetLang;
-  }
-  const detected = detectLanguage(text);
-  if (SW.flipTargetIfSameLanguage) {
-    return SW.flipTargetIfSameLanguage(detected, targetLang);
-  }
   return targetLang;
 }
 
@@ -2234,7 +2322,9 @@ function buildFallbackProvider() {
   };
 }
 
-async function translate(text, sourceLang = 'auto', targetLang = 'zh', context = null) {
+async function translate(text, sourceLang = 'auto', targetLang = 'zh', context = null, options = {}) {
+  // 出站并发闸门优先级：默认 HIGH（划词/弹窗单句）；批量补全经 options 传入 LOW
+  const gatePriority = (typeof options.priority === 'number') ? options.priority : SW.SCHEDULER_PRIORITY.HIGH;
   const start = performance.now();
   targetLang = resolveTargetLanguage(text, sourceLang, targetLang);
   const resolvedSourceLang = resolveSourceLanguage(text, sourceLang);
@@ -2297,8 +2387,8 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
   try {
     // 划词优先级最高；相同 cacheKey 的并发请求（划词+整页批次同文本）共享一次结果
     const translated = SW.scheduleTranslation
-      ? await SW.scheduleTranslation(cacheKey, () => translateWithCloud(text, resolvedSourceLang, targetLang, context), SW.SCHEDULER_PRIORITY.HIGH)
-      : await translateWithCloud(text, resolvedSourceLang, targetLang, context);
+      ? await SW.scheduleTranslation(cacheKey, () => translateWithCloud(text, resolvedSourceLang, targetLang, context, null, { priority: gatePriority }), SW.SCHEDULER_PRIORITY.HIGH)
+      : await translateWithCloud(text, resolvedSourceLang, targetLang, context, null, { priority: gatePriority });
     await setToCache(cacheKey, translated);
     recordUsage(false, 1, tokens);
     recordMetric({
@@ -2319,7 +2409,7 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
       if (fallback && isProviderAvailable(fallback) && fallback.provider !== activeProvider) {
         console.warn(`[YuxTrans] 主供应商 ${activeProvider} 失败，尝试 ${fallback.provider}:`, error.message);
         try {
-          const translated = await translateWithCloud(text, resolvedSourceLang, targetLang, context, fallback);
+          const translated = await translateWithCloud(text, resolvedSourceLang, targetLang, context, fallback, { priority: gatePriority });
           await setToCache(cacheKey, translated);
           recordUsage(false, 1, tokens);
           recordMetric({
@@ -2522,6 +2612,8 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       let parseError = null;
       const batchLogStart = performance.now();
       await applyRateDelay();
+      // 出站并发闸门：批量请求以 LOW 优先级排队（让位划词/流式），同样受限速上限约束
+      await apiConcurrencyGate.acquire(SW.SCHEDULER_PRIORITY.LOW);
       try {
         const { headers, body } = buildRequest(prompt, false, null, true);
         const endpoint = getEndpoint();
@@ -2578,6 +2670,9 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       } catch (e) {
         parseError = e.message;
         console.warn('[YuxTrans] Batch translation for group ' + groupTargetLang + ' parse error:', e);
+      } finally {
+        // 会话 abort / 网络出错 / 解析异常均经此处释放槽位，不泄漏
+        apiConcurrencyGate.release();
       }
 
       logRequest({
@@ -2708,7 +2803,8 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
     chunks.push(uniqueItems.slice(i, i + maxConcurrent));
   }
 
-  for (const chunk of chunks) {
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const chunk = chunks[chunkIndex];
     if (isSessionCancelled(sessionId)) break;
     const chunkPromises = chunk.map(async (uniqueItem) => {
       const originalIndices = [];
@@ -2723,7 +2819,8 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
       for (let retry = 0; retry < 3; retry++) {
         try {
           if (retry > 0) await new Promise((r) => setTimeout(r, retry * 1000 + requestDelay));
-          const res = await translate(uniqueItem.text, sourceLang, uniqueItem.resolvedTargetLang, context);
+          // 批量补全属批次流量：LOW 优先级过闸门，让位划词/流式（原分片并发由全局闸门取代兜底）
+          const res = await translate(uniqueItem.text, sourceLang, uniqueItem.resolvedTargetLang, context, { priority: SW.SCHEDULER_PRIORITY.LOW });
           originalIndices.forEach((originalIndex) => {
             finalResults[originalIndex] = { ...res, success: true };
           });
@@ -2741,7 +2838,7 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
     });
 
     await Promise.allSettled(chunkPromises);
-    if (chunks.indexOf(chunk) < chunks.length - 1) {
+    if (chunkIndex < chunks.length - 1) {
       await new Promise((r) => setTimeout(r, requestDelay !== undefined ? requestDelay : 500));
     }
   }
@@ -2750,7 +2847,13 @@ async function fallbackBatchItems(uniqueItems, sourceLang, context, finalResults
 // ===== 连接测试 =====
 
 async function testProviderConnection(testConfig) {
-  const { provider, apiKey, endpoint, model } = testConfig;
+  const { provider, endpoint, model } = testConfig;
+  // 前置校验：空 endpoint 直接返回结构化错误，不依赖 fetch 抛错兜底
+  if (!endpoint || !String(endpoint).trim()) {
+    return { success: false, error: '请先填写接口地址（Endpoint）' };
+  }
+  // 表单不回显明文 Key：未携带 apiKey 时回退到已保存的同供应商档案 Key
+  const apiKey = testConfig.apiKey || getStoredApiKeyForProvider(provider);
 
   if (!apiKey && provider !== 'local') return { success: false, error: '请先填写 API Key' };
 
@@ -2804,7 +2907,9 @@ async function testProviderConnection(testConfig) {
 }
 
 async function fetchModels(testConfig) {
-  const { provider, apiKey, endpoint } = testConfig;
+  const { provider, endpoint } = testConfig;
+  // 表单不回显明文 Key：未携带 apiKey 时回退到已保存的同供应商档案 Key
+  const apiKey = testConfig.apiKey || getStoredApiKeyForProvider(provider);
 
   // 本地模型无需 API Key 校验
   if (!apiKey && provider !== 'local') return { success: false, error: '请先填写 API Key' };
@@ -2874,36 +2979,45 @@ async function fetchModels(testConfig) {
 // ===== 事件监听 =====
 
 let initialized = false;
+// 共享初始化 Promise：SW 冷启动时并发消息只触发一次 loadConfig/loadCacheFromDB；
+// 失败后重置为 null，允许后续调用重试（避免永久卡在 rejected 状态）
+let initPromise = null;
 
-async function ensureInitialized() {
-  if (!initialized) {
-    const initStart = performance.now();
-    let success = true;
-    let errorType = '';
-    try {
-      await loadConfig();
-      await loadUsageStats();
-      await loadRateLimitState();
-      initialized = true;
-      // 首次初始化成功后异步清理旧指标与无效缓存，不阻塞
-      cleanupMetrics();
-      cleanupInvalidCacheEntries().catch(() => {});
-    } catch (error) {
-      success = false;
-      errorType = classifyError(error);
-      throw error;
-    } finally {
-      recordMetric({
-        action: 'swInit',
-        provider: resolveProviderConfig()?.provider || 'unknown',
-        cached: false,
-        latencyMs: Math.round(performance.now() - initStart),
-        textLength: 0,
-        tokens: 0,
-        success,
-        errorType
-      });
-    }
+function ensureInitialized() {
+  if (initialized) return Promise.resolve();
+  if (!initPromise) {
+    initPromise = doInitialize().finally(() => { initPromise = null; });
+  }
+  return initPromise;
+}
+
+async function doInitialize() {
+  const initStart = performance.now();
+  let success = true;
+  let errorType = '';
+  try {
+    await loadConfig();
+    await loadUsageStats();
+    await loadRateLimitState();
+    initialized = true;
+    // 首次初始化成功后异步清理旧指标与无效缓存，不阻塞
+    cleanupMetrics();
+    cleanupInvalidCacheEntries().catch(() => {});
+  } catch (error) {
+    success = false;
+    errorType = classifyError(error);
+    throw error;
+  } finally {
+    recordMetric({
+      action: 'swInit',
+      provider: resolveProviderConfig()?.provider || 'unknown',
+      cached: false,
+      latencyMs: Math.round(performance.now() - initStart),
+      textLength: 0,
+      tokens: 0,
+      success,
+      errorType
+    });
   }
 }
 
@@ -3021,9 +3135,19 @@ function failResponse(error) {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 安全校验：仅处理本扩展（content script / popup / options）发出的消息，
+  // 拒绝其他扩展或网页经 externally_connectable 等途径发来的外部消息
+  if (!sender || sender.id !== chrome.runtime.id) {
+    try { sendResponse({ success: false, error: 'Forbidden: external sender' }); } catch (e) { /* 消息通道可能已关闭 */ }
+    return false;
+  }
+
   const respondOnce = (payload) => {
     try { sendResponse(payload); } catch (e) { /* 消息通道可能已关闭 */ }
   };
+
+  // #4 浮窗串台修复：content 按 requestId 把响应路由回对应浮窗，SW 需原样回传
+  const withRequestId = (payload) => ({ ...payload, requestId: request.requestId || null });
 
   ensureInitialized().then(() => {
     const tabId = sender.tab?.id || null;
@@ -3034,15 +3158,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const context = request.context || null;
 
       translate(request.text, sourceLang, targetLang, context)
-        .then(result => sendResponse({ success: true, ...result }))
-        .catch(error => sendResponse(failResponse(error)));
+        .then(result => sendResponse(withRequestId({ success: true, ...result })))
+        .catch(error => sendResponse(withRequestId(failResponse(error))));
       return;
     }
 
     else if (request.action === 'translateStream') {
       // 整页取消后不再发起新的流式请求（与 translateBatchInternal 的会话检查对齐）
       if (isSessionCancelled(request.sessionId || null)) {
-        sendResponse(failResponse(new Error('翻译已取消')));
+        sendResponse(withRequestId(failResponse(new Error('翻译已取消'))));
         return;
       }
       const streamStart = performance.now();
@@ -3060,7 +3184,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const glossaryHit = lookupGlossary(request.text);
       if (glossaryHit != null) {
         recordUsage(true, 1);
-        sendResponse({ success: true, text: glossaryHit, cached: true, engine: 'glossary' });
+        sendResponse(withRequestId({ success: true, text: glossaryHit, cached: true, engine: 'glossary' }));
         return;
       }
 
@@ -3078,19 +3202,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           success: true,
           errorType: ''
         });
-        sendResponse({ success: true, text: cached, cached: true, engine: 'cache' });
+        sendResponse(withRequestId({ success: true, text: cached, cached: true, engine: 'cache' }));
         return;
       }
 
       try {
         assertOfflineAllowed(false);
       } catch (offlineErr) {
-        sendResponse(failResponse(offlineErr));
+        sendResponse(withRequestId(failResponse(offlineErr)));
         return;
       }
 
       translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, {
-        context, providerOverride: null, requestId: request.requestId || null, sessionId: request.sessionId || null
+        context, providerOverride: null, requestId: request.requestId || null, sessionId: request.sessionId || null,
+        // 整页流式（带会话）按批次流量 LOW 排队；划词/弹窗流式 HIGH 优先过闸门
+        priority: request.sessionId ? SW.SCHEDULER_PRIORITY.LOW : SW.SCHEDULER_PRIORITY.HIGH
       })
         .then(async (fullText) => {
           await setToCache(cacheKey, fullText);
@@ -3105,14 +3231,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             success: true,
             errorType: ''
           });
-          sendResponse({ success: true, text: fullText, cached: false, engine: resolveProviderConfig().provider });
+          sendResponse(withRequestId({ success: true, text: fullText, cached: false, engine: resolveProviderConfig().provider }));
         })
         .catch(async (error) => {
           // 流式失败时，尝试非流式故障转移（用户仍可在弹窗看到最终结果）
           if (config.autoFallback && !config.offlineMode) {
             try {
               const result = await translate(request.text, sourceLang, targetLang, context);
-              sendResponse({ success: true, ...result });
+              sendResponse(withRequestId({ success: true, ...result }));
               return;
             } catch (fallbackError) {
               console.error('[YuxTrans] 流式故障转移失败:', fallbackError);
@@ -3128,7 +3254,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             success: false,
             errorType: classifyError(error)
           });
-          sendResponse(failResponse(error));
+          sendResponse(withRequestId(failResponse(error)));
         });
       return;
     }
@@ -3151,8 +3277,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const sourceLang = request.sourceLang || config.sourceLang || 'auto';
       const targetLang = request.targetLang || config.targetLang || 'zh';
       lookupWord(request.text, sourceLang, targetLang)
-        .then(result => sendResponse({ success: true, ...result }))
-        .catch(error => sendResponse(failResponse(error)));
+        .then(result => sendResponse(withRequestId({ success: true, ...result })))
+        .catch(error => sendResponse(withRequestId(failResponse(error))));
       return;
     }
 
@@ -3189,7 +3315,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     else if (request.action === 'getConfig') {
-      sendResponse({ ...config, batchConfig: getBatchConfig() });
+      // 脱敏响应：profiles 不含明文 apiKey，仅提供 hasApiKey 标志
+      sendResponse({ ...buildSanitizedConfig(), batchConfig: getBatchConfig() });
     }
 
     else if (request.action === 'getProviderDefaults') {
@@ -3413,7 +3540,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // ===== ProviderProfile 管理接口 =====
     else if (request.action === 'getProfiles') {
-      sendResponse({ success: true, profiles: config.profiles || [], activeProfileId: config.activeProfileId });
+      // 与 getConfig 一致脱敏，列表展示仅需非敏感字段
+      sendResponse({
+        success: true,
+        profiles: (config.profiles || []).map(sanitizeProfileForClient),
+        activeProfileId: config.activeProfileId
+      });
     }
 
     else if (request.action === 'saveProfile') {
@@ -3483,7 +3615,8 @@ chrome.commands.onCommand.addListener((command) => {
 
 // ===== 自动更新检测 =====
 const GITHUB_REPO = 'Yaemikoreal/YuxTrans';
-const CHECK_UPDATE_INTERVAL = 12 * 60 * 60 * 1000; // 12 小时
+const VERSION_CHECK_ALARM = 'yxt-version-check';
+const VERSION_CHECK_PERIOD_MINUTES = 12 * 60; // 12 小时
 
 async function checkNewVersion() {
   try {
@@ -3515,8 +3648,10 @@ async function checkNewVersion() {
 }
 
 function isNewerVersion(latest, current) {
-  const l = latest.split('.').map(Number);
-  const c = current.split('.').map(Number);
+  // 剥离预发布后缀（如 0.6.0-beta.1），避免 Number('0-beta') 得 NaN 导致误判
+  const parse = (v) => String(v).split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+  const l = parse(latest);
+  const c = parse(current);
   for (let i = 0; i < 3; i++) {
     if (l[i] > (c[i] || 0)) return true;
     if (l[i] < (c[i] || 0)) return false;
@@ -3524,10 +3659,22 @@ function isNewerVersion(latest, current) {
   return false;
 }
 
+// 定时检查更新走 chrome.alarms：SW 休眠后 setInterval 会消失，alarms 到点会唤醒 SW
+// （测试环境可能没有 chrome.alarms，加守卫）
+if (typeof chrome !== 'undefined' && chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === VERSION_CHECK_ALARM) {
+      ensureInitialized().then(() => checkNewVersion());
+    }
+  });
+}
+
 // 启动时加载配置
 ensureInitialized().then(() => {
   checkNewVersion(); // 启动后立即检查一次
-  setInterval(checkNewVersion, CHECK_UPDATE_INTERVAL);
+  if (typeof chrome !== 'undefined' && chrome.alarms && chrome.alarms.create) {
+    chrome.alarms.create(VERSION_CHECK_ALARM, { periodInMinutes: VERSION_CHECK_PERIOD_MINUTES });
+  }
 });
 
 // 捕获未处理的异常与 Promise 拒绝，避免 Service Worker 进入坏状态
@@ -3555,6 +3702,9 @@ if (typeof module !== 'undefined' && module.exports) {
     generateCacheKey,
     normalizeCacheKeyText,
     parseCacheKey,
+    ensureInitialized,
+    // 测试钩子：重置初始化状态，模拟 SW 冷启动
+    __resetInitForTest() { initialized = false; initPromise = null; },
     isSessionCancelled,
     cancelTranslationSession,
     getTranslationSession,
@@ -3572,8 +3722,18 @@ if (typeof module !== 'undefined' && module.exports) {
     isSameAsTargetLanguage,
     isProviderAvailable,
     isNoConfigProvider,
+    translateWithCloud,
     translateWithStream,
+    apiConcurrencyGate,
     splitIntoCharBatches,
+    // 以下仅为测试可测性追加的导出，不改变任何业务逻辑
+    validateCacheEntry,
+    translateBatchInternal,
+    updateRateLimitState,
+    tryRecoverRateLimit,
+    getRateLimitParams,
+    rateLimitState,
+    RATE_LIMIT_CONFIG,
     buildBatchPrompt,
     buildTranslationPrompt,
     buildDictionaryPrompt,
@@ -3585,6 +3745,9 @@ if (typeof module !== 'undefined' && module.exports) {
     addOrUpdateProfile,
     removeProfile,
     makeProfileId,
+    sanitizeProfileForClient,
+    buildSanitizedConfig,
+    getStoredApiKeyForProvider,
     ProductHelpers,
     SW,
     // 便于测试直接调用 helpers / SW modules

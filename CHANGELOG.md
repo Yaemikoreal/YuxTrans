@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> 依据 `docs/PROJECT_EVALUATION.md`（2026-07-27 评判报告）执行的阶段一「固本」：清零 P0 安全与 P1 功能正确性问题，补齐核心测试，建立最小 CI。单测 91 → **142 项全绿**。
+
+### Security
+
+- **getConfig / getProfiles 响应脱敏** — 不再回吐明文 API Key，改返回 `hasApiKey` 标记；options 表单不回显 Key，留空保存保留原 Key；「测试连接 / 获取模型」空 Key 时由 SW 回退已存档案 Key。
+- **消息入口 sender 校验** — `onMessage` 拒绝 `sender.id !== chrome.runtime.id` 的外部调用方。
+- **options 页自 XSS 修复** — 档案/模型名、错误信息、请求日志等多处用户可控字段统一经 `escapeHtml`（下沉至 `lib/product-helpers.js` 单一来源）后拼入 innerHTML；附载荷级回归测试。
+- **manifest 主机权限收窄** — `http://localhost:*/*` → `http://localhost:11434/*`（Ollama 默认端口；自定义端点仍走 optional_host_permissions 按需授权）。
+
+### Added
+
+- **拉丁语系语言检测** — `lib/sw/lang.js` 新增 en/fr/de/es/pt/it 停用词打分（短文本保守兜底 en），修复目标语言为英语时法/德/西/葡/意文本被误判「已是目标语言」而跳过翻译的缺陷。
+- **SW 全局并发闸门** — `lib/sw/scheduler.js` 新增 `createConcurrencyGate`：自适应并发上限（1~10）对全部出站翻译请求（云翻/流式/批量）真实生效，按「划词 > 视口 > 批次」优先级排队；abort/出错经 finally 释放槽位。
+- **最小 CI** — `.github/workflows/ci.yml`：push/PR 触发 `npm ci` + `npm test` + manifest MV3 校验。
+- **修饰键+划选触发模式** — `triggerMode` 新增 `modifier`（按住修饰键划选才翻译，松手瞬间校验，不拦截任何原生快捷键）；`selectionModifier` 支持 Ctrl/Alt/Shift，默认 Ctrl；输入框划选同门槛。macOS Ctrl+点击等效右键、Shift 与扩展选区冲突已在设置 UI 注明。
+
+### Changed
+
+- **默认触发模式变更** — 新安装默认由「选中即译(auto)」改为「修饰键+划选(modifier)」；老用户已存配置不受影响。`resolveTriggerAction` 未知值兜底随新默认改为 `modifier`。
+
+### Fixed
+
+- **交互功能冲突批量修复**（依据 `docs/superpowers/specs/2026-07-28-interaction-conflict-fixes-design.md`，13 项修复 + 2 项文档化）：
+  - **#4 浮窗串台** — 划词/词典请求改用唯一 requestId（`popup-<递增>`），SW 在 translate/lookupWord/translateStream 响应中原样透传；content 维护 `requestId → 浮窗` 映射，响应与流式 chunk 路由回捕获的浮窗，浮窗已销毁则丢弃并清理映射；对照浮窗响应同样校验存活。修复翻译在途时 pin 或快速连划导致旧响应写进新浮窗。
+  - **#11 在途标志拆分** — `isTranslating`（划词）与 `isDictLookingUp`（词典）独立，互不静默吞操作；各配 70s 看门狗（对齐流式 65s 超时），SW 不回包时复位并告警，不再永久卡死。
+  - **#6 悬停/划选同键冲突** — 鼠标按键按下（划选/拖拽中）不触发悬停翻译；options 在 hoverTranslate 开 + modifier 模式 + 两键相同时显示同键警告（不阻断保存）。
+  - **#1 双击双触发** — 双击（`e.detail >= 2`）且双击查词开启且选区为单词时，划词链路跳过，交由 dblclick 统一查词典。
+  - **#2 icon 模式浮钮残留** — `_handleDblClick` 与 `showPopup` 开头清除悬浮按钮。
+  - **#5 对照浮窗无限累积** — 对照模式自动 pin 改为替换语义：新对照前移除上一次自动 pin 的主浮窗（手动 pin 不动）。
+  - **#14 输入框翻译无视 triggerMode** — input 分支补齐模式语义：contextMenu 不弹窗、icon 出浮钮（保留插入能力）、auto 直译、modifier 维持修饰键门槛。
+  - **#17 悬停翻译绕过站点黑白名单** — hover 入口补 `isSiteAllowed()` 检查。
+  - **#13 动态增量占用整页标志** — `_processAddedNodes` 改用独立 `_dynamicTranslating`，消除「增量翻译中按 Ctrl+Shift+P 被当作取消整页」；重试/取消/批量 worker 等读取点同步对齐。
+  - **#8A/#8B/#8C** — 整页收集跳过悬停引导与页面 toast；译文区域（悬停译文/双语/流式临时）的再次划选不触发翻译；悬停翻译失败清除 done 标记，允许再次悬停重试。
+  - **#3 mousedown 误关浮窗** — 点击整页控制条/悬停译文/悬停引导不再关闭浮窗。
+  - **#9 MutationObserver 自触发** — 新增节点全部位于自有 UI（`.yuxtrans-*`）内时直接忽略，不进防抖与全页扫描。
+  - **#15/#16 文档化** — options 双击查词行补充「右键菜单模式下仍生效；输入框内请划选单词」。
+- **版本更新检测改用 `chrome.alarms`** — 修复 SW 休眠后 `setInterval` 消失导致检查失效。
+- **`ensureInitialized` 并发竞态** — 共享 Promise 模式，SW 冷启动并发消息不再重复全量加载；失败可重试。
+- **僵尸翻译会话清理** — 会话带创建时间戳，超过 30 分钟自动 abort 并移出 Map。
+- **`isNewerVersion` 支持预发布版本号**（剥离 `-beta.x` 再比较）；`testProviderConnection` 空端点前置校验；`fallbackBatchItems` 末片判断改下标遍历。
+- **死代码清理** — 删除退化的 `flipTargetIfSameLanguage` 与 background 内重复的 `SCRIPT_RANGES` fallback；`CACHE_KEY_VERSION` 兜底值对齐 `'v3'`。
+
+### Tests
+
+- 新增 `background-coverage.test.js`（23 项）：`validateCacheEntry` 全规则正反例、批量翻译降级链（直解/代码块/正则/sanity check/单句补全重试上限）、自适应限速与 429 冷却恢复。
+- 新增 `concurrency-gate.test.js`（7 项）：闸门并发上限、动态限速即时生效、abort/出错不泄漏槽位。
+- 新增 `options-security.test.js`（8 项）：`escapeHtml` 载荷断言 + 源码级防回归。
+- 补充 sender 校验、配置脱敏、初始化竞态、僵尸会话等用例；`mock-chrome.js` 增加 `runtime.id` 与 `alarms` mock。
+- 已知记录（未改逻辑，测试中标注）：`validateCacheEntry` 的 `length_ratio` 与 `entity_drift` 规则在当前阈值（10 < 12）下不可达，属待决策的实现层疑点。
+
 ## [0.5.0] - 2026-07-24
 
 > **稳定版（Stable）** — 浏览器扩展为唯一产品形态；相对 0.4.1 完成阅读交互增强、整页流式与配额治理、设置页信息架构重构、可自定义风格提示词与发布前质量门禁。建议从 `v0.5.0-beta.1` 升级至本版本。  

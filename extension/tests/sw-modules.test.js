@@ -87,9 +87,6 @@ test('lang：检测与同语种跳过', () => {
   assert.strictEqual(SW.detectLanguage('这是中文句子'), 'zh');
   assert.strictEqual(SW.detectLanguage('Hello world'), 'en');
   assert.strictEqual(SW.resolveSourceLanguage('こんにちは', 'auto'), 'ja');
-  // 同语种不再翻向对照语言：统一返回 targetLang
-  assert.strictEqual(SW.flipTargetIfSameLanguage('zh', 'zh'), 'zh');
-  assert.strictEqual(SW.flipTargetIfSameLanguage('en', 'zh'), 'zh');
   // 目标语言归一化：zh-CN / zh-TW -> zh
   assert.strictEqual(SW.normalizeTargetLang('zh-CN'), 'zh');
   assert.strictEqual(SW.normalizeTargetLang('en'), 'en');
@@ -97,6 +94,32 @@ test('lang：检测与同语种跳过', () => {
   assert.strictEqual(SW.isSameAsTargetLanguage('你好世界', 'zh'), true);
   assert.strictEqual(SW.isSameAsTargetLanguage('Hello world', 'zh'), false);
   assert.strictEqual(SW.isSameAsTargetLanguage('Hello world', 'en'), true);
+});
+
+test('lang：拉丁语系细分（en/fr/de/es/pt/it）', () => {
+  // 法/德/西/葡/意真实例句可正确识别（F1 修复：不再统一落到 en）
+  assert.strictEqual(SW.detectLanguage('Le chat est dans la maison et il mange du fromage.'), 'fr');
+  assert.strictEqual(SW.detectLanguage('Der Hund ist sehr groß und er spielt im Garten.'), 'de');
+  assert.strictEqual(SW.detectLanguage('El gato está en la casa y come mucho.'), 'es');
+  assert.strictEqual(SW.detectLanguage('O menino não quer comer a sopa porque está quente.'), 'pt');
+  assert.strictEqual(SW.detectLanguage('Il cane è molto grande e corre nel parco.'), 'it');
+  // 典型英文句仍判 en
+  assert.strictEqual(SW.detectLanguage('The quick brown fox jumps over the lazy dog and runs into the forest.'), 'en');
+  assert.strictEqual(SW.detectLanguage('Hello world'), 'en');
+  // 原有非拉丁脚本判断不回归
+  assert.strictEqual(SW.detectLanguage('这是中文句子'), 'zh');
+  assert.strictEqual(SW.detectLanguage('こんにちは'), 'ja');
+  assert.strictEqual(SW.detectLanguage('안녕하세요'), 'ko');
+  assert.strictEqual(SW.detectLanguage('Привет мир'), 'ru');
+  assert.strictEqual(SW.detectLanguage('مرحبا بالعالم'), 'ar');
+  // 边界：很短文本（<10 字符）不崩溃、兜底 en
+  assert.strictEqual(SW.detectLanguage('Bonjour'), 'en');
+  assert.strictEqual(SW.detectLanguage('Hallo'), 'en');
+  assert.strictEqual(SW.detectLanguage('a b'), 'en');
+  assert.strictEqual(SW.detectLanguage(''), 'unknown');
+  // targetLang=en 时，法语句子不再被误判为「已是目标语言」
+  assert.strictEqual(SW.isSameAsTargetLanguage('Le chat est dans la maison.', 'en'), false);
+  assert.strictEqual(SW.isSameAsTargetLanguage('This is an English sentence.', 'en'), true);
 });
 
 test('message-actions：注册与归类', () => {

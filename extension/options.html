@@ -447,10 +447,23 @@
                 <span class="form-label">触发方式</span>
               </div>
               <div class="radio-group">
-                <label><input type="radio" name="triggerMode" value="auto" checked> 选中后弹出</label>
+                <label><input type="radio" name="triggerMode" value="modifier" checked> 修饰键 + 划选</label>
+                <label><input type="radio" name="triggerMode" value="auto"> 选中后弹出</label>
                 <label><input type="radio" name="triggerMode" value="icon"> 悬浮图标</label>
                 <label><input type="radio" name="triggerMode" value="contextMenu"> 右键菜单</label>
               </div>
+            </div>
+            <div class="setting-row setting-row--sub" id="selectionModifierRow">
+              <div class="setting-info">
+                <label class="form-label" for="selectionModifier">划选修饰键</label>
+                <p class="setting-desc">按住所选键 + 鼠标划选才触发翻译。macOS 上 Ctrl+点击等效右键，建议选 Alt；Shift 会与「扩展选区」冲突</p>
+                <p class="setting-desc" id="modifierConflictWarning" hidden>悬停修饰键与划选修饰键相同，按住划选时将不触发悬停翻译</p>
+              </div>
+              <select id="selectionModifier" class="setting-control">
+                <option value="ctrl">Ctrl</option>
+                <option value="alt">Alt</option>
+                <option value="shift">Shift</option>
+              </select>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -508,6 +521,7 @@
             <div class="setting-row setting-row--sub" id="dictDblclickRow">
               <div class="setting-info">
                 <label class="form-label" for="dictDblclick">双击单词直接查词典</label>
+                <p class="setting-desc">右键菜单模式下仍生效；输入框内请划选单词</p>
               </div>
               <label class="paper-toggle"><input type="checkbox" id="dictDblclick" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>

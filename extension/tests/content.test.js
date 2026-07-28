@@ -327,3 +327,287 @@ test('translateStreamForNode：取消后不发起新请求', async () => {
     '取消后不应再发送流式请求'
   );
 });
+
+// ===== modifier 触发模式：划选门槛行为 =====
+// 利用 setup() 的 getConfig 响应下发 triggerMode/selectionModifier，
+// 等 loadConfig 微任务落地后直接驱动 handleMouseUp（内部 setTimeout 10ms，等 30ms）。
+
+test('modifier 模式：未按修饰键的划选不发起翻译请求', async () => {
+  const { instance, mock } = setup({ triggerMode: 'modifier', selectionModifier: 'ctrl' });
+  instance.showPopup = () => {};
+  instance.updatePopup = () => {};
+  instance._toggleInsertBtn = () => {};
+
+  const prevGetSelection = global.window.getSelection;
+  global.window.getSelection = () => ({ toString: () => 'Hello world', rangeCount: 0 });
+  try {
+    await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 应用 triggerMode
+    instance.handleMouseUp({ target: null, ctrlKey: false, clientX: 10, clientY: 20 });
+    await new Promise((r) => setTimeout(r, 30)); // 等 handleMouseUp 内部 setTimeout(10ms)
+
+    const translateMsgs = mock.sent.filter(
+      (s) => s.msg.action === 'translate' || s.msg.action === 'translateStream'
+    );
+    assert.strictEqual(translateMsgs.length, 0, '未按 Ctrl 时不应发起翻译请求');
+  } finally {
+    global.window.getSelection = prevGetSelection;
+  }
+});
+
+test('modifier 模式：按住配置修饰键的划选发起 translateText', async () => {
+  const { instance, mock } = setup({ triggerMode: 'modifier', selectionModifier: 'ctrl' });
+  instance.showPopup = () => {};
+  instance.updatePopup = () => {};
+  instance._toggleInsertBtn = () => {};
+
+  const prevGetSelection = global.window.getSelection;
+  global.window.getSelection = () => ({ toString: () => 'Hello world', rangeCount: 0 });
+  try {
+    await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 应用 triggerMode
+    instance.handleMouseUp({ target: null, ctrlKey: true, clientX: 10, clientY: 20 });
+    await new Promise((r) => setTimeout(r, 30)); // 等 handleMouseUp 内部 setTimeout(10ms)
+
+    const translateMsgs = mock.sent.filter(
+      (s) => s.msg.action === 'translate' || s.msg.action === 'translateStream'
+    );
+    assert.strictEqual(translateMsgs.length, 1, '按住 Ctrl 划选应发起一次翻译请求');
+    assert.strictEqual(translateMsgs[0].msg.text, 'Hello world');
+  } finally {
+    global.window.getSelection = prevGetSelection;
+  }
+});
+
+// ===== 交互冲突修复（#1/#2/#4/#8B/#11/#14）行为用例 =====
+
+test('#1 双击守卫：detail>=2 + 单词选区 + 双击查词开启 → 不发翻译/查词请求', async () => {
+  const { instance, mock } = setup({ triggerMode: 'auto' });
+  instance.showPopup = () => {};
+  instance.updatePopup = () => {};
+  instance._toggleInsertBtn = () => {};
+
+  const prevGetSelection = global.window.getSelection;
+  global.window.getSelection = () => ({ toString: () => 'hello', rangeCount: 0 });
+  try {
+    await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 落地
+    instance.handleMouseUp({ target: null, detail: 2, clientX: 10, clientY: 20 });
+    await new Promise((r) => setTimeout(r, 30)); // 等 handleMouseUp 内部 setTimeout(10ms)
+
+    const reqs = mock.sent.filter(
+      (s) => ['lookupWord', 'translate', 'translateStream'].includes(s.msg.action)
+    );
+    assert.strictEqual(reqs.length, 0, '双击单词应交给 _handleDblClick，划词链路不发请求');
+  } finally {
+    global.window.getSelection = prevGetSelection;
+  }
+});
+
+test('#1 单击划选单词（detail=1）仍正常走词典查询', async () => {
+  const { instance, mock } = setup({ triggerMode: 'auto' });
+  instance.showPopup = function () {
+    this.popup = { dataset: {}, querySelector: () => null };
+  };
+  instance.updatePopup = () => {};
+  instance.renderDictResult = () => {};
+  instance._toggleInsertBtn = () => {};
+
+  const prevGetSelection = global.window.getSelection;
+  global.window.getSelection = () => ({ toString: () => 'hello', rangeCount: 0 });
+  try {
+    await new Promise((r) => setTimeout(r, 20));
+    instance.handleMouseUp({ target: null, detail: 1, clientX: 10, clientY: 20 });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const dictReqs = mock.sent.filter((s) => s.msg.action === 'lookupWord');
+    assert.strictEqual(dictReqs.length, 1, '单击划选单词应发起一次词典查询');
+    assert.strictEqual(dictReqs[0].msg.text, 'hello');
+  } finally {
+    global.window.getSelection = prevGetSelection;
+  }
+});
+
+test('#14 输入框翻译：contextMenu 模式不弹窗不发请求', async () => {
+  const { instance, mock } = setup({ triggerMode: 'contextMenu', inputTranslate: true });
+  instance.showPopup = () => {};
+  instance.updatePopup = () => {};
+  instance._toggleInsertBtn = () => {};
+
+  const inputEl = {
+    nodeType: 1,
+    tagName: 'TEXTAREA',
+    value: 'hello world',
+    selectionStart: 0,
+    selectionEnd: 5,
+    closest(sel) { return sel.includes('textarea') ? this : null; }
+  };
+
+  await new Promise((r) => setTimeout(r, 20));
+  instance.handleMouseUp({ target: inputEl, clientX: 5, clientY: 5 });
+  await new Promise((r) => setTimeout(r, 30));
+
+  const reqs = mock.sent.filter(
+    (s) => ['lookupWord', 'translate', 'translateStream'].includes(s.msg.action)
+  );
+  assert.strictEqual(reqs.length, 0, 'contextMenu 模式输入框划选不应发请求');
+  assert.ok(!instance.floatBtn, 'contextMenu 模式不应出浮钮');
+});
+
+test('#14 输入框翻译：icon 模式出浮钮且不直接翻译', async () => {
+  const { instance, mock } = setup({ triggerMode: 'icon', inputTranslate: true });
+
+  const inputEl = {
+    nodeType: 1,
+    tagName: 'TEXTAREA',
+    value: 'hello world',
+    selectionStart: 0,
+    selectionEnd: 11,
+    closest(sel) { return sel.includes('textarea') ? this : null; }
+  };
+
+  await new Promise((r) => setTimeout(r, 20));
+  instance.handleMouseUp({ target: inputEl, clientX: 5, clientY: 5 });
+  await new Promise((r) => setTimeout(r, 30));
+
+  const reqs = mock.sent.filter(
+    (s) => ['lookupWord', 'translate', 'translateStream'].includes(s.msg.action)
+  );
+  assert.strictEqual(reqs.length, 0, 'icon 模式不应直接发翻译请求');
+  assert.ok(instance.floatBtn, 'icon 模式应显示悬浮按钮');
+  assert.strictEqual(instance._lastInputElement, inputEl, 'F5 插入能力保留（记录触发输入框）');
+});
+
+test('#8B 选区位于译文元素（.yuxtrans-bilingual-text）内时不触发翻译', async () => {
+  const { instance, mock } = setup({ triggerMode: 'auto' });
+  instance.showPopup = () => {};
+  instance.updatePopup = () => {};
+
+  const bilingualEl = {
+    nodeType: 1,
+    closest(sel) { return sel.includes('.yuxtrans-bilingual-text') ? this : null; }
+  };
+  const prevGetSelection = global.window.getSelection;
+  global.window.getSelection = () => ({
+    toString: () => '这是译文文本内容',
+    rangeCount: 1,
+    getRangeAt: () => ({ commonAncestorContainer: bilingualEl })
+  });
+  try {
+    await new Promise((r) => setTimeout(r, 20));
+    instance.handleMouseUp({ target: null, clientX: 10, clientY: 20 });
+    await new Promise((r) => setTimeout(r, 30));
+
+    const reqs = mock.sent.filter(
+      (s) => ['lookupWord', 'translate', 'translateStream'].includes(s.msg.action)
+    );
+    assert.strictEqual(reqs.length, 0, '译文区域的再次划选不应触发翻译');
+  } finally {
+    global.window.getSelection = prevGetSelection;
+  }
+});
+
+test('#2 showPopup 打开浮窗前清除悬浮按钮', () => {
+  const { instance } = setup();
+  instance.showFloatButton(10, 10, 'hello');
+  assert.ok(instance.floatBtn, '浮钮已显示');
+
+  // showPopup 依赖真实 DOM 能力（querySelector/rAF/布局），测试环境打桩最小子集
+  const prevRaf = global.requestAnimationFrame;
+  const prevQS = FakeElement.prototype.querySelector;
+  const hadGBCR = 'getBoundingClientRect' in FakeElement.prototype;
+  const prevGBCR = FakeElement.prototype.getBoundingClientRect;
+  const domStub = { addEventListener: () => {}, hidden: false };
+  global.requestAnimationFrame = (fn) => fn();
+  FakeElement.prototype.querySelector = () => domStub;
+  FakeElement.prototype.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 50, right: 100, bottom: 50 });
+  try {
+    instance.showPopup(10, 10, 'hello');
+    assert.strictEqual(instance.floatBtn, null, 'showPopup 应清除浮钮');
+  } finally {
+    global.requestAnimationFrame = prevRaf;
+    FakeElement.prototype.querySelector = prevQS;
+    if (hadGBCR) FakeElement.prototype.getBoundingClientRect = prevGBCR;
+    else delete FakeElement.prototype.getBoundingClientRect;
+    instance.popup = null;
+  }
+});
+
+test('#4 requestId 路由：响应/流式 chunk 各写入捕获浮窗，销毁浮窗的响应被丢弃', async () => {
+  const { instance, mock } = setup({ enableStreaming: false });
+  instance._toggleInsertBtn = () => {};
+  // 简化 showPopup：创建带 target 子节点的浮窗元素并挂到 body
+  instance.showPopup = function (x, y, text) {
+    const el = new FakeElement('div');
+    el.dataset.sourceText = text;
+    const target = new FakeElement('div');
+    el.appendChild(target);
+    el.querySelector = (sel) => (sel === '.yuxtrans-target' ? target : null);
+    document.body.appendChild(el);
+    this.popup = el;
+  };
+  // updatePopup 真实实现依赖完整浮窗 DOM，打桩为直接写 target（仍校验路由目标）
+  instance.updatePopup = (text, cached, engine, src, popupEl) => {
+    const t = (popupEl || instance.popup).querySelector('.yuxtrans-target');
+    t.textContent = text;
+  };
+
+  let resolveLookup;
+  mock.handlers.translate = (msg) => ({
+    success: true, text: '译:' + msg.text, cached: false, engine: 'qwen', requestId: msg.requestId
+  });
+  mock.handlers.lookupWord = () => new Promise((res) => { resolveLookup = res; });
+
+  await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 应用 enableStreaming:false（走 translate）
+  // 划词翻译在途（popupA），随后双击查词（popupB）——#11 拆分标志后两者可并发
+  instance.translateText('first text', 0, 0);
+  const popupA = instance.popup;
+  const reqA = mock.sent.find((s) => s.msg.action === 'translate').msg.requestId;
+
+  instance.lookupWord('hello', 0, 0);
+  const popupB = instance.popup;
+  const reqB = mock.sent.find((s) => s.msg.action === 'lookupWord').msg.requestId;
+  assert.notStrictEqual(reqA, reqB, '每个请求应有唯一 requestId');
+
+  // 流式 chunk 按 requestId 路由到 popupA（即使当前浮窗已是 popupB）
+  instance.handleStreamChunk('块A', '块A', reqA);
+  assert.strictEqual(popupA.querySelector('.yuxtrans-target').textContent, '块A');
+  assert.strictEqual(popupB.querySelector('.yuxtrans-target').textContent, '');
+
+  // popupB 销毁后，其迟到响应被丢弃并清理映射
+  instance.hidePopup(); // 销毁当前浮窗 popupB（真实路径：remove + 清空 this.popup + 清扫映射）
+  resolveLookup({ success: true, dict: { word: 'hello', senses: [] }, requestId: reqB });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(instance._popupRequests.has(reqB), false, '销毁浮窗的映射应被清理');
+  assert.strictEqual(popupB.querySelector('.yuxtrans-target').textContent, '', '销毁浮窗不应被写入');
+
+  // popupA 的响应正常写回 popupA（而非当前浮窗）
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(popupA.querySelector('.yuxtrans-target').textContent, '译:first text');
+  assert.strictEqual(instance._popupRequests.size, 0, '全部响应后映射清空');
+});
+
+test('#11 拆分在途标志：词典在途不阻塞划词翻译', async () => {
+  const { instance, mock } = setup({ enableStreaming: false });
+  instance._toggleInsertBtn = () => {};
+  instance.showPopup = function () {
+    const el = new FakeElement('div');
+    document.body.appendChild(el);
+    this.popup = el;
+  };
+  instance.updatePopup = () => {};
+  mock.handlers.lookupWord = () => new Promise(() => {}); // 永不返回，模拟 SW 沉默
+  mock.handlers.translate = (msg) => ({
+    success: true, text: '译:' + msg.text, requestId: msg.requestId
+  });
+
+  instance.lookupWord('hello', 0, 0);
+  assert.strictEqual(instance.isDictLookingUp, true);
+  assert.strictEqual(instance.isTranslating, false, '词典在途不占用划词标志');
+
+  await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 应用 enableStreaming:false（走 translate）
+  instance.translateText('some longer text', 0, 0);
+  const translateMsgs = mock.sent.filter((s) => s.msg.action === 'translate');
+  assert.strictEqual(translateMsgs.length, 1, '划词翻译不应被词典在途阻塞');
+
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(instance.isTranslating, false, '划词响应后标志复位');
+  assert.strictEqual(instance.isDictLookingUp, true, '词典仍在途（等待看门狗或响应）');
+});

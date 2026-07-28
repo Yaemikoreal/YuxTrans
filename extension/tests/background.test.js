@@ -358,6 +358,95 @@ test('isSessionCancelled 对未知 / 空 session 返回 false', () => {
   assert.strictEqual(bg.isSessionCancelled(''), false);
 });
 
+// ===== R2：ensureInitialized 并发共享 Promise =====
+
+test('ensureInitialized 并发调用只初始化一次（共享 Promise）', async () => {
+  bg.__resetInitForTest();
+  // loadConfig 每次执行会调用一次 storage.local.get('config')，以此计数初始化次数
+  let configLoads = 0;
+  const origGet = chrome.storage.local.get;
+  chrome.storage.local.get = async (keys) => {
+    if (keys === 'config') configLoads++;
+    return origGet(keys);
+  };
+
+  try {
+    await Promise.all([
+      bg.ensureInitialized(),
+      bg.ensureInitialized(),
+      bg.ensureInitialized()
+    ]);
+    assert.strictEqual(configLoads, 1, '并发冷启动应只触发一次 loadConfig');
+    // 初始化完成后再次调用不再重复加载
+    await bg.ensureInitialized();
+    assert.strictEqual(configLoads, 1, '已初始化后不应重复加载');
+  } finally {
+    chrome.storage.local.get = origGet;
+  }
+});
+
+test('ensureInitialized 失败后重置 Promise，允许重试', async () => {
+  bg.__resetInitForTest();
+  const origGet = chrome.storage.local.get;
+  let failOnce = true;
+  chrome.storage.local.get = async (keys) => {
+    if (failOnce && keys === 'config') {
+      failOnce = false;
+      throw new Error('storage transient failure');
+    }
+    return origGet(keys);
+  };
+
+  try {
+    let firstError = null;
+    try {
+      await bg.ensureInitialized();
+    } catch (e) {
+      firstError = e;
+    }
+    assert.ok(firstError, '首次初始化应失败');
+    // Promise 已重置，重试可成功
+    await bg.ensureInitialized();
+  } finally {
+    chrome.storage.local.get = origGet;
+  }
+});
+
+// ===== R3：僵尸翻译会话清扫 =====
+
+test('僵尸会话清扫：超时会话被 abort 并从 Map 移除', () => {
+  const zombieSid = 'zombie-' + Math.random().toString(36).slice(2);
+  const freshSid = 'fresh-' + Math.random().toString(36).slice(2);
+  const ctrl = new AbortController();
+  bg.registerSessionController(zombieSid, ctrl);
+  // 人为把会话创建时间拨回 31 分钟前，模拟页面未发 cancel 直接关闭
+  const session = bg.getTranslationSession(zombieSid);
+  session.createdAt = Date.now() - 31 * 60 * 1000;
+
+  // 新会话创建时顺带清扫僵尸会话
+  bg.getTranslationSession(freshSid);
+
+  assert.strictEqual(ctrl.signal.aborted, true, '僵尸会话的 controller 应被 abort');
+  assert.strictEqual(
+    bg.isSessionCancelled(zombieSid), false,
+    '僵尸会话应已从 Map 移除（查询行为等同未知会话）'
+  );
+  // 新会话本身不受影响
+  assert.strictEqual(bg.isSessionCancelled(freshSid), false);
+});
+
+test('未超时的活跃会话不被清扫', () => {
+  const activeSid = 'active-' + Math.random().toString(36).slice(2);
+  const freshSid = 'fresh2-' + Math.random().toString(36).slice(2);
+  const ctrl = new AbortController();
+  bg.registerSessionController(activeSid, ctrl);
+
+  bg.getTranslationSession(freshSid);
+
+  assert.strictEqual(ctrl.signal.aborted, false, '活跃会话不应被 abort');
+  assert.ok(bg.getTranslationSession(activeSid), '活跃会话仍在 Map 中');
+});
+
 
 test('parseDictionaryResult 解析词典 JSON 并降级', () => {
   // 合法 JSON
@@ -544,5 +633,126 @@ test('translateWithStream：google 供应商降级为一次性翻译并以单 ch
     global.fetch = originalFetch;
     chrome.tabs.sendMessage = originalTabsSend;
     global.navigator = originalNavigator;
+  }
+});
+
+// ===== 安全修复 S1：getConfig 脱敏 + onMessage sender 校验 =====
+
+/**
+ * 通过 onMessage 模拟一次消息收发（沿用 mock-chrome 的 _trigger）
+ * @param {object} request
+ * @param {object} sender
+ * @returns {Promise<object>}
+ */
+function sendSwMessage(request, sender) {
+  return new Promise((resolve) => {
+    chrome.runtime.onMessage._trigger(request, sender, resolve);
+  });
+}
+
+test('getConfig 响应脱敏：profiles 不含明文 apiKey，仅带 hasApiKey', async () => {
+  const profileId = bg.addOrUpdateProfile({
+    provider: 'qwen',
+    apiKey: 'sk-secret-should-not-leak',
+    model: 'qwen-turbo-s1-test'
+  });
+
+  // 本扩展 content script（带 tab）调用
+  const res = await sendSwMessage(
+    { action: 'getConfig' },
+    { id: chrome.runtime.id, tab: { id: 1 } }
+  );
+  assert.ok(res, '应返回配置');
+  const leaked = JSON.stringify(res);
+  assert.ok(!leaked.includes('sk-secret-should-not-leak'), '响应任何位置都不应含明文 Key');
+
+  const profile = (res.profiles || []).find((p) => p.id === profileId);
+  assert.ok(profile, '响应中应包含该档案');
+  assert.strictEqual(profile.apiKey, '');
+  assert.strictEqual(profile.hasApiKey, true);
+  assert.strictEqual(profile.customProvider.apiKey, '');
+  assert.strictEqual(profile.customProvider.hasApiKey, false);
+  // 顶层旧版 apiKey 字段同样不回吐
+  assert.strictEqual(res.apiKey, '');
+
+  // SW 内部配置不受影响，仍持有真实 Key（翻译 / 缓存键不受影响）
+  assert.strictEqual(bg.getActiveProfile().apiKey, 'sk-secret-should-not-leak');
+});
+
+test('getProfiles 响应同样脱敏', async () => {
+  const res = await sendSwMessage(
+    { action: 'getProfiles' },
+    { id: chrome.runtime.id }
+  );
+  assert.strictEqual(res.success, true);
+  assert.ok(!JSON.stringify(res).includes('sk-secret-should-not-leak'));
+  const withKey = res.profiles.find((p) => p.hasApiKey);
+  assert.ok(withKey, '已存 Key 的档案应带 hasApiKey: true');
+  assert.strictEqual(withKey.apiKey, '');
+});
+
+test('addOrUpdateProfile：空 apiKey 视为不修改，保留原 Key', () => {
+  const id = bg.addOrUpdateProfile({ provider: 'deepseek', apiKey: 'sk-ds-keep', model: 'deepseek-s1-test' });
+  // 模拟页面保存：表单留空（不回显），apiKey 为空字符串
+  bg.addOrUpdateProfile({ id, provider: 'deepseek', apiKey: '', model: 'deepseek-s1-test', label: '更新标签' });
+  assert.strictEqual(bg.getActiveProfile().apiKey, 'sk-ds-keep');
+  assert.strictEqual(bg.getActiveProfile().label, '更新标签');
+  // 非空 apiKey 正常覆盖
+  bg.addOrUpdateProfile({ id, provider: 'deepseek', apiKey: 'sk-ds-new', model: 'deepseek-s1-test' });
+  assert.strictEqual(bg.getActiveProfile().apiKey, 'sk-ds-new');
+});
+
+test('onMessage 拒绝外部 sender（其他扩展 / 网页）', async () => {
+  const res = await sendSwMessage(
+    { action: 'getConfig' },
+    { id: 'evil-other-extension-id' }
+  );
+  assert.strictEqual(res.success, false);
+  assert.ok(String(res.error).includes('Forbidden'));
+});
+
+test('onMessage 接受本扩展页面（无 sender.tab）与 content script（有 sender.tab）', async () => {
+  // 扩展页面（popup / options）：sender 无 tab
+  const pageRes = await sendSwMessage(
+    { action: 'getProviderDefaults' },
+    { id: chrome.runtime.id }
+  );
+  assert.strictEqual(pageRes.success, true);
+
+  // content script：sender 带 tab
+  const csRes = await sendSwMessage(
+    { action: 'getConfig' },
+    { id: chrome.runtime.id, tab: { id: 7 } }
+  );
+  assert.ok(csRes && csRes.profiles, 'content script 应能正常获取脱敏配置');
+});
+
+// ===== #4 浮窗串台修复：SW 响应透传 requestId =====
+
+test('translate / lookupWord / translateStream 响应透传 requestId', async () => {
+  const originalFetch = global.fetch;
+  // 500 触发失败路径（failResponse）；有 Key 时走 fetch，无 Key 时前置抛错，两者都应带 requestId
+  global.fetch = async () => ({ ok: false, status: 500, text: async () => 'boom' });
+  try {
+    const sender = { id: chrome.runtime.id, tab: { id: 3 } };
+    const t = await sendSwMessage(
+      { action: 'translate', text: 'requestId passthrough probe', sourceLang: 'en', targetLang: 'zh', requestId: 'popup-42' },
+      sender
+    );
+    assert.strictEqual(t.requestId, 'popup-42', 'translate 响应应透传 requestId');
+
+    const d = await sendSwMessage(
+      { action: 'lookupWord', text: 'probe', sourceLang: 'en', targetLang: 'zh', requestId: 'popup-43' },
+      sender
+    );
+    assert.strictEqual(d.requestId, 'popup-43', 'lookupWord 响应应透传 requestId');
+
+    const s = await sendSwMessage(
+      { action: 'translateStream', text: 'requestId passthrough probe', sourceLang: 'en', targetLang: 'zh', requestId: 'popup-44' },
+      sender
+    );
+    assert.strictEqual(s.requestId, 'popup-44', 'translateStream 响应应透传 requestId');
+  } finally {
+    global.fetch = originalFetch;
   }
 });

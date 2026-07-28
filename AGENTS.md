@@ -110,7 +110,7 @@ node --test extension/tests/      # 运行全部扩展单元测试
 npm test                          # 等价：node --test extension/tests/*.test.js
 ```
 
-覆盖范围：`product-helpers.test.js`（商品翻译辅助逻辑）、`logo-icons.test.js`（图标资源）、`sw-modules.test.js`（Service Worker 核心模块）。验证结果（当前环境）：`55 passed`。修改 `options.js`、`background.js`、`content.js` 后仍建议在真实浏览器中加载扩展手动验证端到端路径。
+覆盖范围：`product-helpers.test.js`（商品翻译辅助逻辑）、`logo-icons.test.js`（图标资源）、`sw-modules.test.js`（Service Worker 核心模块）等。提交前运行 `npm test` 确保全部通过。修改 `options.js`、`background.js`、`content.js` 后仍建议在真实浏览器中加载扩展手动验证端到端路径。
 
 ## 7. 代码风格与开发约定
 
@@ -127,7 +127,7 @@ npm test                          # 等价：node --test extension/tests/*.test.
 
 - 云端供应商（qwen / openai / deepseek / anthropic / groq / moonshot / siliconflow / google / custom）+ 本地 Ollama（google 为免 Key 免费接口）
 - 源语言 / 目标语言 / 翻译风格（普通 / 学术 / 技术 / 文学）
-- 缓存限额（默认 200MB）、触发模式、双语模式、站点黑白名单等
+- 缓存限额（默认 200MB）、触发模式（默认「修饰键+划选」modifier，可选 auto/icon/contextMenu；划选修饰键 ctrl/alt/shift 默认 ctrl）、双语模式、站点黑白名单等
 - F1-F8 行为开关：悬停翻译、单词词典、原文显示样式、浮窗钉住、双档案对照、输入框翻译、正文区域识别
 
 默认云端供应商：`qwen`，模型 `qwen-turbo`；默认本地模型通过 `http://localhost:11434/api/chat` 访问 Ollama。

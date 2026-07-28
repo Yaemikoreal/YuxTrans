@@ -79,6 +79,11 @@ node_modules/
 *.tar.gz
 *.zip
 
+# Remotion (yuxtrans-promo)
+yuxtrans-promo/out/
+yuxtrans-promo/dist/
+yuxtrans-promo/.remotion/
+
 # Build artifacts
 *.pyc
 *.pyo

@@ -10,6 +10,18 @@ class YuxTransContent {
   constructor() {
     this.popup = null;
     this.isTranslating = false;
+    // #11：词典查询独立在途标志（与划词 isTranslating 拆分，互不阻塞）
+    this.isDictLookingUp = false;
+    // #11：70s 看门狗——SW 不回包时复位在途标志，避免永久卡死（对齐流式 65s 超时）
+    this._translateWatchdog = null;
+    this._dictWatchdog = null;
+    // #4：requestId -> 浮窗元素，翻译响应与流式 chunk 按此路由回对应浮窗，防止串台
+    this._popupRequests = new Map();
+    this._popupReqSeq = 0;
+    // #5：对照模式自动 pin 的主浮窗（替换语义：新对照前移除旧的，只留一个）
+    this._compareMainPopup = null;
+    // #13：动态增量翻译独立在途标志（不占用整页主流程 isTranslating）
+    this._dynamicTranslating = false;
     this.helpers = (typeof YuxTransHelpers !== 'undefined' && YuxTransHelpers) || {};
     this.pageTranslationState = {
       isTranslated: false,
@@ -46,7 +58,8 @@ class YuxTransContent {
       targetLang: 'zh',
       siteRule: 'all',
       siteList: [],
-      triggerMode: 'auto',
+      triggerMode: 'modifier',
+      selectionModifier: 'ctrl', // 'ctrl' | 'alt' | 'shift'
       enableStreaming: true,
       bilingualMode: true,
       offlineMode: false,
@@ -120,7 +133,8 @@ class YuxTransContent {
         this.config.siteRule = response.siteRule || 'all';
         this.config.siteList = response.siteList || [];
         this.config.autoCopy = response.autoCopy || false;
-        this.config.triggerMode = response.triggerMode || 'auto';
+        this.config.triggerMode = response.triggerMode || 'modifier';
+        this.config.selectionModifier = ['ctrl', 'alt', 'shift'].includes(response.selectionModifier) ? response.selectionModifier : 'ctrl';
         this.config.enableStreaming = response.enableStreaming !== false;
         this.config.offlineMode = !!response.offlineMode;
         this.config.siteModePrefs = response.siteModePrefs || {};
@@ -325,6 +339,13 @@ class YuxTransContent {
    */
   _handleHoverMouseMove(e) {
     if (!this.config.hoverTranslate) return;
+    // #17：悬停翻译同样遵守站点黑白名单
+    if (!this.isSiteAllowed()) return;
+    // #6：鼠标按键按下（划选/拖拽中）不触发悬停翻译，避免插入 DOM 块破坏选区
+    if ((e.buttons || 0) !== 0) {
+      if (this._hoverTarget || this._hoverTimer) this._cancelHover();
+      return;
+    }
     const modifierKey = this.config.hoverModifier === 'ctrl' ? 'ctrlKey' : 'altKey';
     if (!e[modifierKey]) {
       // 修饰键未按下：清理描边与定时器
@@ -391,6 +412,7 @@ class YuxTransContent {
    */
   _translateHoverParagraph(el) {
     if (el.dataset.yxtHoverDone === '1') return;
+    // #8C：先占位防重入；仅翻译成功保留标记，失败时清除允许再次悬停重试
     el.dataset.yxtHoverDone = '1';
     el.classList.remove('yuxtrans-hover-target');
     this._hoverTarget = null;
@@ -442,6 +464,8 @@ class YuxTransContent {
         if (response && response.success) {
           span.textContent = response.text;
         } else {
+          // #8C：失败清除 done 标记，允许再次悬停重试
+          delete el.dataset.yxtHoverDone;
           span.textContent = (response && response.error) || '翻译失败';
           span.style.color = 'var(--yxt-error)';
         }
@@ -476,6 +500,8 @@ class YuxTransContent {
   _handleDblClick(e) {
     if (!this.config.dictDblclick || !this.config.dictMode) return;
     if (this._eventClosest(e, '.yuxtrans-popup, .yuxtrans-float-btn')) return;
+    // #2：双击直出词典前清除可能残留的悬浮按钮（icon 模式）
+    this.hideFloatButton();
     this._lastInputElement = null;
     setTimeout(() => {
       const sel = window.getSelection().toString().trim();
@@ -490,7 +516,8 @@ class YuxTransContent {
    */
   lookupWord(word, x, y) {
     if (!this.isSiteAllowed()) return;
-    if (this.isTranslating) return;
+    // #11：词典查询独立在途标志，不再与划词翻译互堵
+    if (this.isDictLookingUp) return;
 
     const selection = window.getSelection();
     let rect = { left: x || 100, top: y || 100, width: 0, height: 0 };
@@ -499,25 +526,40 @@ class YuxTransContent {
     }
     // 复用浮窗骨架，source 区显示单词原文
     this.showPopup(rect.left, rect.bottom + 10, word);
-    this.isTranslating = true;
-    this.popup.dataset.mode = 'dict';
+    const popup = this.popup;
+    this.isDictLookingUp = true;
+    // #11：70s 看门狗——SW 不回包时复位在途标志，避免永久卡死
+    clearTimeout(this._dictWatchdog);
+    this._dictWatchdog = setTimeout(() => {
+      this._dictWatchdog = null;
+      this.isDictLookingUp = false;
+      console.warn('[YuxTrans] 词典查询 70s 无响应，已复位在途标志');
+    }, 70000);
+    if (this._dictWatchdog.unref) this._dictWatchdog.unref(); // Node 测试环境不阻塞进程退出
+    popup.dataset.mode = 'dict';
     // F5：输入框触发时显示"插入译文"按钮
     this._toggleInsertBtn();
 
     const sourceLang = this.config.sourceLang || 'auto';
     const targetLang = this.config.targetLang || 'zh';
+    // #4：登记 requestId -> 浮窗映射，响应路由回捕获的浮窗（pin 或快速连划不串台）
+    const requestId = this._registerPopupRequest(popup);
     chrome.runtime.sendMessage(
-      { action: 'lookupWord', text: word, sourceLang, targetLang, context: this.getPageContext(), requestId: 'popup' },
+      { action: 'lookupWord', text: word, sourceLang, targetLang, context: this.getPageContext(), requestId },
       (response) => {
-        this.isTranslating = false;
+        clearTimeout(this._dictWatchdog);
+        this._dictWatchdog = null;
+        this.isDictLookingUp = false;
+        const target = this._takePopupForRequest(requestId);
+        if (!target) return; // 浮窗已销毁：丢弃响应
         if (response && response.success) {
-          this.renderDictResult(response.dict, response.cached, word);
+          this.renderDictResult(response.dict, response.cached, word, target);
         } else {
           const userError = response && response.userError;
           const msg = userError
             ? (this.helpers.formatUserErrorCompact ? this.helpers.formatUserErrorCompact(userError) : userError.userMessage)
             : (response && response.error) || '词典查询失败';
-          this.updatePopup(msg, false, 'error', word);
+          this.updatePopup(msg, false, 'error', word, target);
         }
       }
     );
@@ -526,10 +568,14 @@ class YuxTransContent {
   /**
    * F2：渲染词典卡片（结构化结果）
    * @param {Object} dict - {word, phonetic, senses:[{pos, meaning, examples:[{source,target}]}], raw}
+   * @param {boolean} cached
+   * @param {string} word
+   * @param {Element|null} [popupEl] - #4 目标浮窗（缺省 this.popup）
    */
-  renderDictResult(dict, cached, word) {
-    if (!this.popup) return;
-    const targetEl = this.popup.querySelector('.yuxtrans-target');
+  renderDictResult(dict, cached, word, popupEl) {
+    const popup = popupEl || this.popup;
+    if (!popup) return;
+    const targetEl = popup.querySelector('.yuxtrans-target');
     if (!targetEl) return;
     targetEl.textContent = '';
 
@@ -537,12 +583,12 @@ class YuxTransContent {
     const hasRaw = !!(dict && dict.raw);
     // 无结构化词典 -> 降级纯文本（本地小模型或解析失败）
     if (!hasSenses) {
-      this.updatePopup(hasRaw ? dict.raw : ((word || '') + '：暂无词典释义'), cached, 'cache', word);
+      this.updatePopup(hasRaw ? dict.raw : ((word || '') + '：暂无词典释义'), cached, 'cache', word, popup);
       return;
     }
 
     // 隐藏 source（dict.word 大字已显示单词，避免重复）
-    const sourceEl = this.popup.querySelector('.yuxtrans-source');
+    const sourceEl = popup.querySelector('.yuxtrans-source');
     if (sourceEl) sourceEl.style.display = 'none';
 
     const container = document.createElement('div');
@@ -593,7 +639,7 @@ class YuxTransContent {
     targetEl.appendChild(container);
 
     // 状态徽章
-    const statusEl = this.popup.querySelector('.yuxtrans-status');
+    const statusEl = popup.querySelector('.yuxtrans-status');
     const badgeClass = cached ? 'cache' : 'cloud';
     statusEl.innerHTML = '<span class="yuxtrans-status-badge ' + badgeClass + '">' +
       (cached ? '缓存命中' : '云端') + '</span>';
@@ -602,16 +648,16 @@ class YuxTransContent {
     const parts = dict.senses.map((s) =>
       (s.pos ? s.pos + ' ' : '') + (s.meaning || '')
     ).filter(Boolean);
-    this.popup.dataset.translation = (dict.word || word || '') + (parts.length ? ' ' + parts.join('; ') : '');
+    popup.dataset.translation = (dict.word || word || '') + (parts.length ? ' ' + parts.join('; ') : '');
 
     // 复制 / 差译按钮可见
-    const badBtn = this.popup.querySelector('.yuxtrans-bad-btn');
-    const copyBtn = this.popup.querySelector('.yuxtrans-copy-btn');
+    const badBtn = popup.querySelector('.yuxtrans-bad-btn');
+    const copyBtn = popup.querySelector('.yuxtrans-copy-btn');
     if (badBtn) { badBtn.hidden = false; badBtn.disabled = false; }
     if (copyBtn) { copyBtn.hidden = false; copyBtn.disabled = false; }
 
-    // 自动复制
-    if (this.config.autoCopy) this.copyPopupTranslation();
+    // 自动复制（仅当前浮窗，避免 pinned 浮窗响应触发误复制）
+    if (this.config.autoCopy && popup === this.popup) this.copyPopupTranslation();
   }
 
   /**
@@ -626,7 +672,15 @@ class YuxTransContent {
     const mainLeft = mainPopup ? parseFloat(mainPopup.style.left) : NaN;
     const mainTop = mainPopup ? parseFloat(mainPopup.style.top) : NaN;
     // 主浮窗钉住（保留主译文），再开对照浮窗
-    if (mainPopup && mainPopup.dataset.pinned !== '1') this.pinPopup();
+    if (mainPopup && mainPopup.dataset.pinned !== '1') {
+      // #5 对照模式替换语义：自动 pin 新主浮窗前，移除上一次对照自动 pin 的主浮窗
+      // （仅自动 pin 的那个，用户手动 pin 的浮窗不动），避免 pinned 浮窗无限累积
+      if (this._compareMainPopup && this._compareMainPopup !== mainPopup) {
+        this.closePopup(this._compareMainPopup);
+      }
+      this.pinPopup();
+      this._compareMainPopup = mainPopup;
+    }
     // 对照浮窗：在主浮窗左侧偏移定位；无主浮窗时回退默认
     const baseX = !isNaN(mainLeft) ? mainLeft - 340 : 100;
     const baseY = !isNaN(mainTop) ? mainTop : 100;
@@ -635,14 +689,17 @@ class YuxTransContent {
     // 标记为对照浮窗
     this.popup.dataset.compare = '1';
     this._updatePopupTitle('compare');
+    const comparePopup = this.popup;
 
     chrome.runtime.sendMessage(
       { action: 'translateWithProfile', text, sourceLang, targetLang, context, profileId },
       (response) => {
+        // #4：对照浮窗已销毁则丢弃响应，避免写入其他浮窗
+        if (!this._isPopupAlive(comparePopup)) return;
         if (response && response.success) {
-          this.updatePopup(response.text, false, response.engine || 'compare', text);
+          this.updatePopup(response.text, false, response.engine || 'compare', text, comparePopup);
         } else {
-          this.updatePopup((response && response.error) || '对照翻译失败', false, 'error', text);
+          this.updatePopup((response && response.error) || '对照翻译失败', false, 'error', text, comparePopup);
         }
       }
     );
@@ -699,7 +756,7 @@ class YuxTransContent {
    * 处理流式输出增量文本
    * @param {string} chunk - 本次增量
    * @param {string} fullText - 当前完整文本
-   * @param {string|null} requestId - 请求标识（整页翻译时为段落 ID，弹窗为 'popup'）
+   * @param {string|null} requestId - 请求标识（整页翻译时为段落 ID，划词浮窗为 _registerPopupRequest 生成的 ID）
    */
   handleStreamChunk(chunk, fullText, requestId) {
     // 1. 整页翻译段落级流式
@@ -711,10 +768,25 @@ class YuxTransContent {
       return;
     }
 
+    // 2. #4 划词浮窗流式：按 requestId 路由到对应浮窗（pin 后在途流仍写回原浮窗，不串台）
+    if (requestId && this._popupRequests.has(requestId)) {
+      const popup = this._peekPopupForRequest(requestId);
+      if (!popup) return; // 浮窗已销毁：丢弃 chunk 并清理映射
+      const targetEl = popup.querySelector('.yuxtrans-target');
+      if (!targetEl) return;
+
+      // 首次收到流式内容时，清除 loading 占位
+      if (targetEl.querySelector('.yuxtrans-loading')) {
+        targetEl.textContent = '';
+      }
+      targetEl.textContent += chunk;
+      return;
+    }
+
     // 整页段落流式的过期 chunk（取消/完成后 streamingNodes 已清理）：直接忽略，避免污染划词弹窗
     if (requestId && requestId !== 'popup') return;
 
-    // 2. 划词弹窗流式（兼容无 requestId 的旧逻辑）
+    // 3. 划词弹窗流式（兼容无 requestId 或 'popup' 的旧逻辑）
     if (!this.popup) return;
     const targetEl = this.popup.querySelector('.yuxtrans-target');
     if (!targetEl) return;
@@ -734,11 +806,24 @@ class YuxTransContent {
     const inputEl = this._eventClosest(e, 'input, textarea');
     if (inputEl) {
       if (!this.config.inputTranslate) return;
+      // #14：input 分支补齐触发模式语义（此前 contextMenu/icon 模式下也直接弹窗）
+      const inputMode = this.helpers.resolveTriggerAction
+        ? this.helpers.resolveTriggerAction(this.config.triggerMode)
+        : (this.config.triggerMode || 'auto');
+      if (inputMode === 'contextMenu') return; // 仅右键菜单触发
+      // modifier 模式：输入框内划选同样要求按住修饰键
+      if (inputMode === 'modifier' &&
+          !this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)) return;
       const sel = this._getInputSelection(inputEl);
       if (!sel) { this._lastInputElement = null; return; }
       this._lastInputElement = inputEl;
       // 跳过无翻译价值文本（纯数字/符号）
       if (!/[\p{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(sel)) return;
+      if (inputMode === 'icon') {
+        // icon 模式出浮钮，点击后翻译；_lastInputElement 已设，F5 插入能力保留
+        this.showFloatButton(e.clientX, e.clientY, sel);
+        return;
+      }
       // 单词走词典，否则普通翻译
       const isWord = this.config.dictMode && this.helpers.isSingleWord(sel);
       if (isWord) this.lookupWord(sel, e.clientX, e.clientY);
@@ -756,10 +841,12 @@ class YuxTransContent {
       }
 
       // 跳过输入框、代码块、可编辑区域中的选中文本
+      // #8B：译文区域（悬停译文/双语译文/流式临时译文）的再次划选不触发翻译
       if (sel.rangeCount > 0) {
         const node = sel.getRangeAt(0).commonAncestorContainer;
         const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-        if (el && el.closest('input, textarea, [contenteditable="true"], code, pre, kbd, samp')) {
+        if (el && el.closest('input, textarea, [contenteditable="true"], code, pre, kbd, samp, ' +
+            '.yuxtrans-hover-translation, .yuxtrans-bilingual-text, .yuxtrans-streaming-text')) {
           this.hideFloatButton();
           return;
         }
@@ -767,6 +854,13 @@ class YuxTransContent {
 
       // 跳过纯数字、纯符号、URL 等无翻译价值文本
       if (!/[\p{L}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(selection)) {
+        this.hideFloatButton();
+        return;
+      }
+
+      // #1：双击单词且双击查词开启时交给 _handleDblClick 统一处理，避免划词+双击双请求
+      if (e.detail >= 2 && this.config.dictDblclick && this.config.dictMode &&
+          this.helpers.isSingleWord(selection)) {
         this.hideFloatButton();
         return;
       }
@@ -780,6 +874,13 @@ class YuxTransContent {
         this.hideFloatButton();
         return;
       }
+      if (mode === 'modifier') {
+        this.hideFloatButton();
+        // 松手瞬间校验修饰键：未按住则静默（不干扰复制/全选/链接点击等原生行为）
+        if (!this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)) return;
+        this.translateText(selection, e.clientX, e.clientY);
+        return;
+      }
       if (mode === 'auto') {
         this.hideFloatButton();
         this.translateText(selection, e.clientX, e.clientY);
@@ -791,7 +892,9 @@ class YuxTransContent {
   }
 
   handleMouseDown(e) {
-    if (!this._eventClosest(e, '.yuxtrans-popup') && !this._eventClosest(e, '.yuxtrans-float-btn')) {
+    // #3：点击自有 UI（浮窗/浮钮/整页控制条/悬停译文/悬停引导）不关闭浮窗
+    if (!this._eventClosest(e, '.yuxtrans-popup, .yuxtrans-float-btn, .yuxtrans-page-control, ' +
+        '.yuxtrans-hover-translation, .yuxtrans-hover-guide')) {
       this.hidePopup();
     }
   }
@@ -851,7 +954,16 @@ class YuxTransContent {
     }
 
     this.showPopup(rect.left, rect.bottom + 10, text);
+    const popup = this.popup;
     this.isTranslating = true;
+    // #11：70s 看门狗——SW 不回包时复位在途标志，避免永久卡死
+    clearTimeout(this._translateWatchdog);
+    this._translateWatchdog = setTimeout(() => {
+      this._translateWatchdog = null;
+      this.isTranslating = false;
+      console.warn('[YuxTrans] 划词翻译 70s 无响应，已复位在途标志');
+    }, 70000);
+    if (this._translateWatchdog.unref) this._translateWatchdog.unref(); // Node 测试环境不阻塞进程退出
     // F5：输入框触发时显示"插入译文"按钮
     this._toggleInsertBtn();
 
@@ -862,6 +974,8 @@ class YuxTransContent {
       ? this.helpers.resolveTranslateAction(this.config.enableStreaming)
       : (this.config.enableStreaming === false ? 'translate' : 'translateStream');
 
+    // #4：登记 requestId -> 浮窗映射，响应与流式 chunk 路由回捕获的浮窗（pin 或快速连划不串台）
+    const requestId = this._registerPopupRequest(popup);
     chrome.runtime.sendMessage(
       {
         action,
@@ -869,17 +983,24 @@ class YuxTransContent {
         sourceLang,
         targetLang,
         context,
-        requestId: 'popup'
+        requestId
       },
       (response) => {
+        clearTimeout(this._translateWatchdog);
+        this._translateWatchdog = null;
         this.isTranslating = false;
+
+        // #4：响应路由回捕获的浮窗；浮窗已销毁则丢弃
+        const target = this._takePopupForRequest(requestId);
+        if (!target) return;
 
         const isLocal = (this.config.provider === 'local');
 
         if (response && response.success) {
-          this.updatePopup(response.text, response.cached, response.engine, text);
+          this.updatePopup(response.text, response.cached, response.engine, text, target);
           // F4b：双档案对照--主翻译成功后用对照档案再译，结果钉到对照浮窗
-          if (this.config.compareProfileId) {
+          // （仅当前浮窗触发；pinned 浮窗的迟到响应不再重复开对照浮窗）
+          if (this.config.compareProfileId && target === this.popup) {
             this.translateWithCompareProfile(text, sourceLang, targetLang, context);
           }
         } else {
@@ -895,9 +1016,9 @@ class YuxTransContent {
             errorMsg = response?.error || '未知错误';
           }
           if (!isLocal && (errorMsg.includes('API Key') || errorMsg.includes('请先配置') || userError?.code === 'AUTH')) {
-            this.updatePopup('请先配置 API Key\n打开设置 → 服务档案', false, 'warning');
+            this.updatePopup('请先配置 API Key\n打开设置 → 服务档案', false, 'warning', undefined, target);
           } else {
-            this.updatePopup(errorMsg, false, 'error');
+            this.updatePopup(errorMsg, false, 'error', undefined, target);
           }
         }
       }
@@ -916,7 +1037,9 @@ class YuxTransContent {
    */
   async translateStreamForNode(nodeInfo, requestId) {
     // 取消后不再发起新请求，避免继续消耗配额
-    if (this.pageTranslationState.cancelRequested || !this.pageTranslationState.isTranslating) {
+    // #13：动态增量翻译走独立标志 _dynamicTranslating，同样视为活跃会话
+    if (this.pageTranslationState.cancelRequested ||
+        (!this.pageTranslationState.isTranslating && !this._dynamicTranslating)) {
       return { success: false, error: '翻译已取消' };
     }
 
@@ -969,7 +1092,7 @@ class YuxTransContent {
           if (response && response.success) {
             // 已取消/已恢复原文时不再落地译文，避免覆盖用户恢复后的页面状态
             const cancelled = this.pageTranslationState.cancelRequested ||
-              !this.pageTranslationState.isTranslating;
+              (!this.pageTranslationState.isTranslating && !this._dynamicTranslating);
             if (!cancelled) {
               this.applyTranslation(nodeInfo, response.text);
             }
@@ -990,6 +1113,10 @@ class YuxTransContent {
   }
 
   showPopup(x, y, sourceText) {
+    // #2：新浮窗出现时清除可能残留的悬浮按钮（icon 模式）
+    this.hideFloatButton();
+    // #4：清理映射中已销毁浮窗的条目，避免 Map 泄漏
+    this._sweepPopupRequests();
     // F4：已 pin 的浮窗保留，仅销毁未 pin 的当前浮窗
     if (this.popup) {
       if (this.popup.dataset.pinned === '1') {
@@ -1079,6 +1206,56 @@ class YuxTransContent {
   }
 
   /**
+   * #4：登记浮窗请求映射（requestId -> 浮窗元素），响应与流式 chunk 按此路由回对应浮窗
+   */
+  _registerPopupRequest(popup) {
+    const requestId = 'popup-' + (++this._popupReqSeq);
+    this._popupRequests.set(requestId, popup);
+    return requestId;
+  }
+
+  /**
+   * #4：浮窗是否仍可写入（真实 DOM 用 isConnected；测试环境退化到 parentNode/pinned 判定）
+   */
+  _isPopupAlive(popup) {
+    if (!popup) return false;
+    if (typeof popup.isConnected === 'boolean') return popup.isConnected;
+    return popup === this.popup || !!popup.parentNode || this.pinnedPopups.includes(popup);
+  }
+
+  /**
+   * #4：按 requestId 取出目标浮窗并移除映射；浮窗已销毁则丢弃响应
+   */
+  _takePopupForRequest(requestId) {
+    const popup = this._popupRequests.get(requestId);
+    this._popupRequests.delete(requestId);
+    return this._isPopupAlive(popup) ? popup : null;
+  }
+
+  /**
+   * #4：流式 chunk 专用——按 requestId 查看目标浮窗（不取走映射，chunk 会多次到达）；
+   * 浮窗已销毁则清理映射并返回 null
+   */
+  _peekPopupForRequest(requestId) {
+    const popup = this._popupRequests.get(requestId);
+    if (!popup) return null;
+    if (!this._isPopupAlive(popup)) {
+      this._popupRequests.delete(requestId);
+      return null;
+    }
+    return popup;
+  }
+
+  /**
+   * #4：清理映射中已销毁浮窗的条目，避免 Map 泄漏（showPopup/pinPopup/hidePopup 时调用）
+   */
+  _sweepPopupRequests() {
+    for (const [id, popup] of this._popupRequests) {
+      if (!this._isPopupAlive(popup)) this._popupRequests.delete(id);
+    }
+  }
+
+  /**
    * F4：关闭指定浮窗（区分当前 this.popup 与已 pin 浮窗）
    */
   closePopup(popup) {
@@ -1103,6 +1280,8 @@ class YuxTransContent {
     const pinBtn = this.popup.querySelector('.yuxtrans-pin-btn');
     if (pinBtn) pinBtn.hidden = true;
     this.popup = null;
+    // #4：pin 的浮窗仍在 DOM 中，其在途请求映射保留；仅清理其他已销毁浮窗的条目
+    this._sweepPopupRequests();
     // 解绑当前 Esc handler（pin 后无当前浮窗；下次划词 showPopup 重绑）
     if (this._popupEscHandler) {
       document.removeEventListener('keydown', this._popupEscHandler);
@@ -1145,10 +1324,13 @@ class YuxTransContent {
 
   /**
    * 同步划词浮窗 header 真实信息：语言对 + 供应商（对照浮窗追加「对照」标记）
+   * @param {string} [engine]
+   * @param {Element|null} [popupEl] - #4 目标浮窗（缺省 this.popup）
    */
-  _updatePopupTitle(engine) {
-    if (!this.popup) return;
-    const titleEl = this.popup.querySelector('.yuxtrans-popup-title');
+  _updatePopupTitle(engine, popupEl) {
+    const popup = popupEl || this.popup;
+    if (!popup) return;
+    const titleEl = popup.querySelector('.yuxtrans-popup-title');
     if (!titleEl || !this.helpers.popupTitleText) return;
     const src = this.config.sourceLang || 'auto';
     const tgt = this.config.targetLang || 'zh';
@@ -1158,18 +1340,19 @@ class YuxTransContent {
     titleEl.textContent = engine === 'compare' ? `${base} · 对照` : base;
   }
 
-  updatePopup(translatedText, cached, engine, sourceText) {
-    if (!this.popup) return;
+  updatePopup(translatedText, cached, engine, sourceText, popupEl) {
+    const popup = popupEl || this.popup;
+    if (!popup) return;
 
     // header 同步真实信息（语言对 + 供应商 / 对照）
-    this._updatePopupTitle(engine);
+    this._updatePopupTitle(engine, popup);
 
-    const targetEl = this.popup.querySelector('.yuxtrans-target');
+    const targetEl = popup.querySelector('.yuxtrans-target');
     targetEl.textContent = translatedText;
     const isError = engine === 'error' || engine === 'warning';
     targetEl.classList.toggle('is-error', isError);
 
-    const statusEl = this.popup.querySelector('.yuxtrans-status');
+    const statusEl = popup.querySelector('.yuxtrans-status');
     const badgeClass = this._getStatusBadgeClass(cached, engine);
     let statusText = '完成';
     if (isError) statusText = engine === 'warning' ? '需配置' : '失败';
@@ -1180,12 +1363,12 @@ class YuxTransContent {
     statusEl.innerHTML = `<span class="yuxtrans-status-badge ${badgeClass}">${this.escapeHtml(String(statusText))}</span>`;
 
     // 保存当前译文，供复制使用
-    this.popup.dataset.translation = translatedText;
-    if (sourceText) this.popup.dataset.sourceText = sourceText;
+    popup.dataset.translation = translatedText;
+    if (sourceText) popup.dataset.sourceText = sourceText;
 
     // 复制 / 差译常驻可见（差译仅在有译文时可用）
-    const badBtn = this.popup.querySelector('.yuxtrans-bad-btn');
-    const copyBtn = this.popup.querySelector('.yuxtrans-copy-btn');
+    const badBtn = popup.querySelector('.yuxtrans-bad-btn');
+    const copyBtn = popup.querySelector('.yuxtrans-copy-btn');
     if (badBtn) {
       badBtn.hidden = false;
       badBtn.disabled = isError;
@@ -1195,8 +1378,8 @@ class YuxTransContent {
       copyBtn.disabled = false;
     }
 
-    // 自动复制（如果用户开启）
-    if (!isError && this.config.autoCopy) {
+    // 自动复制（如果用户开启；仅当前浮窗，避免 pinned 浮窗响应触发误复制）
+    if (!isError && this.config.autoCopy && popup === this.popup) {
       this.copyPopupTranslation();
     }
   }
@@ -1264,6 +1447,8 @@ class YuxTransContent {
       this.popup.remove();
       this.popup = null;
     }
+    // #4：浮窗销毁后清理其在途请求映射，迟到响应将被丢弃
+    this._sweepPopupRequests();
     if (this._popupEscHandler) {
       document.removeEventListener('keydown', this._popupEscHandler);
       this._popupEscHandler = null;
@@ -1300,7 +1485,8 @@ class YuxTransContent {
             '.yuxtrans-side-tab', '.yuxtrans-float-btn', '.yuxtrans-site-rule-toast',
             '.yuxtrans-translated', '.yuxtrans-translated-bilingual',
             '.yuxtrans-bilingual-text', '.yuxtrans-streaming-text',
-            '.yuxtrans-hover-translation', '.yuxtrans-dict'
+            '.yuxtrans-hover-translation', '.yuxtrans-dict',
+            '.yuxtrans-hover-guide', '.yuxtrans-page-toast' // #8A：自身 UI 不被整页翻译
           ].join(', ');
           if (parent.closest(skipSelectors)) {
             return NodeFilter.FILTER_REJECT;
@@ -1483,7 +1669,8 @@ class YuxTransContent {
       const queue = items.map((_, i) => i);
 
       const worker = async () => {
-        while (queue.length > 0 && this.pageTranslationState.isTranslating && !this.pageTranslationState.cancelRequested) {
+        // #13：整页主流程（isTranslating）或动态增量（_dynamicTranslating）任一活跃即继续
+        while (queue.length > 0 && (this.pageTranslationState.isTranslating || this._dynamicTranslating) && !this.pageTranslationState.cancelRequested) {
           const globalIdx = queue.shift();
           const item = items[globalIdx];
           const requestId = 'yxt-page-stream-' + (++this._streamReqSeq);
@@ -1537,7 +1724,8 @@ class YuxTransContent {
     let fallbackMode = false; // 是否已进入单句翻译降级模式
 
     const worker = async () => {
-      while (queue.length > 0 && this.pageTranslationState.isTranslating && !this.pageTranslationState.cancelRequested) {
+      // #13：整页主流程（isTranslating）或动态增量（_dynamicTranslating）任一活跃即继续
+      while (queue.length > 0 && (this.pageTranslationState.isTranslating || this._dynamicTranslating) && !this.pageTranslationState.cancelRequested) {
         const batchIndex = queue.shift();
         const batch = batches[batchIndex];
         
@@ -2175,7 +2363,8 @@ _showPageToast(message) {
    */
   async retryFailedPageItems() {
     const failed = this.pageTranslationState.failedItems || [];
-    if (failed.length === 0 || this.pageTranslationState.isTranslating) return;
+    // #13：动态增量翻译进行中同样视为整页任务在途，避免重试与增量交叉写 DOM
+    if (failed.length === 0 || this.pageTranslationState.isTranslating || this._dynamicTranslating) return;
 
     this.pageTranslationState.isTranslating = true;
     this.setPageControlTranslateDisabled(true);
@@ -2360,8 +2549,8 @@ _showPageToast(message) {
   }
 
   restoreOriginalTexts() {
-    // 若仍有在途翻译，先取消，避免恢复原文后继续消耗配额
-    if (this.pageTranslationState.isTranslating) {
+    // 若仍有在途翻译（整页主流程或动态增量），先取消，避免恢复原文后继续消耗配额
+    if (this.pageTranslationState.isTranslating || this._dynamicTranslating) {
       this.cancelPageTranslation();
     }
     // 清理流式翻译中的临时节点
@@ -2409,6 +2598,9 @@ _showPageToast(message) {
     // F4：清理所有已 pin 的浮窗
     this.pinnedPopups.forEach((p) => { if (p.parentNode) p.remove(); });
     this.pinnedPopups = [];
+    // #5/#4：对照主浮窗引用与浮窗请求映射同步清理
+    this._compareMainPopup = null;
+    this._sweepPopupRequests();
   }
 
   /**
@@ -2538,9 +2730,23 @@ _showPageToast(message) {
   _onMutations(mutations) {
     if (!this.pageTranslationState.isTranslated) return;
     // 主翻译或上一轮动态翻译进行中时，忽略自身插入译文节点触发的 mutation
-    if (this._isProcessingAdded || this.pageTranslationState.isTranslating) return;
-    const hasAdded = mutations.some((m) => m.addedNodes && m.addedNodes.length > 0);
-    if (!hasAdded) return;
+    if (this._isProcessingAdded || this._dynamicTranslating || this.pageTranslationState.isTranslating) return;
+    // #9：全部新增节点都位于自有 UI（.yuxtrans-* 容器）内时直接忽略，
+    // 不进防抖与全页扫描（浮窗/悬停译文/控制条等自身 UI 不触发增量翻译）
+    let hasAdded = false;
+    let allOwnUI = true;
+    for (const m of mutations) {
+      for (const n of (m.addedNodes || [])) {
+        hasAdded = true;
+        const el = n.nodeType === 1 ? n : n.parentElement;
+        if (el && typeof el.closest === 'function' && !el.closest('[class*="yuxtrans-"]')) {
+          allOwnUI = false;
+          break;
+        }
+      }
+      if (!allOwnUI) break;
+    }
+    if (!hasAdded || allOwnUI) return;
     clearTimeout(this._addedDebounceTimer);
     this._addedDebounceTimer = setTimeout(() => {
       this._processAddedNodes();
@@ -2549,8 +2755,10 @@ _showPageToast(message) {
 
   async _processAddedNodes() {
     if (!this.pageTranslationState.isTranslated) return;
-    if (this.pageTranslationState.isTranslating) return;
-    this.pageTranslationState.isTranslating = true;
+    // #13：动态增量翻译改用独立标志，不占用整页主流程 isTranslating，
+    // 消除「增量翻译中按 Ctrl+Shift+P 被当作取消整页」的边缘情况
+    if (this._dynamicTranslating || this.pageTranslationState.isTranslating) return;
+    this._dynamicTranslating = true;
     this._isProcessingAdded = true;
     try {
       // collectTextNodes 遍历 body，已翻译节点会被 acceptNode 排除，
@@ -2576,7 +2784,7 @@ _showPageToast(message) {
     } catch (e) {
       console.error('[YuxTrans] 动态内容翻译异常:', e);
     } finally {
-      this.pageTranslationState.isTranslating = false;
+      this._dynamicTranslating = false;
       this._isProcessingAdded = false;
     }
   }

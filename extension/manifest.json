@@ -22,7 +22,7 @@
     "https://api.moonshot.cn/*",
     "https://api.siliconflow.cn/*",
     "https://translate.googleapis.com/*",
-    "http://localhost:*/*"
+    "http://localhost:11434/*"
   ],
 
   "optional_host_permissions": [

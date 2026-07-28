@@ -55,6 +55,7 @@ function createEvent() {
 
 global.chrome = {
   runtime: {
+    id: 'yuxtrans-test-extension-id',
     onInstalled: createEvent(),
     onStartup: createEvent(),
     onMessage: createEvent(),
@@ -74,6 +75,10 @@ global.chrome = {
   },
   commands: {
     onCommand: createEvent()
+  },
+  alarms: {
+    create: () => {},
+    onAlarm: createEvent()
   },
   tabs: {
     query: async () => [],
