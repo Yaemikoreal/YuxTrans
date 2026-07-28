@@ -49,6 +49,7 @@ class YuxTransContent {
     this._lastInputElement = null; // F5：触发翻译的输入框元素（供"插入译文"使用）
     this.pinnedPopups = []; // F4：已 pin 的浮窗列表（不被新划词覆盖，用于结果对照）
     this.pageControl = null;
+    this.sideTab = null; // #54：整页控制条收起后的右缘挂耳
     this.config = {
       concurrency: 50, // 并发请求数（云端默认 50，本地自动降为 1）
       batchSize: 20,  // 批量大小（减少 API 调用次数）
@@ -2318,8 +2319,8 @@ _showPageToast(message) {
       restoreBtn.addEventListener('click', () => {
         if (this.pageTranslationState.isTranslated) {
           this.restoreOriginalTexts();
-          // 不隐藏控制条，切换到可重新翻译状态
-          this.setPageControlRestoredState();
+          // #54：恢复原文即彻底收尾，控制条与挂耳一并移除
+          this.hidePageControl();
         } else {
           // 已恢复状态下再次点击，触发重新翻译
           this.translatePage();
@@ -2344,10 +2345,10 @@ _showPageToast(message) {
       disableBtn.addEventListener('click', () => this.disableCurrentSite());
     }
 
-    // 关闭按钮
+    // 关闭按钮：#54 不销毁，收起为右缘挂耳，点击可重新展开
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
-        this.hidePageControl();
+        this.collapsePageControlToTab();
       });
     }
 
@@ -2810,6 +2811,48 @@ _showPageToast(message) {
     if (this.pageControl) {
       this.pageControl.remove();
       this.pageControl = null;
+    }
+    this.removeSideTab();
+  }
+
+  /**
+   * #54：关闭控制条不销毁，收起为贴右缘的竖向挂耳；
+   * 控制条仅隐藏并保留引用，进度/统计/按钮状态在重新展开时原样恢复
+   */
+  collapsePageControlToTab() {
+    if (this._pageCollapseTimer) {
+      clearTimeout(this._pageCollapseTimer);
+      this._pageCollapseTimer = null;
+    }
+    if (!this.pageControl) return;
+    this.pageControl.style.display = 'none';
+    this.removeSideTab();
+
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'yuxtrans-side-tab';
+    tab.textContent = '译';
+    tab.setAttribute('aria-label', '展开整页翻译控制条');
+    tab.title = '展开整页翻译控制条';
+    tab.addEventListener('click', () => this.expandPageControlFromTab());
+    document.body.appendChild(tab);
+    this.sideTab = tab;
+  }
+
+  /**
+   * #54：点击挂耳重新展开原控制条（状态保持），挂耳自身移除
+   */
+  expandPageControlFromTab() {
+    this.removeSideTab();
+    if (this.pageControl) {
+      this.pageControl.style.display = '';
+    }
+  }
+
+  removeSideTab() {
+    if (this.sideTab) {
+      this.sideTab.remove();
+      this.sideTab = null;
     }
   }
 

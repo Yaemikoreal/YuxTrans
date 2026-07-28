@@ -69,7 +69,10 @@ class FakeElement {
   remove() {
     if (this.parentElement) this.parentElement.removeChild(this);
   }
-  addEventListener() {}
+  addEventListener(type, fn) {
+    if (!this._listeners) this._listeners = {};
+    this._listeners[type] = fn;
+  }
   setAttribute() {}
   querySelector() { return null; }
   querySelectorAll() { return []; }
@@ -610,4 +613,70 @@ test('#11 拆分在途标志：词典在途不阻塞划词翻译', async () => {
   await new Promise((r) => setTimeout(r, 20));
   assert.strictEqual(instance.isTranslating, false, '划词响应后标志复位');
   assert.strictEqual(instance.isDictLookingUp, true, '词典仍在途（等待看门狗或响应）');
+});
+
+// ===== #54 整页控制条挂耳（side tab） =====
+// 利用 setup() 实例 + FakeElement 直接驱动 collapse/expand/hide 三个方法，
+// 验证：关闭收起为挂耳、挂耳点击回调重新展开、hidePageControl 两者一并移除。
+
+function makePageControl(instance) {
+  const control = new FakeElement('div');
+  control.className = 'yuxtrans-page-control';
+  document.body.appendChild(control);
+  instance.pageControl = control;
+  return control;
+}
+
+function cleanupPageControl(instance, control) {
+  instance.removeSideTab();
+  if (control.parentElement) control.remove();
+  instance.pageControl = null;
+}
+
+test('#54 关闭控制条收起为挂耳：控制条隐藏保留，挂耳出现', () => {
+  const { instance } = setup();
+  const control = makePageControl(instance);
+  try {
+    instance.collapsePageControlToTab();
+
+    assert.strictEqual(control.style.display, 'none', '控制条应隐藏而非销毁');
+    assert.strictEqual(instance.pageControl, control, '控制条引用保留以维持进度/按钮状态');
+    assert.ok(instance.sideTab, '挂耳应已创建');
+    assert.strictEqual(instance.sideTab.className, 'yuxtrans-side-tab');
+    assert.strictEqual(instance.sideTab.parentElement, document.body, '挂耳挂在 body 上');
+  } finally {
+    cleanupPageControl(instance, control);
+  }
+});
+
+test('#54 点击挂耳重新展开原控制条并移除挂耳', () => {
+  const { instance } = setup();
+  const control = makePageControl(instance);
+  try {
+    instance.collapsePageControlToTab();
+    const tab = instance.sideTab;
+    assert.ok(tab._listeners && typeof tab._listeners.click === 'function', '挂耳应绑定点击回调');
+
+    tab._listeners.click(); // 模拟点击挂耳
+
+    assert.strictEqual(control.style.display, '', '控制条恢复可见');
+    assert.strictEqual(instance.sideTab, null, '挂耳引用已清空');
+    assert.ok(!document.body.childNodes.includes(tab), '挂耳节点已从 DOM 移除');
+  } finally {
+    cleanupPageControl(instance, control);
+  }
+});
+
+test('#54 hidePageControl（恢复原文/取消/重新翻译前置）将控制条与挂耳一并移除', () => {
+  const { instance } = setup();
+  const control = makePageControl(instance);
+  instance.collapsePageControlToTab();
+  const tab = instance.sideTab;
+
+  instance.hidePageControl();
+
+  assert.strictEqual(instance.pageControl, null, '控制条引用已清空');
+  assert.ok(!document.body.childNodes.includes(control), '控制条节点已从 DOM 移除');
+  assert.strictEqual(instance.sideTab, null, '挂耳引用已清空');
+  assert.ok(!document.body.childNodes.includes(tab), '挂耳节点已从 DOM 移除');
 });

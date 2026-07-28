@@ -474,6 +474,41 @@ code {
   width: 100%;
 }
 
+/* ===== 整页控制条挂耳（#54）：关闭后收起为贴右缘的竖向 Tab，点击重新展开 ===== */
+.yuxtrans-side-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2147483646;
+  writing-mode: vertical-rl;
+  padding: var(--yxt-space-3) var(--yxt-space-1);
+  background: var(--yxt-paper-95);
+  border: 1px solid var(--yxt-border);
+  border-right: none;
+  border-radius: var(--yxt-radius-md) 0 0 var(--yxt-radius-md);
+  box-shadow: var(--yxt-shadow-sm);
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-secondary);
+  cursor: pointer;
+  transition: all var(--yxt-transition-fast);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* hover 微移：向左探出 2px，暮瞳描边提示可点击 */
+.yuxtrans-side-tab:hover {
+  transform: translateY(-50%) translateX(-2px);
+  color: var(--yxt-text);
+  border-color: var(--yxt-border-dusk);
+}
+
+.yuxtrans-side-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--yxt-shadow-glow);
+}
+
 /* ===== 站点规则反馈提示 ===== */
 .yuxtrans-site-rule-toast {
   position: fixed;
@@ -851,6 +886,7 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .yuxtrans-popup,
   .yuxtrans-page-control,
+  .yuxtrans-side-tab,
   .yuxtrans-streaming-text,
   .yuxtrans-streaming-text::after,
   .yuxtrans-page-control-progress-bar::after,

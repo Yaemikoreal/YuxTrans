@@ -2963,7 +2963,7 @@ async function fetchModels(testConfig) {
       const models = data.data.map(m => m.id).filter(id => id && !id.includes(':')).sort();
       return { success: true, models };
     } else if (data.models && Array.isArray(data.models)) {
-      const models = data.models.map(m => m.name || m.model);
+      const models = data.models.map(m => m.name || m.model).sort();
       return { success: true, models };
     }
 

@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **#3 mousedown 误关浮窗** — 点击整页控制条/悬停译文/悬停引导不再关闭浮窗。
   - **#9 MutationObserver 自触发** — 新增节点全部位于自有 UI（`.yuxtrans-*`）内时直接忽略，不进防抖与全页扫描。
   - **#15/#16 文档化** — options 双击查词行补充「右键菜单模式下仍生效；输入框内请划选单词」。
+
+### Added（issue #54 / #48）
+
+- **整页翻译控制挂耳（#54）** — 整页控制条点「关闭」不再销毁，收起为贴右缘的竖排挂耳 Tab（`.yuxtrans-side-tab`，书房衬纸风格，尊重 prefers-reduced-motion），点击可原状态重新展开；「恢复原文」时控制条与挂耳一并移除。
+- **Popup 容器圆角（#48）** — popup 卡片 `border-radius: var(--yxt-radius-xl)` + 外缘细描边；html 根背景与纸底同色，避免 Chrome popup 窗口透明白角。
+- **杂项** — `showStatus('info')` 补 `.status.info` 样式（「下载已取消」提示可见）；模型拉取 `data.models` 分支补字母序；清理 options.js 陈旧注释与磁盘 `.pyc` 残留。
 - **版本更新检测改用 `chrome.alarms`** — 修复 SW 休眠后 `setInterval` 消失导致检查失效。
 - **`ensureInitialized` 并发竞态** — 共享 Promise 模式，SW 冷启动并发消息不再重复全量加载；失败可重试。
 - **僵尸翻译会话清理** — 会话带创建时间戳，超过 30 分钟自动 abort 并移出 Map。

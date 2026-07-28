@@ -1,6 +1,6 @@
 /**
  * Options Script
- * 支持完整的设置功能：自定义供应商、语言设置、操作行为、历史记录
+ * 支持完整的设置功能：自定义供应商、语言设置、操作行为
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
