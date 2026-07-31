@@ -20,7 +20,8 @@ E:/Pythonproject/YuxTrans
 │   ├── manifest.json
 │   ├── background.js            # Service Worker（核心）
 │   ├── lib/sw/                  # SW 纯函数模块（constants / cache-keys / providers-core / lang / translate-core / message-actions 等）
-│   ├── content.js               # 内容脚本（划词 + 整页翻译）
+│   ├── content.js               # 内容脚本核心（类声明/配置/事件绑定/流式聚合，域方法经原型后挂）
+│   ├── lib/content/             # content 拆分模块（constants 调优常量(D1c) / selection 划词浮窗 / dict 词典 / hover 悬停 / input 输入框 / page 整页 / init 引导，按 manifest 顺序注入）
 │   ├── content.css              # 书房衬纸风格样式（详见 docs/UI_DESIGN_SYSTEM.md）
 │   ├── design-tokens.css        # 设计令牌（--yxt-* 变量）
 │   ├── popup.html / popup.js    # 弹窗界面
@@ -67,16 +68,16 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 
 | 文件 | 职责 |
 |------|------|
-| `background.js` | Service Worker：配置管理、IndexedDB 缓存、API 调用、流式输出、自适应速率限制、右键菜单、版本更新检测 |
-| `lib/sw/` | SW 纯函数模块（可单测）：常量、缓存键、供应商判断、语言检测、prompt 构建、消息路由 |
-| `content.js` | 内容脚本：划词翻译浮窗、整页翻译（保持样式）、批量翻译、可视区域优先、进度条 |
+| `background.js` | Service Worker：配置管理、IndexedDB 缓存、API 调用、流式输出、自适应速率限制、右键菜单、版本更新检测、消息路由（监听器内表驱动 `messageHandlers` 分发） |
+| `lib/sw/` | SW 纯函数模块（可单测）：常量、缓存键、供应商判断、语言检测、prompt 构建、消息 action 注册表 |
+| `content.js` + `lib/content/` | 内容脚本：`content.js` 定义 `YuxTransContent` 类核心（constructor/init/配置/事件绑定/流式聚合），`lib/content/` 按域拆分（划词浮窗、单词词典、悬停段落、输入框、整页翻译+控制条、引导实例化），经 `Object.assign` 挂原型，manifest 按序注入 |
 | `popup.js` | 弹窗快捷翻译 |
 | `options.js` | 设置页面：供应商 / 模型 / 语言 / 缓存 / 快捷键 |
 | `content.css` | 书房衬纸风格样式（详见 docs/UI_DESIGN_SYSTEM.md） |
 
 ### 关键技术设计
 
-- **双缓存策略**：`Map` 内存缓存 + IndexedDB 持久化（缓存键格式 `v3:p1:<modelSlug>:<src>:<tgt>:<style>:<归一化文本>`，详见 CONTEXT.md）。
+- **双缓存策略**：内存热缓存（`Map` LRU，上限 32MB）+ IndexedDB 冷数据持久化（`getFromCache` 异步两级：内存未命中单键回查并提升；缓存键格式 `v3:p1:<modelSlug>:<src>:<tgt>:<style>:<归一化文本>`，详见 CONTEXT.md）。
 - **自适应速率限制**：根据连续成功/失败次数动态调整并发（1~10）与请求延迟（0~2000ms），429 触发 30s 冷却。
 - **批量翻译降级**：先筛缓存命中，未命中批量请求 JSON 数组；解析失败则单句并发补全，最多 3 次重试。
 - **整页翻译**：DOM 文本节点分批处理，双语 `<span>` 跟在原文后，可视区域优先，动态内容增量翻译，可恢复原文。
@@ -108,6 +109,8 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 ```bash
 node --test extension/tests/      # 运行全部扩展单元测试
 npm test                          # 等价：node --test extension/tests/*.test.js
+npm run lint                      # ESLint 静态检查（no-undef / no-unsanitized 为 error）
+npm run test:e2e                  # Playwright 冒烟：真实 Chromium 加载扩展，模拟划词断言浮窗（headed；Linux 需 xvfb-run）
 ```
 
 覆盖范围：`product-helpers.test.js`（商品翻译辅助逻辑）、`logo-icons.test.js`（图标资源）、`sw-modules.test.js`（Service Worker 核心模块）等。提交前运行 `npm test` 确保全部通过。修改 `options.js`、`background.js`、`content.js` 后仍建议在真实浏览器中加载扩展手动验证端到端路径。

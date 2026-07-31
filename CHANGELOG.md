@@ -20,11 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **拉丁语系语言检测** — `lib/sw/lang.js` 新增 en/fr/de/es/pt/it 停用词打分（短文本保守兜底 en），修复目标语言为英语时法/德/西/葡/意文本被误判「已是目标语言」而跳过翻译的缺陷。
 - **SW 全局并发闸门** — `lib/sw/scheduler.js` 新增 `createConcurrencyGate`：自适应并发上限（1~10）对全部出站翻译请求（云翻/流式/批量）真实生效，按「划词 > 视口 > 批次」优先级排队；abort/出错经 finally 释放槽位。
-- **最小 CI** — `.github/workflows/ci.yml`：push/PR 触发 `npm ci` + `npm test` + manifest MV3 校验。
+- **最小 CI** — `.github/workflows/ci.yml`：push/PR 触发 `npm ci` + `npm test` + manifest MV3 校验 + ESLint。
+- **ESLint 静态守门（D3）** — `eslint.config.mjs`（flat config）：`no-undef` 与 `no-unsanitized/*` 为 error（后者防 S2 类 options 页 XSS 回归），其余推荐规则以 warn 接入逐步收紧；17 处已验证安全的 innerHTML（静态模板或已 `escapeHtml`）逐点带理由豁免；`npm run lint` 接入 CI。
+- **Playwright E2E 冒烟（D3）** — `tests-e2e/smoke.spec.mjs`：真实 Chromium 加载 MV3 扩展 → 本地 HTTP 测试页 → 模拟 Ctrl+划选 → 断言划词浮窗出现且结构完整（不依赖翻译后端）。`npm run test:e2e`（headed 模式；Linux 需 xvfb）。
 - **修饰键+划选触发模式** — `triggerMode` 新增 `modifier`（按住修饰键划选才翻译，松手瞬间校验，不拦截任何原生快捷键）；`selectionModifier` 支持 Ctrl/Alt/Shift，默认 Ctrl；输入框划选同门槛。macOS Ctrl+点击等效右键、Shift 与扩展选区冲突已在设置 UI 注明。
 
 ### Changed
 
+- **content 侧魔法数字集中（D1c）** — 新建 `lib/content/constants.js`（`YuxContentConsts`，浏览器/Node 双兼容）：流式超时 65s、批量超时 130s、看门狗 70s、悬停延迟 300ms、增量防抖 500ms、视口预加载 200px/回退 2s、布局分批 200 等 11 项调优参数收编；manifest 注入顺序将其置于 content.js 之前。
+- **content.js 按功能域拆分（D1b）** — 单类 2917 行拆为 7 文件：核心 `content.js`（类与共享机制，362 行）+ `lib/content/selection.js`（划词浮窗 630）/ `dict.js`（词典 178）/ `hover.js`（悬停 210）/ `input.js`（输入框 58）/ `page.js`（整页与动态增量 1533）/ `init.js`（引导 13）；各域经 `Object.assign(YuxTransContent.prototype, …)` 挂接（浏览器/Node 双兼容 IIFE），`manifest.json` content_scripts 按序注入 8 文件；86 个方法对账无遗漏，逐字比对 PASS，E2E 真实浏览器验证多文件注入可用。
+- **消息路由表驱动化（D1a）** — `background.js` 的 `onMessage` 440+ 行 if-else 链重构为监听器内 `messageHandlers` 表分发（25 个 handler 一一对应 action），分支体逐字搬移（脚本逐行比对验证）；`lib/sw/message-actions.js` 注册表与处理器集合核对，发现 `getUsageStats`/`testProvider` 两个注册项无处理器且无发送方（历史残留，未改注册表）。
 - **默认触发模式变更** — 新安装默认由「选中即译(auto)」改为「修饰键+划选(modifier)」；老用户已存配置不受影响。`resolveTriggerAction` 未知值兜底随新默认改为 `modifier`。
 
 ### Fixed
@@ -43,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **#3 mousedown 误关浮窗** — 点击整页控制条/悬停译文/悬停引导不再关闭浮窗。
   - **#9 MutationObserver 自触发** — 新增节点全部位于自有 UI（`.yuxtrans-*`）内时直接忽略，不进防抖与全页扫描。
   - **#15/#16 文档化** — options 双击查词行补充「右键菜单模式下仍生效；输入框内请划选单词」。
+- **缓存校验死规则修复（D4）** — `SHORT_SOURCE_THRESHOLD` 10 → 24（须大于 `MIN_CACHE_SOURCE_LENGTH` 12 才可达），`length_ratio` / `entity_drift` 两条坏缓存拦截规则对 12~24 字符短源文恢复生效；对应用例由「断言不可达」改为「断言拦截」，并新增 too_short 独立用例。
+- **flush 取舍文档化（D5）** — 缓存落盘注释与 CONTEXT.md 明确「onSuspend 兜底写不被平台保证完成、可能丢最近几条缓存」为已知取舍，避免后续误当 bug 修。
 
 ### Added（issue #54 / #48）
 
@@ -55,8 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`isNewerVersion` 支持预发布版本号**（剥离 `-beta.x` 再比较）；`testProviderConnection` 空端点前置校验；`fallbackBatchItems` 末片判断改下标遍历。
 - **死代码清理** — 删除退化的 `flipTargetIfSameLanguage` 与 background 内重复的 `SCRIPT_RANGES` fallback；`CACHE_KEY_VERSION` 兜底值对齐 `'v3'`。
 
+### Performance
+
+- **整页收集两阶段布局读取（Q1）** — `collectTextNodes` 改异步：TreeWalker 先纯收集（不触发布局），再每 200 节点一批读取 `getBoundingClientRect`，批间 `scheduler.yield`/`setTimeout(0)` 让出主线程；大页面整页翻译启动不再长卡顿。调用方（整页主流程 / 动态增量）同步 await 化。
+- **动态增量翻译只扫新增子树（Q2）** — `_onMutations` 收集防抖窗口内的新增子树根，`_processAddedNodes` 仅对这些子树调 `collectTextNodes`（嵌套根去重、断连根跳过），取代整页重扫 body；无限滚动/SPA 大页面下从 O(页面) 降为 O(新增子树)。
+- **缓存冷热两级（Q3）** — 内存热缓存限 32MB LRU，冷数据留 IndexedDB；`getFromCache` 异步化，内存未命中单键回查 DB 并提升为热条目；对外缓存统计改为全量口径（热+冷）。修复加载时 LRU 顺序倒置（新→旧直接插入导致裁剪先删最新）的既有 bug；用户限额（总量）硬保证由启动加载裁剪提供。SW 唤醒不再把整库（最高 200MB）一次性读入内存。
+
 ### Tests
 
+- 新增 `cache-lazy.test.js`（4 项）：Q3 冷数据回查提升、旧版本冷数据拒绝、DB miss、写入统计与立即命中；`mock-chrome.js` IndexedDB mock 升级（Map 按键存储、可用的 get/put/delete、事务 oncomplete 触发、可选持久化单例 `__enablePersistence`）。
 - 新增 `background-coverage.test.js`（23 项）：`validateCacheEntry` 全规则正反例、批量翻译降级链（直解/代码块/正则/sanity check/单句补全重试上限）、自适应限速与 429 冷却恢复。
 - 新增 `concurrency-gate.test.js`（7 项）：闸门并发上限、动态限速即时生效、abort/出错不泄漏槽位。
 - 新增 `options-security.test.js`（8 项）：`escapeHtml` 载荷断言 + 源码级防回归。
