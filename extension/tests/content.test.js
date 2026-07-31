@@ -77,6 +77,13 @@ class FakeElement {
   querySelector() { return null; }
   querySelectorAll() { return []; }
   closest() { return null; }
+  contains(el) {
+    for (const c of this.childNodes) {
+      if (c === el) return true;
+      if (c instanceof FakeElement && c.contains(el)) return true;
+    }
+    return false;
+  }
 }
 
 global.document = {
@@ -100,7 +107,15 @@ global.window = {
 global.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
 global.location = { hostname: 'example.com', href: 'https://example.com/article' };
 
+// content.js 拆分模块：Node 下经 globalThis 取类，IIFE 即挂原型（与 manifest 注入顺序一致）
+require('../lib/content/constants.js');
 const { YuxTransContent } = require('../content.js');
+require('../lib/content/selection.js');
+require('../lib/content/dict.js');
+require('../lib/content/hover.js');
+require('../lib/content/input.js');
+require('../lib/content/page.js');
+require('../lib/content/init.js');
 
 /**
  * 构造一个带父元素的文本节点翻译项（模拟 collectTextNodes 的输出）
@@ -679,4 +694,73 @@ test('#54 hidePageControl（恢复原文/取消/重新翻译前置）将控制�
   assert.ok(!document.body.childNodes.includes(control), '控制条节点已从 DOM 移除');
   assert.strictEqual(instance.sideTab, null, '挂耳引用已清空');
   assert.ok(!document.body.childNodes.includes(tab), '挂耳节点已从 DOM 移除');
+});
+
+// ===== Q2：动态增量翻译只扫新增子树（不再全页重扫） =====
+
+test('Q2 _onMutations：收集非自有 UI 的新增根，自有 UI 节点直接忽略', () => {
+  const { instance } = setup();
+  instance.pageTranslationState.isTranslated = true;
+
+  const realRoot = new FakeElement('div');
+  const ownUI = new FakeElement('div');
+  ownUI.closest = (sel) => (sel === '[class*="yuxtrans-"]' ? ownUI : null); // 模拟位于 .yuxtrans-* 内
+
+  instance._onMutations([{ addedNodes: [ownUI] }]);
+  assert.strictEqual(instance._pendingAddedRoots.size, 0, '自有 UI 新增不进入待扫集合');
+  assert.strictEqual(instance._addedDebounceTimer, null, '自有 UI 新增不启动防抖');
+
+  instance._onMutations([{ addedNodes: [realRoot] }]);
+  assert.ok(instance._pendingAddedRoots.has(realRoot), '真实新增根进入待扫集合');
+  assert.ok(instance._addedDebounceTimer, '真实新增启动防抖');
+  clearTimeout(instance._addedDebounceTimer);
+  instance._addedDebounceTimer = null;
+  instance._pendingAddedRoots.clear();
+});
+
+test('Q2 _processAddedNodes：只扫描新增子树根，嵌套根去重、断连根跳过', async () => {
+  const { instance } = setup();
+  instance.pageTranslationState.isTranslated = true;
+  instance.translateBatchParallel = async () => {}; // 本用例不断言翻译链路
+
+  const outer = new FakeElement('div');
+  outer.isConnected = true;
+  const inner = new FakeElement('p');
+  inner.isConnected = true;
+  outer.appendChild(inner);
+  const detached = new FakeElement('div');
+  detached.isConnected = false;
+
+  instance._pendingAddedRoots.add(outer);
+  instance._pendingAddedRoots.add(inner);     // 被 outer 包含，应去重
+  instance._pendingAddedRoots.add(detached);  // 已断连，应跳过
+
+  const scanned = [];
+  instance.collectTextNodes = (root) => { scanned.push(root); return []; };
+
+  await instance._processAddedNodes();
+
+  assert.deepStrictEqual(scanned, [outer], '仅扫描最外层有效新增根');
+  assert.strictEqual(instance._pendingAddedRoots.size, 0, '待扫集合已排空');
+  assert.strictEqual(instance._dynamicTranslating, false, '增量在途标志已复位');
+});
+
+test('Q2 _processAddedNodes：新增子树中的未翻译文本照常提交翻译', async () => {
+  const { instance } = setup();
+  instance.pageTranslationState.isTranslated = true;
+
+  const root = new FakeElement('div');
+  root.isConnected = true;
+  instance._pendingAddedRoots.add(root);
+  const nodes = [makeNodeInfo('Dynamically added paragraph text.')];
+  instance.collectTextNodes = (r) => (r === root ? nodes : []);
+
+  const batches = [];
+  instance.translateBatchParallel = async (items) => { batches.push(items); };
+  instance.applyTranslation = () => {};
+
+  await instance._processAddedNodes();
+
+  assert.strictEqual(batches.length, 1, '提交一次批量翻译');
+  assert.strictEqual(batches[0][0].text, 'Dynamically added paragraph text.');
 });
