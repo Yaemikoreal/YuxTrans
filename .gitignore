@@ -91,3 +91,6 @@ yuxtrans-promo/.remotion/
 # Test databases
 test_*.db
 test_*.sqlite
+# Playwright E2E 产物
+test-results/
+playwright-report/
