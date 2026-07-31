@@ -112,7 +112,10 @@ if (typeof global.AbortSignal?.timeout !== 'function') {
   };
 }
 
-// 最小化 IndexedDB mock：让 openDatabase / loadCacheFromDB 能正常走完，不抛错误
+// 最小化 IndexedDB mock：让 openDatabase / loadCacheFromDB 能正常走完，不抛错误。
+// 默认每次 open 返回全新实例（跨事务不共享，与历史行为一致）；
+// 测试可调用 global.indexedDB.__enablePersistence(true) 切换为单例持久化，
+// 并通过 __getStore(name) 直接播种数据（供 Q3 冷缓存回查等场景使用）。
 class FakeIDBRequest {
   constructor(result = undefined) {
     this.result = result;
@@ -127,56 +130,84 @@ class FakeIDBRequest {
   }
 }
 
+// 以 Map 模拟按键索引的记录存储；键取 item.key（缓存库）或 item.id（模型库）
 class FakeIDBObjectStore {
   constructor() {
-    this._data = [];
+    this._data = new Map();
   }
+  _keyOf(item) { return item && (item.key !== undefined ? item.key : item.id); }
   getAll() {
-    const req = new FakeIDBRequest([...this._data]);
+    const req = new FakeIDBRequest([...this._data.values()]);
     setTimeout(() => req._fireSuccess(), 0);
     return req;
   }
-  get() { return new FakeIDBRequest(undefined); }
-  put(item) { this._data.push(item); }
-  clear() { this._data = []; }
-  delete() {}
+  get(key) {
+    const req = new FakeIDBRequest(this._data.get(key));
+    setTimeout(() => req._fireSuccess(), 0);
+    return req;
+  }
+  put(item) {
+    this._data.set(this._keyOf(item), item);
+    const req = new FakeIDBRequest(this._keyOf(item));
+    setTimeout(() => req._fireSuccess(), 0);
+    return req;
+  }
+  clear() { this._data.clear(); }
+  delete(key) { this._data.delete(key); }
   createIndex() {}
   openCursor() { return new FakeIDBRequest(null); }
 }
 
 class FakeIDBTransaction {
-  constructor(stores) {
+  constructor(stores, database) {
     this.stores = stores;
-    this._storeMap = {};
-    [].concat(stores).forEach((name) => {
-      this._storeMap[name] = new FakeIDBObjectStore();
-    });
+    this._db = database;
     this.oncomplete = null;
     this.onerror = null;
+    // 事务提交语义：put/delete 为同步内存操作，微任务后触发 oncomplete
+    setTimeout(() => { if (this.oncomplete) this.oncomplete({ target: this }); }, 0);
   }
-  objectStore(name) { return this._storeMap[name] || new FakeIDBObjectStore(); }
+  objectStore(name) { return this._db._store(name); }
   abort() {}
 }
 
 class FakeIDBDatabase {
   constructor() {
+    this._stores = {};
     this.objectStoreNames = {
       contains: () => true
     };
     this.onclose = null;
     this.onerror = null;
   }
+  _store(name) {
+    if (!this._stores[name]) this._stores[name] = new FakeIDBObjectStore();
+    return this._stores[name];
+  }
   createObjectStore(name) {
-    return new FakeIDBObjectStore();
+    return this._store(name);
   }
   transaction(stores, mode) {
-    return new FakeIDBTransaction(stores);
+    return new FakeIDBTransaction(stores, this);
   }
 }
 
 global.indexedDB = {
+  __persistent: false,
+  __db: null,
+  __enablePersistence(flag) {
+    this.__persistent = !!flag;
+    if (flag && !this.__db) this.__db = new FakeIDBDatabase();
+  },
+  __getStore(name) {
+    if (!this.__db) this.__db = new FakeIDBDatabase();
+    return this.__db._store(name);
+  },
   open: () => {
-    const req = new FakeIDBRequest(new FakeIDBDatabase());
+    const db = global.indexedDB.__persistent
+      ? (global.indexedDB.__db || (global.indexedDB.__db = new FakeIDBDatabase()))
+      : new FakeIDBDatabase();
+    const req = new FakeIDBRequest(db);
     setTimeout(() => req._fireSuccess(), 0);
     return req;
   }

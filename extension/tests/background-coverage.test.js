@@ -52,21 +52,24 @@ test('validateCacheEntry：API 拒绝 / 错误内容被 refusal 规则拦截', (
   assert.strictEqual(validate(src, 'en', 'zh', '请为我翻译下面这个段落。').valid, true);
 });
 
-test('validateCacheEntry：过短源文被 too_short 拦截（length_ratio 当前不可达）', () => {
-  // 8 字符源文 + 超长译文：长度比极端异常，但 MIN_CACHE_SOURCE_LENGTH(12) >
-  // SHORT_SOURCE_THRESHOLD(10)，规则 1（length_ratio）实际不可达，只能由 too_short 拦截
-  const r = validate('Hi there', 'en', 'zh', '这是一段远远超出原文长度的译文，用来构造极端的长度比例异常情况');
+test('validateCacheEntry：过短源文被 too_short 拦截', () => {
+  // 8 字符源文 < MIN_CACHE_SOURCE_LENGTH(12)，无论译文如何都判无效
+  const r = validate('Hi there', 'en', 'zh', '你好，最近怎么样');
   assert.deepStrictEqual(r, { valid: false, rule: 'too_short' });
-  // 明确锁定：命中的不是 length_ratio（该规则在当前阈值下为死代码，见实现层疑点汇报）
-  assert.notStrictEqual(r.rule, 'length_ratio');
 });
 
-test('validateCacheEntry：短源文实体漂移同样只被 too_short 拦截（entity_drift 当前不可达）', () => {
-  // 10 字符源文译文被替换成钓鱼 URL：hasEntityDrift 本可识别，但规则 4 要求源文 ≤10
-  // 而 too_short 已拦截 <12，因此 entity_drift 在当前阈值下为死代码
-  const r = validate('OpenAI API', 'en', 'zh', 'https://malicious.example.com/phishing');
-  assert.deepStrictEqual(r, { valid: false, rule: 'too_short' });
-  assert.notStrictEqual(r.rule, 'entity_drift');
+test('validateCacheEntry：短源文极端长度比被 length_ratio 拦截', () => {
+  // 12 字符源文（过 too_short、≤ SHORT_SOURCE_THRESHOLD(24)），en→zh 阈值 2：
+  // 27 字符译文 / 12 字符源文 ≈ 2.25 超阈值，规则 1 生效（阈值 10 时代为死代码，已修复）
+  const r = validate('Hi there pal', 'en', 'zh', '这是一段远远超出原文长度的译文用来构造极端长度比例异常情况');
+  assert.deepStrictEqual(r, { valid: false, rule: 'length_ratio' });
+});
+
+test('validateCacheEntry：短源文实体漂移被 entity_drift 拦截', () => {
+  // 19 字符源文（过 too_short、≤24），译文主体为中文（汉字占比 15/25=0.6 过规则3）
+  // 但夹带 .com 域名（实体漂移），长度比 28/19≈1.5 不触发规则1（阈值 10 时代为死代码，已修复）
+  const r = validate('How to use the tool', 'en', 'zh', '详情说明请参考官方文档完整内容 github.com/x');
+  assert.deepStrictEqual(r, { valid: false, rule: 'entity_drift' });
 });
 
 test('validateCacheEntry：跨语种回显原文被 echo 规则拦截', () => {

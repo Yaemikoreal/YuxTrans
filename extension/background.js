@@ -352,17 +352,28 @@ let config = {
   compareProfileId: ''
 };
 
-let cache = new Map();        // key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
-let cacheBytes = 0;           // 当前缓存字节数（UTF-16 估算）
+let cache = new Map();        // 内存热缓存 key -> value；Map 的插入顺序即 LRU 顺序（最旧在前）
+let cacheBytes = 0;           // 内存热缓存字节数（UTF-16 估算）
+// Q3：全量统计（热缓存 + 仅存于 IndexedDB 的冷数据），供占用展示与总量限额判断。
+// 会话内为近似值（冷键被覆写时会轻微高估），每次 SW 启动 loadCacheFromDB 按 getAll 重算校准
+let totalCacheCount = 0;
+let totalCacheBytes = 0;
 let cacheStats = { wordCount: 0, sizeBytes: 0 };
 let pendingCacheWrites = new Set(); // 待写入 IndexedDB 的键
 let pendingCacheDeletes = new Set(); // 待从 IndexedDB 删除的键
 let db = null;
 
-// 缓存落盘控制：减少 IndexedDB 事务频率，同时避免 Service Worker 终止前大量丢失
+// 缓存落盘控制：减少 IndexedDB 事务频率，同时避免 Service Worker 终止前大量丢失。
+// 已知取舍（勿当 bug 修）：3s flush 窗口内 SW 若休眠，pending 写入仅靠 onSuspend 兜底，
+// 而 onSuspend 中的 async IndexedDB 写不被平台保证完成——可能丢失最近几条缓存。
+// 缓存本就易失（miss 后重译即可），此取舍可接受；如要根治需关键写入同步 flush，代价是事务频率上升。
 const CACHE_FLUSH_MAX_PENDING = 100; // 累计多少条待写入后强制 flush
 const CACHE_FLUSH_DELAY_MS = 3000;   // 定时 flush 间隔
 let flushTimer = null;               // 定时 flush 句柄
+
+// Q3：内存热缓存上限（字节估算）。冷数据留 IndexedDB，getFromCache 内存未命中时
+// 单键回查并提升为热条目，避免 SW 每次唤醒把整库（上限为用户限额）一次性读入内存
+const MEM_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 
 let usageStats = {
   totalCount: 0, cacheHits: 0, totalTokens: 0, sessionTokens: 0,
@@ -517,11 +528,15 @@ async function loadCacheFromDB() {
           const items = request.result;
           cache.clear();
           cacheBytes = 0;
+          totalCacheCount = 0;
+          totalCacheBytes = 0;
           pendingCacheWrites.clear();
           pendingCacheDeletes.clear();
 
-          // 按时间戳从新到旧排序，使最近使用的项位于 Map 末尾
+          // 按时间戳从新到旧排序：优先把最新条目装进内存热缓存、优先保留最新条目
           items.sort((a, b) => b.timestamp - a.timestamp);
+          const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
+          const hot = [];
           let invalidCount = 0;
           for (const item of items) {
             const validation = validateCacheEntry(item.key, item.value);
@@ -530,21 +545,28 @@ async function loadCacheFromDB() {
               invalidCount++;
               continue;
             }
-            cache.set(item.key, item.value);
-            cacheBytes += item.key.length * 2 + item.value.length * 2;
+            const entryBytes = item.key.length * 2 + item.value.length * 2;
+            // 用户限额针对总量（热+冷）：超出部分直接物理删除最旧条目
+            if (totalCacheBytes + entryBytes > maxBytes) {
+              pendingCacheDeletes.add(item.key);
+              continue;
+            }
+            totalCacheCount++;
+            totalCacheBytes += entryBytes;
+            // Q3：内存只装最热的一段，其余有效条目留在 IndexedDB 作为冷数据按需回查
+            if (cacheBytes + entryBytes <= MEM_CACHE_MAX_BYTES) {
+              hot.push(item);
+              cacheBytes += entryBytes;
+            }
+          }
+          // hot 当前为新→旧顺序；反转为旧→新插入，使最新项位于 Map 末尾
+          //（LRU 淘汰取 Map 首部 = 最旧项。此前实现按新→旧直接插入，首部反而是最新项，
+          //  裁剪时会先删最新缓存，属既有 bug，随 Q3 一并修正）
+          for (let i = hot.length - 1; i >= 0; i--) {
+            cache.set(hot[i].key, hot[i].value);
           }
           if (invalidCount > 0) {
             console.log(`[YuxTrans] 加载缓存时跳过 ${invalidCount} 条无效/旧版本记录`);
-          }
-
-          // 应用缓存字节限额限制 (LRU: 物理空间驱动)
-          const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
-          while (cacheBytes > maxBytes && cache.size > 0) {
-            const oldestKey = cache.keys().next().value;
-            const oldestVal = cache.get(oldestKey);
-            cache.delete(oldestKey);
-            cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
-            pendingCacheDeletes.add(oldestKey);
           }
 
           updateCacheStats();
@@ -721,15 +743,94 @@ async function removeProviderRecord(recordId) {
 }
 
 function updateCacheStats() {
-  cacheStats = { wordCount: cache.size, sizeBytes: cacheBytes };
+  // Q3：对外展示全量（热+冷），而非仅内存热条目
+  cacheStats = { wordCount: totalCacheCount, sizeBytes: totalCacheBytes };
 }
 
 // ===== 缓存操作 =====
 
-function getFromCache(key) {
+/**
+ * Q3：单键回查 IndexedDB 冷数据（内存未命中时调用）
+ * @returns {Promise<string|undefined>} 命中返回 value，未命中/出错返回 undefined
+ */
+async function getColdEntryFromDB(key) {
+  try {
+    return await withDbRetry(async () => {
+      const database = await openDatabase();
+      return await new Promise((resolve) => {
+        const request = database.transaction(CACHE_STORE, 'readonly').objectStore(CACHE_STORE).get(key);
+        request.onsuccess = () => {
+          const record = request.result;
+          resolve(record && typeof record.value === 'string' ? record.value : undefined);
+        };
+        request.onerror = () => {
+          console.error('[YuxTrans] 冷缓存回查失败:', request.error);
+          resolve(undefined);
+        };
+      });
+    });
+  } catch (e) {
+    console.error('[YuxTrans] 冷缓存回查异常:', e);
+    return undefined;
+  }
+}
+
+/**
+ * Q3：内存热缓存超 MEM_CACHE_MAX_BYTES 时淘汰最旧项
+ *（被淘汰项仍保留在 IndexedDB，不加入 pendingCacheDeletes；未落盘的 pending 写入跳过不淘汰）
+ */
+function trimHotCache() {
+  while (cacheBytes > MEM_CACHE_MAX_BYTES && cache.size > 1) {
+    let oldestKey = null;
+    for (const k of cache.keys()) {
+      if (!pendingCacheWrites.has(k)) { oldestKey = k; break; }
+    }
+    if (oldestKey === null) break;
+    const oldestVal = cache.get(oldestKey);
+    cache.delete(oldestKey);
+    cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+  }
+}
+
+/**
+ * Q3：把冷数据命中提升为内存热条目
+ */
+function promoteToHotCache(key, value) {
+  if (cache.has(key)) {
+    const old = cache.get(key);
+    cacheBytes -= key.length * 2 + old.length * 2;
+    cache.delete(key);
+  }
+  cache.set(key, value);
+  cacheBytes += key.length * 2 + value.length * 2;
+  trimHotCache();
+}
+
+/**
+ * 读缓存（Q3 异步化）：先查内存热缓存，未命中回查 IndexedDB 冷数据并提升。
+ * @returns {Promise<string|null>}
+ */
+async function getFromCache(key) {
   if (!config.cacheEnabled) return null;
-  const value = cache.get(key);
-  if (value === undefined) return null;
+  let value = cache.get(key);
+
+  if (value === undefined) {
+    // 内存未命中：回查冷数据
+    const coldValue = await getColdEntryFromDB(key);
+    if (coldValue === undefined) return null;
+    // 冷数据只经历完整校验（可能是旧版本/坏条目）；不合格则物理删除
+    const validation = validateCacheEntry(key, coldValue);
+    if (!validation.valid) {
+      pendingCacheDeletes.add(key);
+      if (totalCacheCount > 0) totalCacheCount--;
+      totalCacheBytes = Math.max(0, totalCacheBytes - (key.length * 2 + coldValue.length * 2));
+      updateCacheStats();
+      saveCacheToDB();
+      return null;
+    }
+    promoteToHotCache(key, coldValue);
+    return coldValue;
+  }
 
   // C: 热路径轻量化 —— 仅做版本号与非空检查，完整校验保留给写入时与后台清理
   const parsed = parseCacheKey(key);
@@ -759,31 +860,44 @@ async function setToCache(key, value) {
   const entryBytes = key.length * 2 + value.length * 2;
   const maxBytes = (config.maxCacheMB || 200) * 1024 * 1024;
 
-  // 若 key 已存在，先扣除旧字节并删除旧位置
+  // 若 key 已在内存热缓存，先扣除旧字节并删除旧位置
   if (cache.has(key)) {
     const oldValue = cache.get(key);
-    cacheBytes -= key.length * 2 + oldValue.length * 2;
+    const oldBytes = key.length * 2 + oldValue.length * 2;
+    cacheBytes -= oldBytes;
+    totalCacheCount--;
+    totalCacheBytes = Math.max(0, totalCacheBytes - oldBytes);
     cache.delete(key);
   }
+  // 注意：key 若以冷数据仅存于 IndexedDB，此处无法廉价感知，总量会轻微高估，
+  // 属可接受的近似（下次 SW 启动 loadCacheFromDB 按 getAll 重算校准）
 
-  // 存入新项
+  // 存入新项（内存热缓存 + 待落盘队列）
   cache.set(key, value);
   cacheBytes += entryBytes;
+  totalCacheCount++;
+  totalCacheBytes += entryBytes;
   pendingCacheWrites.add(key);
   pendingCacheDeletes.delete(key);
 
   // D: 改为批量 flush，减少 IndexedDB 事务频率
   scheduleCacheFlush();
 
-  // 按 LRU 裁剪最旧的项
-  while (cacheBytes > maxBytes && cache.size > 0) {
+  // 用户限额针对总量：从最旧的热条目开始物理删除（含冷数据部分的硬保证由启动加载裁剪提供）
+  while (totalCacheBytes > maxBytes && cache.size > 0) {
     const oldestKey = cache.keys().next().value;
     const oldestVal = cache.get(oldestKey);
+    const oldestBytes = oldestKey.length * 2 + oldestVal.length * 2;
     cache.delete(oldestKey);
-    cacheBytes -= oldestKey.length * 2 + oldestVal.length * 2;
+    cacheBytes -= oldestBytes;
+    totalCacheCount--;
+    totalCacheBytes = Math.max(0, totalCacheBytes - oldestBytes);
     pendingCacheDeletes.add(oldestKey);
     pendingCacheWrites.delete(oldestKey);
   }
+
+  // 内存热缓存自身限额（Q3）
+  trimHotCache();
 
   updateCacheStats();
 }
@@ -837,7 +951,10 @@ const PROPER_NOUN_WHITELIST = new Set([
 ]);
 
 const MIN_CACHE_SOURCE_LENGTH = 12;   // 低于此长度的源文存在较大歧义，不缓存/不命中
-const SHORT_SOURCE_THRESHOLD = 10;
+// 短源文规则（length_ratio / entity_drift）的适用上限。必须大于 MIN_CACHE_SOURCE_LENGTH，
+// 否则短源文已被 too_short 拦截、两条规则永不可达（历史值 10 < 12 即为死代码，2026-07-28 修正为 24）。
+// 12~24 字符的短译文恰是坏缓存最难肉眼分辨的区间，规则在此真正生效。
+const SHORT_SOURCE_THRESHOLD = 24;
 const RULE3_SAMPLE_THRESHOLD = 200;
 const RULE3_SAMPLE_SIZE = 100;
 const RULE3_MIN_TARGET_SCRIPT_RATIO = 0.5;
@@ -1032,7 +1149,10 @@ function validateCacheEntry(key, value) {
 function evictCacheEntry(key) {
   if (!cache.has(key)) return;
   const value = cache.get(key);
-  cacheBytes -= key.length * 2 + value.length * 2;
+  const entryBytes = key.length * 2 + value.length * 2;
+  cacheBytes -= entryBytes;
+  totalCacheCount--;
+  totalCacheBytes = Math.max(0, totalCacheBytes - entryBytes);
   cache.delete(key);
   pendingCacheDeletes.add(key);
   pendingCacheWrites.delete(key);
@@ -1506,8 +1626,8 @@ async function lookupWord(word, sourceLang = 'auto', targetLang = 'zh') {
   // 缓存键：style 段复用为 mode 段（'dict'），与正常译文（'normal' 等）不撞
   const cacheKey = generateCacheKey(word, sourceLang, targetLang, 'dict');
 
-  // 先查缓存（getFromCache 不检查长度门槛，单词可命中）
-  const cached = getFromCache(cacheKey);
+  // 先查缓存（getFromCache 不检查长度门槛，单词可命中；Q3 起为异步冷热两级）
+  const cached = await getFromCache(cacheKey);
   if (cached) {
     recordUsage(true, 1);
     return { dict: safeParseDictJson(cached), cached: true, engine: 'cache' };
@@ -2364,7 +2484,7 @@ async function translate(text, sourceLang = 'auto', targetLang = 'zh', context =
 
   const cacheKey = generateCacheKey(text, sourceLang, targetLang);
 
-  const cached = getFromCache(cacheKey);
+  const cached = await getFromCache(cacheKey);
   if (cached) {
     recordUsage(true, 1);
     recordMetric({
@@ -2548,7 +2668,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       continue;
     }
     const cacheKey = generateCacheKey(text, sourceLang, resolvedTargetLang);
-    const cached = getFromCache(cacheKey);
+    const cached = await getFromCache(cacheKey);
     if (cached) {
       finalResults[i] = { text: cached, cached: true, engine: 'cache', success: true };
       recordUsage(true, 1);
@@ -3152,444 +3272,454 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   ensureInitialized().then(() => {
     const tabId = sender.tab?.id || null;
 
-    if (request.action === 'translate') {
-      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-      const targetLang = request.targetLang || config.targetLang || 'zh';
-      const context = request.context || null;
+    // 表驱动消息分发：每个 action 对应一个处理器方法（分支体逐字搬移，仅重新缩进）
+    const messageHandlers = {
+      translate({ request, sendResponse, withRequestId }) {
+        const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+        const targetLang = request.targetLang || config.targetLang || 'zh';
+        const context = request.context || null;
 
-      translate(request.text, sourceLang, targetLang, context)
-        .then(result => sendResponse(withRequestId({ success: true, ...result })))
-        .catch(error => sendResponse(withRequestId(failResponse(error))));
-      return;
-    }
-
-    else if (request.action === 'translateStream') {
-      // 整页取消后不再发起新的流式请求（与 translateBatchInternal 的会话检查对齐）
-      if (isSessionCancelled(request.sessionId || null)) {
-        sendResponse(withRequestId(failResponse(new Error('翻译已取消'))));
+        translate(request.text, sourceLang, targetLang, context)
+          .then(result => sendResponse(withRequestId({ success: true, ...result })))
+          .catch(error => sendResponse(withRequestId(failResponse(error))));
         return;
-      }
-      const streamStart = performance.now();
-      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-      let targetLang = request.targetLang || config.targetLang || 'zh';
-      targetLang = resolveTargetLanguage(request.text, sourceLang, targetLang);
-      const resolvedSourceLang = resolveSourceLanguage(request.text, sourceLang);
+      },
 
-      const context = request.context || null;
-      const cacheKey = generateCacheKey(request.text, sourceLang, targetLang);
-      const streamTokens = estimateTokens(request.text);
-      const textLength = request.text?.length || 0;
+      translateStream({ request, sendResponse, tabId, withRequestId }) {
+        // 整页取消后不再发起新的流式请求（与 translateBatchInternal 的会话检查对齐）
+        if (isSessionCancelled(request.sessionId || null)) {
+          sendResponse(withRequestId(failResponse(new Error('翻译已取消'))));
+          return;
+        }
+        const streamStart = performance.now();
+        const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+        let targetLang = request.targetLang || config.targetLang || 'zh';
+        targetLang = resolveTargetLanguage(request.text, sourceLang, targetLang);
+        const resolvedSourceLang = resolveSourceLanguage(request.text, sourceLang);
 
-      // 术语表优先
-      const glossaryHit = lookupGlossary(request.text);
-      if (glossaryHit != null) {
-        recordUsage(true, 1);
-        sendResponse(withRequestId({ success: true, text: glossaryHit, cached: true, engine: 'glossary' }));
-        return;
-      }
+        const context = request.context || null;
+        const cacheKey = generateCacheKey(request.text, sourceLang, targetLang);
+        const streamTokens = estimateTokens(request.text);
+        const textLength = request.text?.length || 0;
 
-      // 先查缓存
-      const cached = getFromCache(cacheKey);
-      if (cached) {
-        recordUsage(true, 1);
-        recordMetric({
-          action: 'translateStream',
-          provider: 'cache',
-          cached: true,
-          latencyMs: Math.round(performance.now() - streamStart),
-          textLength,
-          tokens: 0,
-          success: true,
-          errorType: ''
-        });
-        sendResponse(withRequestId({ success: true, text: cached, cached: true, engine: 'cache' }));
-        return;
-      }
+        // 术语表优先
+        const glossaryHit = lookupGlossary(request.text);
+        if (glossaryHit != null) {
+          recordUsage(true, 1);
+          sendResponse(withRequestId({ success: true, text: glossaryHit, cached: true, engine: 'glossary' }));
+          return;
+        }
 
-      try {
-        assertOfflineAllowed(false);
-      } catch (offlineErr) {
-        sendResponse(withRequestId(failResponse(offlineErr)));
-        return;
-      }
-
-      translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, {
-        context, providerOverride: null, requestId: request.requestId || null, sessionId: request.sessionId || null,
-        // 整页流式（带会话）按批次流量 LOW 排队；划词/弹窗流式 HIGH 优先过闸门
-        priority: request.sessionId ? SW.SCHEDULER_PRIORITY.LOW : SW.SCHEDULER_PRIORITY.HIGH
-      })
-        .then(async (fullText) => {
-          await setToCache(cacheKey, fullText);
-          recordUsage(false, 1, streamTokens);
-          recordMetric({
-            action: 'translateStream',
-            provider: resolveProviderConfig().provider,
-            cached: false,
-            latencyMs: Math.round(performance.now() - streamStart),
-            textLength,
-            tokens: streamTokens,
-            success: true,
-            errorType: ''
-          });
-          sendResponse(withRequestId({ success: true, text: fullText, cached: false, engine: resolveProviderConfig().provider }));
-        })
-        .catch(async (error) => {
-          // 流式失败时，尝试非流式故障转移（用户仍可在弹窗看到最终结果）
-          if (config.autoFallback && !config.offlineMode) {
-            try {
-              const result = await translate(request.text, sourceLang, targetLang, context);
-              sendResponse(withRequestId({ success: true, ...result }));
-              return;
-            } catch (fallbackError) {
-              console.error('[YuxTrans] 流式故障转移失败:', fallbackError);
-            }
+        // 先查缓存（Q3：异步——内存未命中时回查 IndexedDB 冷数据）
+        getFromCache(cacheKey).then((cached) => {
+          if (cached) {
+            recordUsage(true, 1);
+            recordMetric({
+              action: 'translateStream',
+              provider: 'cache',
+              cached: true,
+              latencyMs: Math.round(performance.now() - streamStart),
+              textLength,
+              tokens: 0,
+              success: true,
+              errorType: ''
+            });
+            sendResponse(withRequestId({ success: true, text: cached, cached: true, engine: 'cache' }));
+            return;
           }
-          recordMetric({
-            action: 'translateStream',
-            provider: resolveProviderConfig().provider,
-            cached: false,
-            latencyMs: Math.round(performance.now() - streamStart),
-            textLength,
-            tokens: streamTokens,
-            success: false,
-            errorType: classifyError(error)
-          });
-          sendResponse(withRequestId(failResponse(error)));
-        });
-      return;
-    }
 
-    else if (request.action === 'translateBatch') {
-      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-      // 目标语言由 translateBatchInternal 内部为每个文本单独 resolveTargetLanguage
-      // 确保缓存键与 translate() 函数一致
-      const targetLang = request.targetLang || config.targetLang || 'zh';
-      const context = request.context || null;
+          try {
+            assertOfflineAllowed(false);
+          } catch (offlineErr) {
+            sendResponse(withRequestId(failResponse(offlineErr)));
+            return;
+          }
 
-      translateBatchInternal(request.texts, sourceLang, targetLang, context, request.sessionId || null)
-        .then(results => sendResponse({ success: true, results }))
-        .catch(error => sendResponse(failResponse(error)));
-      return;
-    }
-
-    else if (request.action === 'lookupWord') {
-      // F2：单词词典查询--结构化词典卡片（音标/义项/例句）
-      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-      const targetLang = request.targetLang || config.targetLang || 'zh';
-      lookupWord(request.text, sourceLang, targetLang)
-        .then(result => sendResponse(withRequestId({ success: true, ...result })))
-        .catch(error => sendResponse(withRequestId(failResponse(error))));
-      return;
-    }
-
-    else if (request.action === 'translateWithProfile') {
-      // F4b：双档案对照--用指定 profileId 翻译同一文本，结果在对照浮窗展示
-      const sourceLang = request.sourceLang || config.sourceLang || 'auto';
-      const targetLang = request.targetLang || config.targetLang || 'zh';
-      const context = request.context || null;
-      const profileId = request.profileId || '';
-      const profile = (config.profiles || []).find((p) => p.id === profileId);
-      if (!profile) {
-        sendResponse({ success: false, error: '对照档案不存在' });
+          translateWithStream(request.text, resolvedSourceLang, targetLang, tabId, {
+            context, providerOverride: null, requestId: request.requestId || null, sessionId: request.sessionId || null,
+            // 整页流式（带会话）按批次流量 LOW 排队；划词/弹窗流式 HIGH 优先过闸门
+            priority: request.sessionId ? SW.SCHEDULER_PRIORITY.LOW : SW.SCHEDULER_PRIORITY.HIGH
+          })
+            .then(async (fullText) => {
+              await setToCache(cacheKey, fullText);
+              recordUsage(false, 1, streamTokens);
+              recordMetric({
+                action: 'translateStream',
+                provider: resolveProviderConfig().provider,
+                cached: false,
+                latencyMs: Math.round(performance.now() - streamStart),
+                textLength,
+                tokens: streamTokens,
+                success: true,
+                errorType: ''
+              });
+              sendResponse(withRequestId({ success: true, text: fullText, cached: false, engine: resolveProviderConfig().provider }));
+            })
+            .catch(async (error) => {
+              // 流式失败时，尝试非流式故障转移（用户仍可在弹窗看到最终结果）
+              if (config.autoFallback && !config.offlineMode) {
+                try {
+                  const result = await translate(request.text, sourceLang, targetLang, context);
+                  sendResponse(withRequestId({ success: true, ...result }));
+                  return;
+                } catch (fallbackError) {
+                  console.error('[YuxTrans] 流式故障转移失败:', fallbackError);
+                }
+              }
+              recordMetric({
+                action: 'translateStream',
+                provider: resolveProviderConfig().provider,
+                cached: false,
+                latencyMs: Math.round(performance.now() - streamStart),
+                textLength,
+                tokens: streamTokens,
+                success: false,
+                errorType: classifyError(error)
+              });
+              sendResponse(withRequestId(failResponse(error)));
+            });
+        }).catch((error) => sendResponse(withRequestId(failResponse(error))));
         return;
-      }
-      const override = {
-        provider: profile.provider,
-        apiKey: profile.apiKey,
-        apiEndpoint: profile.apiEndpoint,
-        model: profile.model,
-        localModel: profile.localModel,
-        customProvider: profile.customProvider || { name: '', endpoint: '', apiKey: '', format: 'openai', model: '' }
-      };
-      translateWithCloud(request.text, sourceLang, targetLang, context, override)
-        .then((text) => sendResponse({ success: true, text, engine: profile.provider }))
-        .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
+      },
 
-    else if (request.action === 'cancelTranslate') {
-      // 用户停止整页/动态翻译：abort 在途请求并阻止后续批次，避免继续消耗配额
-      const aborted = cancelTranslationSession(request.sessionId || null);
-      sendResponse({ success: true, aborted });
-      return;
-    }
+      translateBatch({ request, sendResponse }) {
+        const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+        // 目标语言由 translateBatchInternal 内部为每个文本单独 resolveTargetLanguage
+        // 确保缓存键与 translate() 函数一致
+        const targetLang = request.targetLang || config.targetLang || 'zh';
+        const context = request.context || null;
 
-    else if (request.action === 'getConfig') {
-      // 脱敏响应：profiles 不含明文 apiKey，仅提供 hasApiKey 标志
-      sendResponse({ ...buildSanitizedConfig(), batchConfig: getBatchConfig() });
-    }
-
-    else if (request.action === 'getProviderDefaults') {
-      sendResponse({
-        success: true,
-        endpoints: API_ENDPOINTS,
-        models: DEFAULT_MODELS,
-        stylePrompts: { ...(STYLE_PROMPTS || {}) },
-        styleIds: SW.STYLE_IDS || ['normal', 'academic', 'technical', 'literary']
-      });
-    }
-
-    else if (request.action === 'setConfig') {
-      const payload = { ...(request.config || {}) };
-      // 规范化用户风格提示词，避免脏键/超长写入
-      if (Object.prototype.hasOwnProperty.call(payload, 'stylePrompts')) {
-        payload.stylePrompts = SW.sanitizeStylePrompts
-          ? SW.sanitizeStylePrompts(payload.stylePrompts)
-          : (payload.stylePrompts || {});
-      }
-      saveConfig(payload)
-        .then(() => sendResponse({ success: true }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return;
-    }
-
-    else if (request.action === 'reportBadTranslation') {
-      reportBadTranslation(request)
-        .then((result) => sendResponse(result))
-        .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
-
-    else if (request.action === 'disableSite') {
-      disableSiteForHostname(request.hostname || request.host)
-        .then((result) => sendResponse(result))
-        .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
-
-    else if (request.action === 'setSiteBilingualMode') {
-      const host = (request.hostname || '').toLowerCase().trim();
-      if (!host) {
-        sendResponse({ success: false, error: '缺少 hostname' });
+        translateBatchInternal(request.texts, sourceLang, targetLang, context, request.sessionId || null)
+          .then(results => sendResponse({ success: true, results }))
+          .catch(error => sendResponse(failResponse(error)));
         return;
-      }
-      const prefs = { ...(config.siteModePrefs || {}) };
-      prefs[host] = {
-        ...(prefs[host] || {}),
-        bilingualMode: request.bilingualMode !== false
-      };
-      saveConfig({ siteModePrefs: prefs })
-        .then(() => sendResponse({ success: true, siteModePrefs: prefs }))
-        .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
+      },
 
-    else if (request.action === 'importGlossary') {
-      try {
-        const entries = ProductHelpers.parseGlossaryImport
-          ? ProductHelpers.parseGlossaryImport(request.raw || '', request.filename || '')
-          : [];
-        const merged = Array.isArray(request.replace) && request.replace
-          ? entries
-          : [...(config.glossary || []), ...entries];
-        // 按 source 去重，后写覆盖
-        const map = new Map();
-        for (const e of merged) {
-          if (e?.source) map.set(String(e.source).replace(/\s+/g, ' ').trim(), {
-            source: String(e.source).replace(/\s+/g, ' ').trim(),
-            target: String(e.target ?? '')
-          });
+      lookupWord({ request, sendResponse, withRequestId }) {
+        // F2：单词词典查询--结构化词典卡片（音标/义项/例句）
+        const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+        const targetLang = request.targetLang || config.targetLang || 'zh';
+        lookupWord(request.text, sourceLang, targetLang)
+          .then(result => sendResponse(withRequestId({ success: true, ...result })))
+          .catch(error => sendResponse(withRequestId(failResponse(error))));
+        return;
+      },
+
+      translateWithProfile({ request, sendResponse }) {
+        // F4b：双档案对照--用指定 profileId 翻译同一文本，结果在对照浮窗展示
+        const sourceLang = request.sourceLang || config.sourceLang || 'auto';
+        const targetLang = request.targetLang || config.targetLang || 'zh';
+        const context = request.context || null;
+        const profileId = request.profileId || '';
+        const profile = (config.profiles || []).find((p) => p.id === profileId);
+        if (!profile) {
+          sendResponse({ success: false, error: '对照档案不存在' });
+          return;
         }
-        const glossary = Array.from(map.values());
-        saveConfig({ glossary })
-          .then(() => sendResponse({ success: true, count: glossary.length, glossary }))
+        const override = {
+          provider: profile.provider,
+          apiKey: profile.apiKey,
+          apiEndpoint: profile.apiEndpoint,
+          model: profile.model,
+          localModel: profile.localModel,
+          customProvider: profile.customProvider || { name: '', endpoint: '', apiKey: '', format: 'openai', model: '' }
+        };
+        translateWithCloud(request.text, sourceLang, targetLang, context, override)
+          .then((text) => sendResponse({ success: true, text, engine: profile.provider }))
           .catch((error) => sendResponse(failResponse(error)));
-      } catch (error) {
-        sendResponse(failResponse(error));
-      }
-      return;
-    }
+        return;
+      },
 
-    else if (request.action === 'clearGlossary') {
-      saveConfig({ glossary: [] })
-        .then(() => sendResponse({ success: true }))
-        .catch((error) => sendResponse(failResponse(error)));
-      return;
-    }
+      cancelTranslate({ request, sendResponse }) {
+        // 用户停止整页/动态翻译：abort 在途请求并阻止后续批次，避免继续消耗配额
+        const aborted = cancelTranslationSession(request.sessionId || null);
+        sendResponse({ success: true, aborted });
+        return;
+      },
 
-    else if (request.action === 'fetchModels') {
-      fetchModels(request.config)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return;
-    }
+      getConfig({ sendResponse }) {
+        // 脱敏响应：profiles 不含明文 apiKey，仅提供 hasApiKey 标志
+        sendResponse({ ...buildSanitizedConfig(), batchConfig: getBatchConfig() });
+      },
 
-    else if (request.action === 'testProviderConnection') {
-      testProviderConnection(request.config)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return;
-    }
+      getProviderDefaults({ sendResponse }) {
+        sendResponse({
+          success: true,
+          endpoints: API_ENDPOINTS,
+          models: DEFAULT_MODELS,
+          stylePrompts: { ...(STYLE_PROMPTS || {}) },
+          styleIds: SW.STYLE_IDS || ['normal', 'academic', 'technical', 'literary']
+        });
+      },
 
-    else if (request.action === 'checkConnection') {
-      // 使用当前激活档案检测连接状态，供 popup 状态灯使用
-      const profile = getActiveProfile() || config;
-      const profileId = config.activeProfileId || `${profile.provider}:${profile.model || profile.localModel || ''}`;
-      const now = Date.now();
-      if (connectionCache.profileId === profileId && now - connectionCache.timestamp < CONNECTION_CACHE_TTL) {
-        sendResponse(connectionCache.result);
-        return true;
-      }
-
-      const testConfig = {
-        provider: profile.provider,
-        apiKey: getApiKey(),
-        endpoint: getEndpoint(),
-        model: getModel()
-      };
-      testProviderConnection(testConfig)
-        .then((result) => {
-          connectionCache = { profileId, timestamp: Date.now(), result };
-          sendResponse(result);
-        })
-        .catch((error) => sendResponse({ success: false, error: error.message }));
-      return true;
-    }
-
-    else if (request.action === 'clearCache') {
-      cache.clear();
-      cacheBytes = 0;
-      cacheStats = { wordCount: 0, sizeBytes: 0 };
-      pendingCacheWrites.clear();
-      pendingCacheDeletes.clear();
-      pendingCacheSave = false;
-      if (cacheSaveTimer) {
-        clearTimeout(cacheSaveTimer);
-        cacheSaveTimer = null;
-      }
-      openDatabase().then(database => {
-        const transaction = database.transaction([CACHE_STORE, MODELS_STORE], 'readwrite');
-        transaction.objectStore(CACHE_STORE).clear();
-        transaction.objectStore(MODELS_STORE).clear();
-        transaction.oncomplete = () => sendResponse({ success: true });
-        transaction.onerror = () => sendResponse({ success: true });
-      }).catch(() => sendResponse({ success: true }));
-      return; // 已经在上面异步返回了
-    }
-
-    else if (request.action === 'getCacheStats') {
-      updateCacheStats();
-      const cacheHits = usageStats.cacheHits || 0;
-      const blockedHits = usageStats.blockedHits || 0;
-      const userReportedHits = usageStats.userReportedHits || 0;
-      const totalCacheHits = cacheHits + blockedHits;
-      const badHitRate = totalCacheHits > 0
-        ? Math.round(((blockedHits + userReportedHits) / totalCacheHits) * 100)
-        : 0;
-      sendResponse({
-        success: true,
-        stats: {
-          wordCount: cacheStats.wordCount,
-          sizeBytes: cacheStats.sizeBytes,
-          sizeMB: Math.round(cacheStats.sizeBytes / 1024 / 1024 * 100) / 100,
-          sizeGB: Math.round(cacheStats.sizeBytes / 1024 / 1024 / 1024 * 100) / 100
-        },
-        usage: {
-          ...usageStats,
-          totalCacheHits,
-          badHitRate
+      setConfig({ request, sendResponse }) {
+        const payload = { ...(request.config || {}) };
+        // 规范化用户风格提示词，避免脏键/超长写入
+        if (Object.prototype.hasOwnProperty.call(payload, 'stylePrompts')) {
+          payload.stylePrompts = SW.sanitizeStylePrompts
+            ? SW.sanitizeStylePrompts(payload.stylePrompts)
+            : (payload.stylePrompts || {});
         }
-      });
-    }
+        saveConfig(payload)
+          .then(() => sendResponse({ success: true }))
+          .catch(error => sendResponse({ success: false, error: error.message }));
+        return;
+      },
 
-    else if (request.action === 'getMetrics') {
-      const limit = request.limit || 1000;
-      const days = request.days || METRICS_RETENTION_DAYS;
-      getMetrics(limit, days)
-        .then(metrics => {
-          // 聚合摘要
-          const total = metrics.length;
-          const success = metrics.filter(m => m.success).length;
-          const failure = total - success;
-          const cacheHits = metrics.filter(m => m.cached).length;
-          const avgLatency = total > 0
-            ? Math.round(metrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / total)
-            : 0;
-          const byProvider = {};
-          metrics.forEach(m => {
-            const p = m.provider || 'unknown';
-            if (!byProvider[p]) byProvider[p] = { count: 0, success: 0, failure: 0, totalLatency: 0, cacheHits: 0 };
-            byProvider[p].count++;
-            if (m.success) byProvider[p].success++; else byProvider[p].failure++;
-            byProvider[p].totalLatency += m.latencyMs || 0;
-            if (m.cached) byProvider[p].cacheHits++;
-          });
-          Object.keys(byProvider).forEach(p => {
-            const item = byProvider[p];
-            item.avgLatency = item.count > 0 ? Math.round(item.totalLatency / item.count) : 0;
-            delete item.totalLatency;
-          });
-          sendResponse({
-            success: true,
-            summary: { total, success, failure, cacheHits, avgLatency },
-            byProvider,
-            metrics: metrics.slice(0, 200) // 返回最近 200 条明细给前端
-          });
-        })
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return;
-    }
+      reportBadTranslation({ request, sendResponse }) {
+        reportBadTranslation(request)
+          .then((result) => sendResponse(result))
+          .catch((error) => sendResponse(failResponse(error)));
+        return;
+      },
 
-    else if (request.action === 'getRequestLogs') {
-      sendResponse({
-        success: true,
-        logs: getRequestLogs(request.limit)
-      });
-      return;
-    }
+      disableSite({ request, sendResponse }) {
+        disableSiteForHostname(request.hostname || request.host)
+          .then((result) => sendResponse(result))
+          .catch((error) => sendResponse(failResponse(error)));
+        return;
+      },
 
-    // ===== ProviderProfile 管理接口 =====
-    else if (request.action === 'getProfiles') {
-      // 与 getConfig 一致脱敏，列表展示仅需非敏感字段
-      sendResponse({
-        success: true,
-        profiles: (config.profiles || []).map(sanitizeProfileForClient),
-        activeProfileId: config.activeProfileId
-      });
-    }
+      setSiteBilingualMode({ request, sendResponse }) {
+        const host = (request.hostname || '').toLowerCase().trim();
+        if (!host) {
+          sendResponse({ success: false, error: '缺少 hostname' });
+          return;
+        }
+        const prefs = { ...(config.siteModePrefs || {}) };
+        prefs[host] = {
+          ...(prefs[host] || {}),
+          bilingualMode: request.bilingualMode !== false
+        };
+        saveConfig({ siteModePrefs: prefs })
+          .then(() => sendResponse({ success: true, siteModePrefs: prefs }))
+          .catch((error) => sendResponse(failResponse(error)));
+        return;
+      },
 
-    else if (request.action === 'saveProfile') {
-      const profile = request.profile;
-      if (!profile || !profile.provider) {
-        sendResponse({ success: false, error: '无效的供应商档案' });
+      importGlossary({ request, sendResponse }) {
+        try {
+          const entries = ProductHelpers.parseGlossaryImport
+            ? ProductHelpers.parseGlossaryImport(request.raw || '', request.filename || '')
+            : [];
+          const merged = Array.isArray(request.replace) && request.replace
+            ? entries
+            : [...(config.glossary || []), ...entries];
+          // 按 source 去重，后写覆盖
+          const map = new Map();
+          for (const e of merged) {
+            if (e?.source) map.set(String(e.source).replace(/\s+/g, ' ').trim(), {
+              source: String(e.source).replace(/\s+/g, ' ').trim(),
+              target: String(e.target ?? '')
+            });
+          }
+          const glossary = Array.from(map.values());
+          saveConfig({ glossary })
+            .then(() => sendResponse({ success: true, count: glossary.length, glossary }))
+            .catch((error) => sendResponse(failResponse(error)));
+        } catch (error) {
+          sendResponse(failResponse(error));
+        }
+        return;
+      },
+
+      clearGlossary({ sendResponse }) {
+        saveConfig({ glossary: [] })
+          .then(() => sendResponse({ success: true }))
+          .catch((error) => sendResponse(failResponse(error)));
+        return;
+      },
+
+      fetchModels({ request, sendResponse }) {
+        fetchModels(request.config)
+          .then(result => sendResponse(result))
+          .catch(error => sendResponse({ success: false, error: error.message }));
+        return;
+      },
+
+      testProviderConnection({ request, sendResponse }) {
+        testProviderConnection(request.config)
+          .then(result => sendResponse(result))
+          .catch(error => sendResponse({ success: false, error: error.message }));
+        return;
+      },
+
+      checkConnection({ sendResponse }) {
+        // 使用当前激活档案检测连接状态，供 popup 状态灯使用
+        const profile = getActiveProfile() || config;
+        const profileId = config.activeProfileId || `${profile.provider}:${profile.model || profile.localModel || ''}`;
+        const now = Date.now();
+        if (connectionCache.profileId === profileId && now - connectionCache.timestamp < CONNECTION_CACHE_TTL) {
+          sendResponse(connectionCache.result);
+          return true;
+        }
+
+        const testConfig = {
+          provider: profile.provider,
+          apiKey: getApiKey(),
+          endpoint: getEndpoint(),
+          model: getModel()
+        };
+        testProviderConnection(testConfig)
+          .then((result) => {
+            connectionCache = { profileId, timestamp: Date.now(), result };
+            sendResponse(result);
+          })
+          .catch((error) => sendResponse({ success: false, error: error.message }));
+        return true;
+      },
+
+      clearCache({ sendResponse }) {
+        cache.clear();
+        cacheBytes = 0;
+        totalCacheCount = 0;
+        totalCacheBytes = 0;
+        cacheStats = { wordCount: 0, sizeBytes: 0 };
+        pendingCacheWrites.clear();
+        pendingCacheDeletes.clear();
+        pendingCacheSave = false;
+        if (cacheSaveTimer) {
+          clearTimeout(cacheSaveTimer);
+          cacheSaveTimer = null;
+        }
+        openDatabase().then(database => {
+          const transaction = database.transaction([CACHE_STORE, MODELS_STORE], 'readwrite');
+          transaction.objectStore(CACHE_STORE).clear();
+          transaction.objectStore(MODELS_STORE).clear();
+          transaction.oncomplete = () => sendResponse({ success: true });
+          transaction.onerror = () => sendResponse({ success: true });
+        }).catch(() => sendResponse({ success: true }));
+        return; // 已经在上面异步返回了
+      },
+
+      getCacheStats({ sendResponse }) {
+        updateCacheStats();
+        const cacheHits = usageStats.cacheHits || 0;
+        const blockedHits = usageStats.blockedHits || 0;
+        const userReportedHits = usageStats.userReportedHits || 0;
+        const totalCacheHits = cacheHits + blockedHits;
+        const badHitRate = totalCacheHits > 0
+          ? Math.round(((blockedHits + userReportedHits) / totalCacheHits) * 100)
+          : 0;
+        sendResponse({
+          success: true,
+          stats: {
+            wordCount: cacheStats.wordCount,
+            sizeBytes: cacheStats.sizeBytes,
+            sizeMB: Math.round(cacheStats.sizeBytes / 1024 / 1024 * 100) / 100,
+            sizeGB: Math.round(cacheStats.sizeBytes / 1024 / 1024 / 1024 * 100) / 100
+          },
+          usage: {
+            ...usageStats,
+            totalCacheHits,
+            badHitRate
+          }
+        });
+      },
+
+      getMetrics({ request, sendResponse }) {
+        const limit = request.limit || 1000;
+        const days = request.days || METRICS_RETENTION_DAYS;
+        getMetrics(limit, days)
+          .then(metrics => {
+            // 聚合摘要
+            const total = metrics.length;
+            const success = metrics.filter(m => m.success).length;
+            const failure = total - success;
+            const cacheHits = metrics.filter(m => m.cached).length;
+            const avgLatency = total > 0
+              ? Math.round(metrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / total)
+              : 0;
+            const byProvider = {};
+            metrics.forEach(m => {
+              const p = m.provider || 'unknown';
+              if (!byProvider[p]) byProvider[p] = { count: 0, success: 0, failure: 0, totalLatency: 0, cacheHits: 0 };
+              byProvider[p].count++;
+              if (m.success) byProvider[p].success++; else byProvider[p].failure++;
+              byProvider[p].totalLatency += m.latencyMs || 0;
+              if (m.cached) byProvider[p].cacheHits++;
+            });
+            Object.keys(byProvider).forEach(p => {
+              const item = byProvider[p];
+              item.avgLatency = item.count > 0 ? Math.round(item.totalLatency / item.count) : 0;
+              delete item.totalLatency;
+            });
+            sendResponse({
+              success: true,
+              summary: { total, success, failure, cacheHits, avgLatency },
+              byProvider,
+              metrics: metrics.slice(0, 200) // 返回最近 200 条明细给前端
+            });
+          })
+          .catch(error => sendResponse({ success: false, error: error.message }));
+        return;
+      },
+
+      getRequestLogs({ request, sendResponse }) {
+        sendResponse({
+          success: true,
+          logs: getRequestLogs(request.limit)
+        });
+        return;
+      },
+
+      // ===== ProviderProfile 管理接口 =====
+      getProfiles({ sendResponse }) {
+        // 与 getConfig 一致脱敏，列表展示仅需非敏感字段
+        sendResponse({
+          success: true,
+          profiles: (config.profiles || []).map(sanitizeProfileForClient),
+          activeProfileId: config.activeProfileId
+        });
+      },
+
+      saveProfile({ request, sendResponse }) {
+        const profile = request.profile;
+        if (!profile || !profile.provider) {
+          sendResponse({ success: false, error: '无效的供应商档案' });
+          return;
+        }
+        const profileId = addOrUpdateProfile(profile);
+        config.activeProfileId = profileId;
+        saveProviderRecord({ ...profile, id: profileId });
+        saveConfig(config)
+          .then(() => sendResponse({ success: true, activeProfileId: profileId }))
+          .catch(e => sendResponse({ success: false, error: e.message }));
+        return;
+      },
+
+      deleteProfile({ request, sendResponse }) {
+        const profileId = request.profileId;
+        if (!profileId) {
+          sendResponse({ success: false, error: '缺少档案 ID' });
+          return;
+        }
+        removeProfile(profileId);
+        removeProviderRecord(profileId).then(() => {
+          saveConfig(config).then(() => sendResponse({ success: true }));
+        }).catch(e => sendResponse({ success: false, error: e.message }));
+        return;
+      },
+
+      setActiveProfile({ request, sendResponse }) {
+        const profileId = request.profileId;
+        const exists = config.profiles.some((p) => p.id === profileId);
+        if (!exists) {
+          sendResponse({ success: false, error: '档案不存在' });
+          return;
+        }
+        config.activeProfileId = profileId;
+        saveConfig(config)
+          .then(() => sendResponse({ success: true }))
+          .catch(e => sendResponse({ success: false, error: e.message }));
         return;
       }
-      const profileId = addOrUpdateProfile(profile);
-      config.activeProfileId = profileId;
-      saveProviderRecord({ ...profile, id: profileId });
-      saveConfig(config)
-        .then(() => sendResponse({ success: true, activeProfileId: profileId }))
-        .catch(e => sendResponse({ success: false, error: e.message }));
-      return;
-    }
 
-    else if (request.action === 'deleteProfile') {
-      const profileId = request.profileId;
-      if (!profileId) {
-        sendResponse({ success: false, error: '缺少档案 ID' });
-        return;
-      }
-      removeProfile(profileId);
-      removeProviderRecord(profileId).then(() => {
-        saveConfig(config).then(() => sendResponse({ success: true }));
-      }).catch(e => sendResponse({ success: false, error: e.message }));
-      return;
-    }
+    };
 
-    else if (request.action === 'setActiveProfile') {
-      const profileId = request.profileId;
-      const exists = config.profiles.some((p) => p.id === profileId);
-      if (!exists) {
-        sendResponse({ success: false, error: '档案不存在' });
-        return;
-      }
-      config.activeProfileId = profileId;
-      saveConfig(config)
-        .then(() => sendResponse({ success: true }))
-        .catch(e => sendResponse({ success: false, error: e.message }));
-      return;
-    }
-
+    const ctx = { request, sender, sendResponse, tabId, withRequestId };
+    const handler = messageHandlers[request.action];
+    if (handler) handler(ctx);
     else {
       sendResponse({ success: false, error: `未知 action: ${request.action}` });
     }
@@ -3728,6 +3858,10 @@ if (typeof module !== 'undefined' && module.exports) {
     splitIntoCharBatches,
     // 以下仅为测试可测性追加的导出，不改变任何业务逻辑
     validateCacheEntry,
+    getFromCache,
+    setToCache,
+    loadCacheFromDB,
+    __cacheInternals: () => ({ size: cache.size, cacheBytes, totalCacheCount, totalCacheBytes }),
     translateBatchInternal,
     updateRateLimitState,
     tryRecoverRateLimit,
