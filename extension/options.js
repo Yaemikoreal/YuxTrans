@@ -237,6 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showModal(html) {
     const modal = document.createElement('div');
     modal.className = 'yxt-modal-overlay';
+    // eslint-disable-next-line no-unsanitized/property -- 静态模板；html 参数来自本文件静态 guideHtml
     modal.innerHTML = `
       <div class="yxt-modal-card" role="dialog" aria-modal="true">
         <div class="yxt-modal-body">${html}</div>
@@ -447,6 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (compareProfileIdSelect) {
       const profiles = Array.isArray(config.profiles) ? config.profiles : [];
       const activeId = config.activeProfileId || '';
+      // eslint-disable-next-line no-unsanitized/property -- 档案字段均经 escapeHtml
       compareProfileIdSelect.innerHTML = '<option value="">不启用对照</option>' +
         profiles
           .filter((p) => p.id !== activeId) // 排除当前激活档案（无需与自身对照）
@@ -1495,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const currentId = config?.activeProfileId || '';
 
+    // eslint-disable-next-line no-unsanitized/property -- 档案/模型字段均经 escapeHtml
     container.innerHTML = modelRecords.map((m, idx) => {
       const isActive = m.id === currentId;
       const providerLabel = PROVIDER_NAMES[m.provider] || m.provider;
@@ -1756,6 +1759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chrome.runtime.lastError) {
         console.error('[YuxTrans] 加载诊断数据失败:', chrome.runtime.lastError);
         if (metricsRecentErrorsEl) {
+          // eslint-disable-next-line no-unsanitized/property -- 静态提示文案
           metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${escapeHtml(chrome.runtime.lastError.message)}</p>`;
         }
         return;
@@ -1763,6 +1767,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!res?.success) {
         console.error('[YuxTrans] 诊断数据返回失败:', res?.error);
         if (metricsRecentErrorsEl) {
+          // eslint-disable-next-line no-unsanitized/property -- 错误信息经 escapeHtml
           metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${escapeHtml(res?.error || '未知错误')}</p>`;
         }
         return;
@@ -1815,6 +1820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               </tr>
             `;
           }).join('');
+        // eslint-disable-next-line no-unsanitized/property -- 文本字段经 escapeHtml，其余为数值
         tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:var(--yxt-text-tertiary);">暂无数据</td></tr>';
       }
     }
@@ -1827,6 +1833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (failures.length === 0) {
         metricsRecentErrorsEl.innerHTML = '<div class="yxt-empty">暂无失败记录</div>';
       } else {
+        // eslint-disable-next-line no-unsanitized/property -- 字段均经 escapeHtml，time 由 Date 生成
         metricsRecentErrorsEl.innerHTML = failures.map(m => {
           const time = new Date(m.timestamp).toLocaleString('zh-CN');
           const actionLabel = { translate: '翻译', translateStream: '流式', translateBatch: '批量', swInit: 'SW 启动' }[m.action] || m.action;
@@ -1854,12 +1861,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chrome.runtime.lastError) {
         console.error('[YuxTrans] 加载请求日志失败:', chrome.runtime.lastError);
         if (requestLogsContainer) {
+          // eslint-disable-next-line no-unsanitized/property -- 静态提示文案
           requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${escapeHtml(chrome.runtime.lastError.message)}</p>`;
         }
         return;
       }
       if (!res?.success) {
         if (requestLogsContainer) {
+          // eslint-disable-next-line no-unsanitized/property -- 错误信息经 escapeHtml
           requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${escapeHtml(res?.error || '未知错误')}</p>`;
         }
         return;
@@ -1875,6 +1884,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // eslint-disable-next-line no-unsanitized/property -- 字段均经 escapeHtml，time 由 Date 生成
     requestLogsContainer.innerHTML = logs.map(log => {
       const time = new Date(log.timestamp).toLocaleString('zh-CN');
       const actionLabel = { translate: '单句', translateStream: '流式', translateBatch: '批量' }[log.action] || log.action;

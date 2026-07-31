@@ -1,7 +1,7 @@
 # YuxTrans 最小持续集成（CI）
 # 用途：在任意分支 push 及 pull_request 时，安装依赖并运行扩展单元测试（node --test），
 # 同时对 extension/manifest.json 做基本合法性校验（JSON 可解析且 manifest_version 为 3）。
-# 保持极简：无矩阵、无 lint、无打包上传。
+# 保持极简：无矩阵、无打包上传。
 
 name: CI
 
@@ -31,3 +31,6 @@ jobs:
 
       - name: 运行单元测试
         run: npm test
+
+      - name: ESLint 静态检查
+        run: npm run lint
