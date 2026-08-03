@@ -820,16 +820,33 @@ function promoteToHotCache(key, value) {
 
 /**
  * 读缓存（Q3 异步化）：先查内存热缓存，未命中回查 IndexedDB 冷数据并提升。
+ * 方案 7：一级未命中时尝试标点归一化二级查找，命中后回填精确键。
+ * @param {string} key
+ * @param {boolean} [_skipNormalized] - 内部参数：跳过二级查找（防止递归）
  * @returns {Promise<string|null>}
  */
-async function getFromCache(key) {
+async function getFromCache(key, _skipNormalized) {
   if (!config.cacheEnabled) return null;
   let value = cache.get(key);
 
   if (value === undefined) {
     // 内存未命中：回查冷数据
     const coldValue = await getColdEntryFromDB(key);
-    if (coldValue === undefined) return null;
+    if (coldValue === undefined) {
+      // 方案 7：标点等价归一化二级查找
+      if (!_skipNormalized && SW.punctuationNormalizedKey) {
+        const normalizedKey = SW.punctuationNormalizedKey(key);
+        if (normalizedKey) {
+          const normalizedValue = await getFromCache(normalizedKey, true);
+          if (normalizedValue !== null) {
+            // 命中归一化键：回填精确键，后续直接命中一级
+            await setToCache(key, normalizedValue);
+            return normalizedValue;
+          }
+        }
+      }
+      return null;
+    }
     // 冷数据只经历完整校验（可能是旧版本/坏条目）；不合格则物理删除
     const validation = validateCacheEntry(key, coldValue);
     if (!validation.valid) {

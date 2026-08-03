@@ -74,6 +74,35 @@ test('cache-keys：model 隔离与 slug 化', () => {
   assert.strictEqual(p3.text, 'Hello');
 });
 
+// 方案 7：标点等价归一化二级查找
+test('cache-keys：punctuationNormalizedKey 标点归一化', () => {
+  // 长文本（>=12 字符）含 CJK 标点 -> 归一化
+  const keyWithCJKPunc = SW.generateCacheKey('这是一段较长的中文测试文本。', 'zh', 'en', 'normal');
+  const normalized = SW.punctuationNormalizedKey(keyWithCJKPunc);
+  assert.ok(normalized !== null, '含 CJK 标点的长文本应返回归一化键');
+  assert.ok(normalized.includes('.'), '句号应被替换为 .');
+  assert.ok(!normalized.includes('。'), '不应保留中文句号');
+
+  // 无 CJK 标点 -> 返回 null（无需二级查找）
+  const keyNoPunc = SW.generateCacheKey('This is a test string', 'en', 'zh', 'normal');
+  assert.strictEqual(SW.punctuationNormalizedKey(keyNoPunc), null);
+
+  // 短文本（<12 字符）-> 返回 null（避免歧义）
+  const shortKey = SW.generateCacheKey('短文本。', 'zh', 'en', 'normal');
+  assert.strictEqual(SW.punctuationNormalizedKey(shortKey), null);
+
+  // 多种 CJK 标点同时存在
+  const keyMultiPunc = SW.generateCacheKey('你好世界，这是一段较长的测试！对吗？', 'zh', 'en', 'normal');
+  const normMulti = SW.punctuationNormalizedKey(keyMultiPunc);
+  assert.ok(normMulti !== null);
+  assert.ok(normMulti.includes(','));
+  assert.ok(normMulti.includes('!'));
+  assert.ok(normMulti.includes('?'));
+  assert.ok(!normMulti.includes('，'));
+  assert.ok(!normMulti.includes('！'));
+  assert.ok(!normMulti.includes('？'));
+});
+
 test('providers-core：默认模型与 JSON mode', () => {
   assert.strictEqual(SW.getDefaultModel('qwen'), 'qwen-turbo');
   assert.strictEqual(SW.supportsJsonMode('openai'), true);

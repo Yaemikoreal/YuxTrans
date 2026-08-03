@@ -80,11 +80,39 @@
     return parseCacheKey(key).text;
   }
 
+  /**
+   * 方案 7：标点等价归一化--将 CJK 标点替换为等价 Latin 标点，用于二级缓存查找。
+   * 仅对文本部分（第 7 段起）做归一化，键结构不受影响。
+   * 短文本（< 12 字符）返回 null，避免数字/符号歧义（对齐 ADR 0004 的 MIN_CACHE_SOURCE_LENGTH）。
+   * @param {string} key
+   * @returns {string|null} 归一化后的键；无变化或短文本时返回 null
+   */
+  function punctuationNormalizedKey(key) {
+    if (!key) return null;
+    const parsed = parseCacheKey(key);
+    if (!parsed.text || parsed.text.length < 12) return null;
+    var normalized = parsed.text
+      .replace(/。/g, '.')   // 。 -> .
+      .replace(/，/g, ',')   // ， -> ,
+      .replace(/！/g, '!')   // ！ -> !
+      .replace(/？/g, '?')   // ？ -> ?
+      .replace(/：/g, ':')   // ： -> :
+      .replace(/；/g, ';')   // ；
+      .replace(/「/g, '"').replace(/」/g, '"')  // 「」 -> ""
+      .replace(/『/g, "'").replace(/』/g, "'")  // 『』 -> ''
+      .replace(/（/g, '(').replace(/）/g, ')')  // （） -> ()
+      .replace(/【/g, '[').replace(/】/g, ']'); // 【】 -> []
+    if (normalized === parsed.text) return null;
+    return parsed.version + ':' + parsed.promptVersion + ':' + parsed.model + ':' +
+      parsed.sourceLang + ':' + parsed.targetLang + ':' + parsed.style + ':' + normalized;
+  }
+
   SW.normalizeCacheKeyText = normalizeCacheKeyText;
   SW.modelSlug = modelSlug;
   SW.parseCacheKey = parseCacheKey;
   SW.generateCacheKey = generateCacheKey;
   SW.getCacheKeyTextPart = getCacheKeyTextPart;
+  SW.punctuationNormalizedKey = punctuationNormalizedKey;
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -92,7 +120,8 @@
       modelSlug,
       parseCacheKey,
       generateCacheKey,
-      getCacheKeyTextPart
+      getCacheKeyTextPart,
+      punctuationNormalizedKey
     };
   }
 })(typeof self !== 'undefined' ? self : typeof globalThis !== 'undefined' ? globalThis : this);
