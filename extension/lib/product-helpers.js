@@ -15,16 +15,39 @@
 
   /**
    * 解析划词触发模式动作
-   * @param {string} triggerMode - auto | icon | contextMenu
-   * @returns {'auto'|'icon'|'contextMenu'}
+   * @param {string} triggerMode - modifier | auto | icon | contextMenu
+   * @returns {'modifier'|'auto'|'icon'|'contextMenu'}
    */
   function resolveTriggerAction(triggerMode) {
-    const mode = (triggerMode || 'auto').toLowerCase();
-    if (mode === 'icon' || mode === 'contextmenu' || mode === 'context_menu') {
-      return mode === 'icon' ? 'icon' : 'contextMenu';
+    const mode = (triggerMode || '').toLowerCase();
+    if (mode === 'auto') return 'auto';
+    if (mode === 'icon') return 'icon';
+    if (mode === 'contextmenu' || mode === 'context_menu' || mode === 'context' || mode === 'menu') {
+      return 'contextMenu';
     }
-    if (mode === 'context' || mode === 'menu') return 'contextMenu';
-    return 'auto';
+    // modifier 为新默认模式：显式 'modifier' 与未知值均兜底到此
+    return 'modifier';
+  }
+
+  /**
+   * 该触发模式是否要求按住修饰键划选才触发
+   * @param {string} triggerMode
+   * @returns {boolean}
+   */
+  function shouldRequireModifier(triggerMode) {
+    return resolveTriggerAction(triggerMode) === 'modifier';
+  }
+
+  /**
+   * 事件上是否按住了配置的划选修饰键
+   * @param {{ctrlKey?:boolean, altKey?:boolean, shiftKey?:boolean}|null|undefined} eventLike
+   * @param {string} selectionModifier - 'ctrl' | 'alt' | 'shift'（未知值按 'ctrl'）
+   * @returns {boolean}
+   */
+  function isSelectionModifierPressed(eventLike, selectionModifier) {
+    if (!eventLike) return false;
+    const mod = ['ctrl', 'alt', 'shift'].includes(selectionModifier) ? selectionModifier : 'ctrl';
+    return !!eventLike[mod + 'Key'];
   }
 
   /**
@@ -509,6 +532,7 @@
     preference: Object.freeze(['sourceLang', 'targetLang', 'translateStyle', 'offlineMode', 'stylePrompts']),
     interaction: Object.freeze([
       'triggerMode',
+      'selectionModifier',
       'enableStreaming',
       'originalStyle',
       'hoverTranslate',
@@ -628,10 +652,27 @@
     return p ? `${pair} · ${p}` : pair;
   }
 
+  /**
+   * HTML 转义：拼入 innerHTML 前包裹一切用户/配置可控字段，防自 XSS
+   * @param {*} str
+   * @returns {string}
+   */
+  function escapeHtml(str) {
+    if (str === undefined || str === null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   return {
     resolveTriggerAction,
     shouldShowFloatButton,
     shouldAutoTranslateOnSelect,
+    shouldRequireModifier,
+    isSelectionModifierPressed,
     shouldUseStreaming,
     resolveTranslateAction,
     isHoverParagraphCandidate,
@@ -662,6 +703,7 @@
     pickModuleConfig,
     shouldShowOptionsQuickStart,
     resolveEventElement,
-    eventTargetClosest
+    eventTargetClosest,
+    escapeHtml
   };
 });

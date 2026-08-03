@@ -22,7 +22,7 @@
     "https://api.moonshot.cn/*",
     "https://api.siliconflow.cn/*",
     "https://translate.googleapis.com/*",
-    "http://localhost:*/*"
+    "http://localhost:11434/*"
   ],
 
   "optional_host_permissions": [
@@ -37,7 +37,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["lib/product-helpers.js", "content.js"],
+      "js": ["lib/product-helpers.js", "lib/content/constants.js", "content.js", "lib/content/selection.js", "lib/content/dict.js", "lib/content/hover.js", "lib/content/input.js", "lib/content/page.js", "lib/content/init.js"],
       "css": ["design-tokens.css", "content.css"],
       "run_at": "document_end"
     }

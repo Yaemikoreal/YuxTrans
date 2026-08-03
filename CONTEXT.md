@@ -14,7 +14,7 @@
 - **Module Save（分栏保存）**：每个可写模块 Tab 仅持久化本栏字段；不存在跨栏「保存全部设置」主按钮。服务档案沿用自身档案保存流。
 - **Options Atmosphere（设置页氛围层）**：仅作用于 Options 的背景表现——静态纸纹 + 单层缓慢漂移的低对比光晕（尊重 `prefers-reduced-motion`）；不作为翻译浮层或 Popup 的默认背景策略。
 - **Zone Accent（分区点缀色）**：设置页导航与块标题使用的极低饱和色相提示，用于缓解单色扫视疲劳；不改变正文大面积书页底，也不等于提高全局品牌主色饱和度。
-- **TranslationCache（翻译缓存）**：以 `sourceLang:targetLang:style:text` 为键的 IndexedDB 缓存；归一化仅保留与语义无关的最小处理（NFC、去除零宽字符、折叠空白），不同标点/引号/全角半角视为不同键，避免近似命中。
+- **TranslationCache（翻译缓存）**：以 `sourceLang:targetLang:style:text` 为键的 IndexedDB 缓存；归一化仅保留与语义无关的最小处理（NFC、去除零宽字符、折叠空白），不同标点/引号/全角半角视为不同键，避免近似命中。落盘为「满 100 条或 3s 定时」批量 flush；已知取舍：SW 休眠时 `onSuspend` 兜底写不被平台保证完成，可能丢失最近几条缓存（缓存易失、miss 后重译即可，勿当 bug 修）。
 - **Good Cache Hit（有效缓存命中）**：一次缓存命中必须同时满足三条——(1) 键精确匹配；(2) 译文质量可接受，无张冠李戴或明显幻觉；(3) 在当前页面上下文下仍然合适。单纯的键匹配不等于有效命中。
 - **Cache Validator（缓存校验器）**：在缓存写入和读取前执行的启发式规则集，用于把坏命中拦截在返回给用户之前。其中源文长度低于 `MIN_CACHE_SOURCE_LENGTH`（12 字符）的条目直接视为近似命中，不进入缓存。
 - **Dictionary Cache（词典缓存）**：F2 单词词典查询的缓存，复用 TranslationCache 键格式但 `style` 段固定为 `'dict'`（与正常译文 `'normal'/'academic'/...` 不撞）。词典 JSON 非译文近似命中，单词普遍 <12 字符是常态，故 Cache Validator 对 `style='dict'` 的键仅做版本号与非空校验，跳过 `too_short`/`refusal`/`length_ratio`/`echo`/`target_script`/`entity_drift` 等译文专有规则。不再有通用 `skipValidation` 逃生口。

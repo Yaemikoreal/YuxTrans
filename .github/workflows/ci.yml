@@ -1,0 +1,36 @@
+# YuxTrans 最小持续集成（CI）
+# 用途：在任意分支 push 及 pull_request 时，安装依赖并运行扩展单元测试（node --test），
+# 同时对 extension/manifest.json 做基本合法性校验（JSON 可解析且 manifest_version 为 3）。
+# 保持极简：无矩阵、无打包上传。
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 校验 extension/manifest.json
+        run: node -e "const m = JSON.parse(require('fs').readFileSync('extension/manifest.json', 'utf8')); if (m.manifest_version !== 3) { console.error('manifest_version 应为 3，实际为 ' + m.manifest_version); process.exit(1); } console.log('manifest.json 校验通过，manifest_version = ' + m.manifest_version);"
+
+      - name: 运行单元测试
+        run: npm test
+
+      - name: ESLint 静态检查
+        run: npm run lint

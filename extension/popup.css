@@ -12,12 +12,21 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Chrome popup 窗口本身不透明：html 若 transparent，圆角外会露出默认白角。
+   让 html 与 body 同纸底，四角与卡片融为一体，圆角描边自然浮现。 */
+html {
+  background: var(--yxt-bg-elevated);
+}
+
 body {
   font-family: var(--yxt-font);
   width: 320px;
   background: var(--yxt-bg-elevated);
   color: var(--yxt-text);
   padding: var(--yxt-space-5);
+  border: 1px solid var(--yxt-border);
+  border-radius: var(--yxt-radius-xl);
+  overflow: hidden;
 }
 
 code {

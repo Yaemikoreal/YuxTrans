@@ -6,12 +6,34 @@ const assert = require('node:assert');
 
 const H = require('../lib/product-helpers.js');
 
-test('resolveTriggerAction 映射三种触发模式', () => {
+test('resolveTriggerAction 映射四种触发模式', () => {
   assert.strictEqual(H.resolveTriggerAction('auto'), 'auto');
   assert.strictEqual(H.resolveTriggerAction('icon'), 'icon');
   assert.strictEqual(H.resolveTriggerAction('contextMenu'), 'contextMenu');
   assert.strictEqual(H.resolveTriggerAction('context_menu'), 'contextMenu');
-  assert.strictEqual(H.resolveTriggerAction(undefined), 'auto');
+  // 新默认模式变更为 modifier，未知值兜底随之由 'auto' 改为 'modifier'
+  assert.strictEqual(H.resolveTriggerAction(undefined), 'modifier');
+});
+
+test('modifier 触发模式：解析与修饰键判定', () => {
+  assert.strictEqual(H.resolveTriggerAction('modifier'), 'modifier');
+  assert.strictEqual(H.resolveTriggerAction('Modifier'), 'modifier');
+  assert.strictEqual(H.resolveTriggerAction(undefined), 'modifier'); // 新默认兜底
+  assert.strictEqual(H.resolveTriggerAction('auto'), 'auto'); // 旧值不受影响
+  assert.strictEqual(H.shouldRequireModifier('modifier'), true);
+  assert.strictEqual(H.shouldRequireModifier('auto'), false);
+  assert.strictEqual(H.shouldRequireModifier('icon'), false);
+  // isSelectionModifierPressed：ctrl/alt/shift 正反例 + 防御
+  assert.strictEqual(H.isSelectionModifierPressed({ ctrlKey: true }, 'ctrl'), true);
+  assert.strictEqual(H.isSelectionModifierPressed({ ctrlKey: false, altKey: true }, 'ctrl'), false);
+  assert.strictEqual(H.isSelectionModifierPressed({ altKey: true }, 'alt'), true);
+  assert.strictEqual(H.isSelectionModifierPressed({ shiftKey: true }, 'shift'), true);
+  assert.strictEqual(H.isSelectionModifierPressed({}, 'ctrl'), false);
+  assert.strictEqual(H.isSelectionModifierPressed(null, 'ctrl'), false);
+  assert.strictEqual(H.isSelectionModifierPressed({ altKey: true }, 'unknown-mod'), false); // 未知修饰键按 ctrl
+  assert.strictEqual(H.isSelectionModifierPressed({ ctrlKey: true }, 'unknown-mod'), true);
+  // OPTIONS_MODULE_KEYS.interaction 含 selectionModifier
+  assert.ok(H.OPTIONS_MODULE_KEYS.interaction.includes('selectionModifier'));
 });
 
 test('shouldShowFloatButton / shouldAutoTranslateOnSelect 互斥', () => {
@@ -289,6 +311,7 @@ test('pickModuleConfig 按模块切片且不串字段', () => {
     stylePrompts: { academic: 'Custom academic' },
     offlineMode: true,
     triggerMode: 'icon',
+    selectionModifier: 'ctrl',
     enableStreaming: false,
     originalStyle: 'fade',
     hoverTranslate: true,

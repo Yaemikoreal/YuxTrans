@@ -17,6 +17,12 @@ YuxTrans 是面向深阅读的 AI 翻译工具，「响应速度是生命，翻�
 # 扩展单元测试（Node 内置 test runner，无额外依赖）
 npm test                           # 等价 node --test extension/tests/*.test.js
 
+# Lint（ESLint + eslint-plugin-no-unsanitized，禁止 innerHTML 等不安全注入）
+npm run lint                       # eslint extension/
+
+# E2E 冒烟测试（Playwright，需已安装 Chromium）
+npm run test:e2e                   # playwright test（tests-e2e/smoke.spec.mjs）
+
 # 扩展本身无构建步骤：chrome://extensions/ 开发者模式 → 加载 extension/ 目录
 ```
 
@@ -33,9 +39,9 @@ npm test                           # 等价 node --test extension/tests/*.test.j
                                                        IndexedDB 缓存 / 云端 API / Ollama
 ```
 
-- **`background.js`（~3200 行）是核心**：配置管理、双缓存（Map 内存 LRU + IndexedDB 持久化，200MB 物理定额）、流式输出（SSE → `chrome.tabs.sendMessage` 逐 chunk 推送）、自适应速率限制（并发 1~10、延迟 0~2000ms，429 触发 30s 冷却）、批量翻译降级（批量 JSON 解析失败 → 单句并发补全，最多 3 次重试）、右键菜单、GitHub Release 更新检测。
+- **`background.js`（~3900 行）是核心**：配置管理、双缓存（Map 内存 LRU + IndexedDB 持久化，200MB 物理定额）、流式输出（SSE → `chrome.tabs.sendMessage` 逐 chunk 推送）、自适应速率限制（并发 1~10、延迟 0~2000ms，429 触发 30s 冷却）、批量翻译降级（批量 JSON 解析失败 → 单句并发补全，最多 3 次重试）、右键菜单、GitHub Release 更新检测。
 - **SW 模块化拆分**：`background.js` 顶部通过 `importScripts`（Node 测试走 `require` 双通道）加载 `extension/lib/sw/` 下的纯函数模块，挂到 `globalThis.YuxTransSW`；`lib/product-helpers.js` 挂到 `YuxTransHelpers`。模块按依赖顺序加载：`bootstrap → constants → cache-keys → providers-core → lang → message-actions → translate-core → scheduler`（`placeholders.js` 仅测试加载）。**新增可单测的纯逻辑应放进 `lib/sw/` 对应模块，而非塞进 background.js。**
-- **content.js**：划词浮窗 + 整页翻译（DOM 文本节点分批 batchSize=20/concurrency=10，双语 `<span>` 标注保持样式，可视区域优先 + 动态内容增量翻译 + 可恢复原文，进度条）。
+- **content.js**：划词浮窗 + 整页翻译（DOM 文本节点分批 batchSize=20，concurrency 云端默认 50 / 本地 Ollama 自动降为 1，双语 `<span>` 标注保持样式，可视区域优先 + 动态内容增量翻译 + 可恢复原文，进度条）。共享常量在 `common.js`（options/popup/content 均需加载）。
 - **`BUILTIN_CACHE` 内置热词库已清空**：严格缓存策略下短词/固定译法属于近似命中，不再预加载。不要恢复预载逻辑。
 - 消息通道：`translate` / `translateStream` / `translateBatch`（content→bg）；`translateSelection` / `translatePage`（bg→content）；`getConfig` / `setConfig` / `getCacheStats` / `clearCache`。
 

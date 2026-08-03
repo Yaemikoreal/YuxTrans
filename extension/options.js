@@ -1,6 +1,6 @@
 /**
  * Options Script
- * 支持完整的设置功能：自定义供应商、语言设置、操作行为、历史记录
+ * 支持完整的设置功能：自定义供应商、语言设置、操作行为
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // F1-F6 新配置元素
   const hoverTranslateInput = getById('hoverTranslate');
   const hoverModifierSelect = getById('hoverModifier');
+  const selectionModifierSelect = getById('selectionModifier');
   const dictModeInput = getById('dictMode');
   const dictDblclickInput = getById('dictDblclick');
   const originalStyleSelect = getById('originalStyle');
@@ -236,6 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function showModal(html) {
     const modal = document.createElement('div');
     modal.className = 'yxt-modal-overlay';
+    // eslint-disable-next-line no-unsanitized/property -- 静态模板；html 参数来自本文件静态 guideHtml
     modal.innerHTML = `
       <div class="yxt-modal-card" role="dialog" aria-modal="true">
         <div class="yxt-modal-body">${html}</div>
@@ -350,17 +352,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     return null;
   }
 
+  /**
+   * 当前激活档案是否为该供应商保存过 Key（getConfig 已脱敏，仅有 hasApiKey 标志）
+   * @param {string} provider
+   * @returns {boolean}
+   */
+  function activeProfileHasSavedKey(provider) {
+    const p = getActiveProfile(config);
+    return !!(p && p.provider === provider && p.hasApiKey);
+  }
+
   function applyProfileToForm(profile) {
     const fallback = profile || {};
     if (providerSelect) providerSelect.value = fallback.provider || 'qwen';
-    if (apiKeyInput) apiKeyInput.value = fallback.apiKey || '';
+    // 安全：不回显明文 API Key；已保存时以占位提示代替，留空表示不修改
+    if (apiKeyInput) {
+      apiKeyInput.value = '';
+      apiKeyInput.placeholder = fallback.hasApiKey ? '已保存 Key，留空表示不修改' : '输入您的 API Key';
+    }
     if (apiEndpointInput) apiEndpointInput.value = fallback.apiEndpoint || '';
     if (localModelInput) localModelInput.value = fallback.localModel || 'translategemma:4b';
 
     const cp = fallback.customProvider || {};
     if (customNameInput) customNameInput.value = cp.name || '';
     if (customEndpointInput) customEndpointInput.value = cp.endpoint || '';
-    if (customApiKeyInput) customApiKeyInput.value = cp.apiKey || '';
+    if (customApiKeyInput) {
+      customApiKeyInput.value = '';
+      customApiKeyInput.placeholder = cp.hasApiKey ? '已保存 Key，留空表示不修改' : '输入自定义供应商的 API Key';
+    }
     if (customFormatSelect) customFormatSelect.value = cp.format || 'openai';
 
     const savedModel = cp.model || '';
@@ -407,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 行为
     triggerModeRadios.forEach((radio) => {
-      radio.checked = radio.value === (config.triggerMode || 'auto');
+      radio.checked = radio.value === (config.triggerMode || 'modifier');
     });
     if (autoCopyCheckbox) autoCopyCheckbox.checked = config.autoCopy || false;
     if (siteRuleSelect) siteRuleSelect.value = config.siteRule || 'all';
@@ -419,6 +438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // F1-F6 配置回填
     if (hoverTranslateInput) hoverTranslateInput.checked = config.hoverTranslate !== false;
     if (hoverModifierSelect) hoverModifierSelect.value = config.hoverModifier === 'ctrl' ? 'ctrl' : 'alt';
+    if (selectionModifierSelect) selectionModifierSelect.value = ['ctrl', 'alt', 'shift'].includes(config.selectionModifier) ? config.selectionModifier : 'ctrl';
     if (dictModeInput) dictModeInput.checked = config.dictMode !== false;
     if (dictDblclickInput) dictDblclickInput.checked = config.dictDblclick !== false;
     if (originalStyleSelect) originalStyleSelect.value = ['normal', 'fade', 'blur'].includes(config.originalStyle) ? config.originalStyle : 'normal';
@@ -428,6 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (compareProfileIdSelect) {
       const profiles = Array.isArray(config.profiles) ? config.profiles : [];
       const activeId = config.activeProfileId || '';
+      // eslint-disable-next-line no-unsanitized/property -- 档案字段均经 escapeHtml
       compareProfileIdSelect.innerHTML = '<option value="">不启用对照</option>' +
         profiles
           .filter((p) => p.id !== activeId) // 排除当前激活档案（无需与自身对照）
@@ -435,7 +456,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const name = PROVIDER_NAMES[p.provider] || p.provider;
             const model = p.model || p.localModel || '';
             const sel = p.id === config.compareProfileId ? ' selected' : '';
-            return `<option value="${p.id}"${sel}>${name}${model ? ' · ' + model : ''}</option>`;
+            // 档案 id / 供应商名 / 模型名均来自用户配置，需转义防自 XSS
+            return `<option value="${escapeHtml(p.id)}"${sel}>${escapeHtml(name)}${model ? ' · ' + escapeHtml(model) : ''}</option>`;
           })
           .join('');
     }
@@ -483,10 +505,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       const row = getById('dictDblclickRow');
       if (row) row.classList.toggle('is-disabled', !dictOn);
     }
+    // 划选修饰键下拉仅 modifier 模式可用
+    const selMode = document.querySelector('input[name="triggerMode"]:checked')?.value || 'modifier';
+    const modifierModeOn = selMode === 'modifier';
+    if (selectionModifierSelect) {
+      selectionModifierSelect.disabled = !modifierModeOn;
+      const row = getById('selectionModifierRow');
+      if (row) row.classList.toggle('is-disabled', !modifierModeOn);
+    }
+    // #6：悬停翻译开 + modifier 模式 + 悬停/划选修饰键同键 → 显示警告（不阻断保存）
+    const conflictWarning = getById('modifierConflictWarning');
+    if (conflictWarning) {
+      const sameModifier = hoverOn && modifierModeOn &&
+        (hoverModifierSelect ? hoverModifierSelect.value : 'alt') ===
+        (selectionModifierSelect ? selectionModifierSelect.value : 'ctrl');
+      conflictWarning.hidden = !sameModifier;
+    }
   }
 
   hoverTranslateInput?.addEventListener('change', syncInteractionSubcontrols);
   dictModeInput?.addEventListener('change', syncInteractionSubcontrols);
+  triggerModeRadios.forEach((radio) => radio.addEventListener('change', syncInteractionSubcontrols));
+  hoverModifierSelect?.addEventListener('change', syncInteractionSubcontrols);
+  selectionModifierSelect?.addEventListener('change', syncInteractionSubcontrols);
 
   // 风格提示词：切换风格前写回草稿；输入时更新「已自定义」状态
   translateStyleRadios.forEach((radio) => {
@@ -1196,8 +1237,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       model = modelSelect.value || '';
     }
 
-    // F7：谷歌免费接口免 Key
-    if (!apiKey && provider !== 'local' && provider !== 'google') {
+    // F7：谷歌免费接口免 Key；已保存 Key 的供应商允许留空（SW 回退到已存 Key）
+    if (!apiKey && provider !== 'local' && provider !== 'google' && !activeProfileHasSavedKey(provider)) {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
@@ -1266,8 +1307,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKey = apiKeyInput.value.trim();
     const endpoint = apiEndpointInput.value.trim() || defaults.endpoints[provider];
 
-    // F7：谷歌免费接口免 Key
-    if (!apiKey && provider !== 'local' && provider !== 'google') {
+    // F7：谷歌免费接口免 Key；已保存 Key 的供应商允许留空（SW 回退到已存 Key）
+    if (!apiKey && provider !== 'local' && provider !== 'google' && !activeProfileHasSavedKey(provider)) {
       showStatus('请先填写 API Key', 'error'); return;
     }
 
@@ -1320,7 +1361,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKey = customApiKeyInput.value.trim();
 
     if (!endpoint) { showStatus('请先填写 API 端点地址', 'error'); return; }
-    if (!apiKey) { showStatus('请先填写 API Key', 'error'); return; }
+    // 已保存 Key 时允许留空（SW 回退到已存 Key）
+    if (!apiKey && !activeProfileHasSavedKey('custom')) { showStatus('请先填写 API Key', 'error'); return; }
     if (!await ensureCustomHostPermission(endpoint)) {
       showStatus('未授权该端点域名，已取消获取', 'error'); return;
     }
@@ -1455,15 +1497,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const currentId = config?.activeProfileId || '';
 
+    // eslint-disable-next-line no-unsanitized/property -- 档案/模型字段均经 escapeHtml
     container.innerHTML = modelRecords.map((m, idx) => {
       const isActive = m.id === currentId;
       const providerLabel = PROVIDER_NAMES[m.provider] || m.provider;
       const modelLabel = m.model || m.localModel || '';
+      // 档案名 / 供应商名 / 模型名均含用户输入，需转义防自 XSS
       return `
         <div class="model-list-item ${isActive ? 'active' : ''}">
           <div class="model-list-info">
-            <div class="model-list-name">${m.label || m.id}</div>
-            <div class="model-list-detail">${providerLabel} · ${modelLabel}</div>
+            <div class="model-list-name">${escapeHtml(m.label || m.id)}</div>
+            <div class="model-list-detail">${escapeHtml(providerLabel)} · ${escapeHtml(modelLabel)}</div>
           </div>
           <div class="model-list-actions">
             ${!isActive ? `<button class="btn-test" data-activate="${idx}">启用</button>` : '<span class="model-list-active-badge">当前使用</span>'}
@@ -1545,6 +1589,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
       hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,
       hoverModifier: getVal(hoverModifierSelect) === 'ctrl' ? 'ctrl' : 'alt',
+      selectionModifier: ['ctrl', 'alt', 'shift'].includes(getVal(selectionModifierSelect)) ? getVal(selectionModifierSelect) : 'ctrl',
       dictMode: dictModeInput ? getChecked(dictModeInput) : true,
       dictDblclick: dictDblclickInput ? getChecked(dictDblclickInput) : true,
       originalStyle: ['normal', 'fade', 'blur'].includes(getVal(originalStyleSelect)) ? getVal(originalStyleSelect) : 'normal',
@@ -1714,14 +1759,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chrome.runtime.lastError) {
         console.error('[YuxTrans] 加载诊断数据失败:', chrome.runtime.lastError);
         if (metricsRecentErrorsEl) {
-          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${chrome.runtime.lastError.message}</p>`;
+          // eslint-disable-next-line no-unsanitized/property -- 静态提示文案
+          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${escapeHtml(chrome.runtime.lastError.message)}</p>`;
         }
         return;
       }
       if (!res?.success) {
         console.error('[YuxTrans] 诊断数据返回失败:', res?.error);
         if (metricsRecentErrorsEl) {
-          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${res?.error || '未知错误'}</p>`;
+          // eslint-disable-next-line no-unsanitized/property -- 错误信息经 escapeHtml
+          metricsRecentErrorsEl.innerHTML = `<p class="hint">加载失败: ${escapeHtml(res?.error || '未知错误')}</p>`;
         }
         return;
       }
@@ -1764,7 +1811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const label = PROVIDER_NAMES[provider] || provider;
             return `
               <tr>
-                <td>${label}</td>
+                <td>${escapeHtml(label)}</td>
                 <td>${item.count}</td>
                 <td>${item.success}</td>
                 <td>${item.failure}</td>
@@ -1773,6 +1820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               </tr>
             `;
           }).join('');
+        // eslint-disable-next-line no-unsanitized/property -- 文本字段经 escapeHtml，其余为数值
         tbody.innerHTML = rows || '<tr><td colspan="6" style="text-align:center;color:var(--yxt-text-tertiary);">暂无数据</td></tr>';
       }
     }
@@ -1785,6 +1833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (failures.length === 0) {
         metricsRecentErrorsEl.innerHTML = '<div class="yxt-empty">暂无失败记录</div>';
       } else {
+        // eslint-disable-next-line no-unsanitized/property -- 字段均经 escapeHtml，time 由 Date 生成
         metricsRecentErrorsEl.innerHTML = failures.map(m => {
           const time = new Date(m.timestamp).toLocaleString('zh-CN');
           const actionLabel = { translate: '翻译', translateStream: '流式', translateBatch: '批量', swInit: 'SW 启动' }[m.action] || m.action;
@@ -1793,8 +1842,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="metrics-error-item">
               <div class="error-time">${time}</div>
               <div>
-                <span class="error-action">${actionLabel} · ${providerLabel}</span>
-                <span class="error-type">${m.errorType || 'unknown'}</span>
+                <span class="error-action">${escapeHtml(actionLabel)} · ${escapeHtml(providerLabel)}</span>
+                <span class="error-type">${escapeHtml(m.errorType || 'unknown')}</span>
               </div>
             </div>
           `;
@@ -1812,13 +1861,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chrome.runtime.lastError) {
         console.error('[YuxTrans] 加载请求日志失败:', chrome.runtime.lastError);
         if (requestLogsContainer) {
-          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${chrome.runtime.lastError.message}</p>`;
+          // eslint-disable-next-line no-unsanitized/property -- 静态提示文案
+          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${escapeHtml(chrome.runtime.lastError.message)}</p>`;
         }
         return;
       }
       if (!res?.success) {
         if (requestLogsContainer) {
-          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${res?.error || '未知错误'}</p>`;
+          // eslint-disable-next-line no-unsanitized/property -- 错误信息经 escapeHtml
+          requestLogsContainer.innerHTML = `<p class="hint">加载失败: ${escapeHtml(res?.error || '未知错误')}</p>`;
         }
         return;
       }
@@ -1833,6 +1884,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    // eslint-disable-next-line no-unsanitized/property -- 字段均经 escapeHtml，time 由 Date 生成
     requestLogsContainer.innerHTML = logs.map(log => {
       const time = new Date(log.timestamp).toLocaleString('zh-CN');
       const actionLabel = { translate: '单句', translateStream: '流式', translateBatch: '批量' }[log.action] || log.action;
@@ -1854,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return `
         <div class="request-log-item">
           <div class="log-header">
-            <span class="log-meta">${time} · ${actionLabel} · ${providerLabel}${log.model ? ' · ' + log.model : ''} · ${log.latencyMs || 0}ms</span>
+            <span class="log-meta">${time} · ${escapeHtml(actionLabel)} · ${escapeHtml(providerLabel)}${log.model ? ' · ' + escapeHtml(log.model) : ''} · ${log.latencyMs || 0}ms</span>
             <span class="log-status ${statusClass}">${statusText}</span>
           </div>
           <div class="log-label">Prompt</div>
@@ -1868,14 +1920,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).join('');
   }
 
+  // 转义实现已下沉至 lib/product-helpers.js（单一来源，可单测）；函数声明保证作用域内各处可用
   function escapeHtml(str) {
-    if (str === undefined || str === null) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return Helpers.escapeHtml(str);
   }
 
   refreshMetricsBtn?.addEventListener('click', loadMetrics);

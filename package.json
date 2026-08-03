@@ -1,5 +1,14 @@
 {
   "scripts": {
-    "test": "node --test extension/tests/*.test.js"
+    "test": "node --test extension/tests/*.test.js",
+    "lint": "eslint extension/",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.0",
+    "eslint": "^10.8.0",
+    "eslint-plugin-no-unsanitized": "^4.1.5",
+    "globals": "^17.8.0"
   }
 }

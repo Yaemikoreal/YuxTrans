@@ -41,6 +41,71 @@
     return entry.promise;
   }
 
+  /**
+   * 信号量式出站并发闸门：在途数 < 上限时立即放行，否则按优先级排队（数值小者优先，同级 FIFO）。
+   * 上限由 getLimit() 在「每次放行决策」时动态读取（而非创建时固化），
+   * 因此限速状态变化（429 冷却把 concurrentLimit 降下来）对后续放行即时生效；
+   * 上限调大时不主动唤醒队列，由下一次 acquire/release 自然消化（保守方向，不会超发）。
+   * @param {() => number} getLimit 动态上限读取函数
+   */
+  function createConcurrencyGate(getLimit) {
+    let active = 0;
+    let seq = 0;
+    const queue = []; // { priority, seq, resolve }
+
+    function currentLimit() {
+      const n = Number(getLimit());
+      // 上限异常时兜底为 1：宁可串行也不放任并发
+      return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+    }
+
+    // 取出优先级最高（数值最小）、同级先到先得的等待者
+    function takeNext() {
+      let best = 0;
+      for (let i = 1; i < queue.length; i++) {
+        if (queue[i].priority < queue[best].priority ||
+            (queue[i].priority === queue[best].priority && queue[i].seq < queue[best].seq)) {
+          best = i;
+        }
+      }
+      return queue.splice(best, 1)[0];
+    }
+
+    function tryDispatch() {
+      while (queue.length > 0 && active < currentLimit()) {
+        const next = takeNext();
+        active++;
+        next.resolve();
+      }
+    }
+
+    /**
+     * 申请一个并发槽位；当前在途数 < 动态上限时立即放行，否则按优先级排队
+     * @param {number} [priority] 优先级，默认 NORMAL
+     * @returns {Promise<void>} 获得槽位时 resolve
+     */
+    function acquire(priority) {
+      const p = (typeof priority === 'number') ? priority : PRIORITY.NORMAL;
+      return new Promise((resolve) => {
+        queue.push({ priority: p, seq: seq++, resolve });
+        tryDispatch();
+      });
+    }
+
+    /** 释放槽位并放行队首（若有空位）；调用方须用 try/finally 保证配对 */
+    function release() {
+      if (active > 0) active--;
+      tryDispatch();
+    }
+
+    return {
+      acquire,
+      release,
+      activeCount: () => active,
+      queuedCount: () => queue.length
+    };
+  }
+
   /** 是否存在指定 cacheKey 的在途翻译 */
   function hasInflight(cacheKey) {
     return !!cacheKey && inflight.has(cacheKey);
@@ -57,12 +122,13 @@
   }
 
   SW.SCHEDULER_PRIORITY = PRIORITY;
+  SW.createConcurrencyGate = createConcurrencyGate;
   SW.scheduleTranslation = scheduleTranslation;
   SW.hasInflight = hasInflight;
   SW.inflightCount = inflightCount;
   SW.clearInflight = clearInflight;
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PRIORITY, scheduleTranslation, hasInflight, inflightCount, clearInflight };
+    module.exports = { PRIORITY, createConcurrencyGate, scheduleTranslation, hasInflight, inflightCount, clearInflight };
   }
 })(typeof self !== 'undefined' ? self : typeof globalThis !== 'undefined' ? globalThis : this);

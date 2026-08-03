@@ -79,6 +79,11 @@ node_modules/
 *.tar.gz
 *.zip
 
+# Remotion (yuxtrans-promo)
+yuxtrans-promo/out/
+yuxtrans-promo/dist/
+yuxtrans-promo/.remotion/
+
 # Build artifacts
 *.pyc
 *.pyo
@@ -86,3 +91,6 @@ node_modules/
 # Test databases
 test_*.db
 test_*.sqlite
+# Playwright E2E 产物
+test-results/
+playwright-report/

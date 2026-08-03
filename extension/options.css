@@ -923,6 +923,14 @@ label.btn-secondary {
   background: var(--yxt-error-soft);
 }
 
+.status.info {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  color: var(--yxt-text);
+  border-color: var(--yxt-border-dusk);
+  background: var(--yxt-accent-soft);
+}
+
 /* ===== 更新横幅 ===== */
 .update-banner {
   background: var(--yxt-accent-soft);
