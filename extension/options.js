@@ -630,6 +630,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const provider = providerSel?.value || 'qwen';
       const url = PROVIDER_KEY_URLS[provider] || '';
       if (url) {
+        // eslint-disable-next-line no-unsanitized/property -- url 来自 PROVIDER_KEY_URLS 常量映射，非用户输入
         keyLinkEl.innerHTML = `还没有 API Key？<a href="${url}" target="_blank" rel="noopener">前往申请 -></a>`;
         keyLinkEl.style.display = '';
       } else {
