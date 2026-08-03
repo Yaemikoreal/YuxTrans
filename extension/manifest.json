@@ -10,7 +10,8 @@
     "storage",
     "unlimitedStorage",
     "clipboardWrite",
-    "contextMenus"
+    "contextMenus",
+    "alarms"
   ],
   
   "host_permissions": [
