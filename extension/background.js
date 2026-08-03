@@ -2777,6 +2777,24 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       // 方案 1：批量规则移入 system message，user message 只带输入数据
       const batchSystemPrompt = buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang);
 
+      // 方案 8：注册批次内每项 cacheKey 为在途，使并发划词可共享批次结果
+      // executor 等待 batchDeferred；批次成功后 resolve，并发划词直接获得结果而不发额外请求
+      // .catch(() => {}) 抑制无并发消费者时的 unhandled rejection
+      let batchDeferredResolve, batchDeferredReject;
+      const batchDeferred = new Promise((res, rej) => { batchDeferredResolve = res; batchDeferredReject = rej; });
+      if (SW.scheduleTranslation) {
+        for (let bi = 0; bi < uniqueItems.length; bi++) {
+          const itemIdx = bi;
+          const ck = generateCacheKey(uniqueItems[bi].text, sourceLang, uniqueItems[bi].resolvedTargetLang);
+          SW.scheduleTranslation(ck, () => batchDeferred.then(output => {
+            if (!output) throw new Error('batch failed');
+            const t = output[itemIdx];
+            if (t && typeof t === 'string' && t.trim()) return t;
+            throw new Error('batch item ' + itemIdx + ' invalid');
+          }), SW.SCHEDULER_PRIORITY.LOW).catch(() => {});
+        }
+      }
+
       // 发送请求并解析（先应用速率延迟）
       let jsonParsed = false;
       let batchOutput = [];
@@ -2881,6 +2899,14 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
           await new Promise(r => setTimeout(r, batch429Retries * 5000 + 5000));
         }
       } while (needRetry429 && !isSessionCancelled(sessionId));
+
+      // 方案 8：批次结束后 resolve 共享 Promise，释放并发划词的在途等待
+      // 成功 -> resolve(output)；失败 -> resolve(null)（executor 内部抛错，并发划词走自身 fallback）
+      if (jsonParsed && batchOutput.length === groupTexts.length) {
+        batchDeferredResolve(batchOutput);
+      } else {
+        batchDeferredResolve(null);
+      }
 
       logRequest({
         action: 'translateBatch',
