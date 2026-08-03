@@ -264,6 +264,7 @@ body::after {
   padding-top: var(--yxt-space-6);
   border-top: 1px solid var(--yxt-border);
   opacity: 0.7;
+  text-align: center;
 }
 
 .sidebar-version {
@@ -272,6 +273,29 @@ body::after {
   color: var(--yxt-text-tertiary);
   text-align: center;
   letter-spacing: 0.02em;
+}
+
+/* GitHub 链接：书页底缘的一枚铅字小印，克制不抢眼 */
+.sidebar-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--yxt-space-2);
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-2xs);
+  color: var(--yxt-text-tertiary);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color var(--yxt-transition-fast);
+}
+
+.sidebar-github:hover {
+  color: var(--yxt-text);
+}
+
+.sidebar-github-icon {
+  fill: currentColor;
+  flex-shrink: 0;
 }
 
 /* ===== 主内容区 ===== */
