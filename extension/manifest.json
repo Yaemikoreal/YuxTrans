@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "__MSG_extDescription__",
   "default_locale": "zh_CN",
   
@@ -64,15 +64,15 @@
   "commands": {
     "translate-selection": {
       "suggested_key": {
-        "default": "Ctrl+Shift+T",
-        "mac": "Command+Shift+T"
+        "default": "Alt+T",
+        "mac": "Alt+T"
       },
       "description": "翻译选中内容"
     },
     "translate-page": {
       "suggested_key": {
-        "default": "Ctrl+Shift+P",
-        "mac": "Command+Shift+P"
+        "default": "Alt+P",
+        "mac": "Alt+P"
       },
       "description": "翻译整页"
     }

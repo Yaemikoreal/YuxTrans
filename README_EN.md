@@ -31,7 +31,7 @@ It is not built for feature density. It answers a single question: in long-form 
 - **Steady by design.** When the local model is unavailable or the cloud throttles, it falls back to a spare provider; a 200 MB IndexedDB cache returns hits in milliseconds.
 - **Profile-based management.** Save multiple provider profiles (provider, credentials, model) in Settings, and switch them in the popup.
 
-Current stable release: **v0.5.0**.
+Current stable release: **v0.6.0**.
 
 ## Design intent
 
@@ -127,8 +127,8 @@ Each writable module has its own **Save** button—save only what you changed. A
 
 ### Selection translation
 
-- Select text and release the mouse (default: show popup on select; can switch to floating icon or context menu only in Settings).
-- Shortcut `Ctrl + Shift + T` (macOS `⌘ + Shift + T`).
+- Default is **modifier + select**: hold **Ctrl** (changeable to Alt/Shift in Settings), select text and release to translate; to translate on plain selection, switch to "popup on select" in Interaction & display.
+- Shortcut `Alt + T` (macOS `Alt + T`).
 - Right-click selection → **Translate selection**.
 
 ### Hover paragraph translation
@@ -143,7 +143,7 @@ Each writable module has its own **Save** button—save only what you changed. A
 ### Full-page translation
 
 - Popup primary button **Translate page**.
-- Shortcut `Ctrl + Shift + P` (macOS `⌘ + Shift + P`).
+- Shortcut `Alt + P` (macOS `Alt + P`).
 - Right-click empty page area → **Translate page**.
 
 Viewport-first batching; optional streaming (token-by-token) and cancel; switch bilingual / translation-only or restore original from the control bar.
@@ -152,11 +152,12 @@ Viewport-first batching; optional streaming (token-by-token) and cancel; switch 
 
 | Shortcut | Action |
 | :--- | :--- |
-| `Ctrl + Shift + T` / `⌘ + Shift + T` | Translate selection |
-| `Ctrl + Shift + P` / `⌘ + Shift + P` | Translate page |
+| `Alt + T` | Translate selection |
+| `Alt + P` | Translate page |
+| `Ctrl` (configurable) + select | Selection translation (default trigger mode) |
 | `Alt` (configurable) + hover | Paragraph translation (must be enabled in Settings) |
 
-Customize the first two at `chrome://extensions/shortcuts`.
+> **Tip**: If a shortcut doesn't work (occupied by the browser or another extension), customize it at `chrome://extensions/shortcuts`.
 
 ---
 

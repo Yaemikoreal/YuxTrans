@@ -77,6 +77,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 补充 sender 校验、配置脱敏、初始化竞态、僵尸会话等用例；`mock-chrome.js` 增加 `runtime.id` 与 `alarms` mock。
 - 已知记录（未改逻辑，测试中标注）：`validateCacheEntry` 的 `length_ratio` 与 `entity_drift` 规则在当前阈值（10 < 12）下不可达，属待决策的实现层疑点。
 
+### User Experience（使用者视角优化）
+
+- **快捷键冲突修复** - `Ctrl+Shift+T`（与 Chrome「恢复关闭标签页」冲突）/ `Ctrl+Shift+P`（与 DevTools 命令面板冲突）改为 `Alt+T`（划词）/ `Alt+P`（整页），macOS 统一用相同组合（不再占用 `⌘` 键）。
+- **README 同步默认触发模式** - 文档「用法」段由「选中后弹出」更正为「修饰键 + 划选」（v0.5.0 后新默认），消除新用户「划选后无浮窗」的困惑。
+- **版本号升级** - manifest 由 `0.5.0` 升至 `0.6.0`，与 Unreleased 代码变更对齐。
+- **首次安装引导补全 Ollama 安装链接** - 引导第 2 步本地路径检测到 Ollama 不可用时，提供「前往 Ollama 官网下载」按钮，不再只给出命令行文案。
+- **首次安装引导补全供应商 Key 申请链接** - 引导第 2 步云端路径各供应商下拉项标注「Key 申请地址」，降低「不知道去哪拿 Key」的卡点。
+- **划词浮窗工具栏图标化** - 钉住 / 复制 / 差译按钮由纯文字升级为图标 + tooltip，提升核心功能的可发现性。
+
 ## [0.5.0] - 2026-07-24
 
 > **稳定版（Stable）** — 浏览器扩展为唯一产品形态；相对 0.4.1 完成阅读交互增强、整页流式与配额治理、设置页信息架构重构、可自定义风格提示词与发布前质量门禁。建议从 `v0.5.0-beta.1` 升级至本版本。  
