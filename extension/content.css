@@ -74,7 +74,8 @@ code {
 }
 
 /* 图钉图标：跟随按钮当前文字色，hover 高亮 */
-.yuxtrans-pin-btn .yuxtrans-pin-icon {
+.yuxtrans-pin-btn .yuxtrans-pin-icon,
+.yuxtrans-action-icon {
   display: inline-block;
   vertical-align: middle;
   fill: currentColor;

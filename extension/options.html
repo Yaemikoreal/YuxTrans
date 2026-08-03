@@ -52,6 +52,7 @@
               <option value="anthropic">Anthropic</option>
               <option value="google">谷歌免费翻译（免 Key）</option>
             </select>
+            <p class="hint" id="firstRunKeyLink">还没有 API Key？<a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener">前往申请 →</a></p>
           </div>
           <div class="form-group">
             <label class="form-label" for="firstRunApiKey">API Key</label>
@@ -65,7 +66,10 @@
             <label class="form-label" for="firstRunLocalModel">本地模型名称</label>
             <input type="text" id="firstRunLocalModel" value="qwen3.5:0.8b" placeholder="如 qwen3.5:0.8b">
           </div>
-          <button type="button" class="btn-secondary" id="firstRunRecheckOllama">重新检测 Ollama</button>
+          <div class="button-group">
+            <button type="button" class="btn-secondary" id="firstRunRecheckOllama">重新检测 Ollama</button>
+            <a href="https://ollama.com/download" target="_blank" rel="noopener" class="btn-secondary" id="firstRunDownloadOllama" style="display:none;">前往 Ollama 官网下载</a>
+          </div>
         </div>
       </div>
 

@@ -607,8 +607,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     const providerSel = getById('firstRunProvider');
     const apiKeyInputFr = getById('firstRunApiKey');
     const localModelInputFr = getById('firstRunLocalModel');
+    const keyLinkEl = getById('firstRunKeyLink');
+    const downloadOllamaLink = getById('firstRunDownloadOllama');
+
+    // 各供应商 API Key 申请地址（google 免 Key）
+    const PROVIDER_KEY_URLS = {
+      qwen: 'https://dashscope.console.aliyun.com/apiKey',
+      deepseek: 'https://platform.deepseek.com/api_keys',
+      openai: 'https://platform.openai.com/api-keys',
+      moonshot: 'https://platform.moonshot.cn/console/api-keys',
+      siliconflow: 'https://cloud.siliconflow.cn/account/ak',
+      groq: 'https://console.groq.com/keys',
+      anthropic: 'https://console.anthropic.com/settings/keys',
+      google: ''
+    };
+
+    /** 切换供应商时更新 Key 申请链接 */
+    function updateKeyLink() {
+      if (!keyLinkEl) return;
+      const provider = providerSel?.value || 'qwen';
+      const url = PROVIDER_KEY_URLS[provider] || '';
+      if (url) {
+        keyLinkEl.innerHTML = `还没有 API Key？<a href="${url}" target="_blank" rel="noopener">前往申请 -></a>`;
+        keyLinkEl.style.display = '';
+      } else {
+        // google 免 Key
+        keyLinkEl.innerHTML = '该供应商无需 API Key，直接继续即可。';
+        keyLinkEl.style.display = '';
+      }
+    }
+    providerSel?.addEventListener('change', updateKeyLink);
 
     wizard.hidden = false;
+    updateKeyLink(); // 初始化 Key 申请链接
 
     function readStateFromDom() {
       state.provider = providerSel?.value || 'qwen';
@@ -655,6 +686,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function probeOllama() {
       if (ollamaStatus) ollamaStatus.textContent = '正在检测本机 Ollama…';
+      if (downloadOllamaLink) downloadOllamaLink.style.display = 'none';
       state.ollamaOk = false;
       try {
         const controller = new AbortController();
@@ -668,11 +700,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         } else {
           if (ollamaStatus) ollamaStatus.textContent = 'Ollama 响应异常，请确认服务已启动。';
+          if (downloadOllamaLink) downloadOllamaLink.style.display = '';
         }
       } catch (e) {
         if (ollamaStatus) {
           ollamaStatus.textContent = '未检测到 Ollama。请先安装并运行 ollama serve，或改用云端 API。';
         }
+        if (downloadOllamaLink) downloadOllamaLink.style.display = '';
       }
       syncPanes();
     }
