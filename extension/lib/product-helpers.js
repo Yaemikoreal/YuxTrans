@@ -550,7 +550,8 @@
       'siteRule',
       'siteList',
       'autoDetectLang',
-      'autoFallback'
+      'autoFallback',
+      'batchContextWindow'
     ])
   });
 

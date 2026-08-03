@@ -95,6 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const siteListTextarea = getById('siteList');
   const autoDetectLangInput = getById('autoDetectLang');
   const autoFallbackInput = getById('autoFallback');
+  const batchContextWindowInput = getById('batchContextWindow');
   const enableStreamingInput = getById('enableStreaming');
   const offlineModeInput = getById('offlineMode');
   // F1-F6 新配置元素
@@ -433,6 +434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (siteListTextarea) siteListTextarea.value = (config.siteList || []).join('\n');
     if (autoDetectLangInput) autoDetectLangInput.checked = config.autoDetectLang !== false;
     if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
+    if (batchContextWindowInput) batchContextWindowInput.checked = config.batchContextWindow !== false;
     if (enableStreamingInput) enableStreamingInput.checked = config.enableStreaming !== false;
     if (offlineModeInput) offlineModeInput.checked = !!config.offlineMode;
     // F1-F6 配置回填
@@ -1619,6 +1621,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
       autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
       autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
+      batchContextWindow: batchContextWindowInput ? getChecked(batchContextWindowInput) : true,
       enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
       offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
       hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,

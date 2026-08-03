@@ -2670,10 +2670,11 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
   let prompt = '';
   // 批量翻译不注入页面级上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
   // 但注入上一批末尾的「原文+译文」作为滑动窗口，提升跨段指代与连贯性（明确标记勿重译）。
-  if (context && context.prevContext && context.prevContext.source) {
+  // 方案 5：窗口缩短至 150 字符；用户可在设置中关闭（config.batchContextWindow === false）
+  if (context && context.prevContext && context.prevContext.source && config.batchContextWindow !== false) {
     prompt += `Previous segment (for reference ONLY, do NOT re-translate or include in output):`;
-    prompt += `\nSource: ${String(context.prevContext.source).slice(0, 300)}`;
-    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 300)}\n\n`;
+    prompt += `\nSource: ${String(context.prevContext.source).slice(0, 150)}`;
+    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 150)}\n\n`;
   }
   prompt += `Input:\n${JSON.stringify(groupTexts)}`;
   return prompt;
@@ -2918,8 +2919,8 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
           const wt = batchOutput[wi];
           if (groupTexts[wi] && wt && typeof wt === 'string' && wt.trim()) {
             windowContext = {
-              source: String(groupTexts[wi]).slice(0, 300),
-              translation: String(wt).trim().slice(0, 300)
+              source: String(groupTexts[wi]).slice(0, 150),
+              translation: String(wt).trim().slice(0, 150)
             };
             break;
           }

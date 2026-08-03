@@ -328,6 +328,7 @@ test('pickModuleConfig 按模块切片且不串字段', () => {
     siteList: ['a.com'],
     autoDetectLang: false,
     autoFallback: false,
+    batchContextWindow: false,
     noise: 'drop-me'
   };
   const pref = H.pickModuleConfig('preference', values);
@@ -348,6 +349,7 @@ test('pickModuleConfig 按模块切片且不串字段', () => {
   const data = H.pickModuleConfig('data', values);
   assert.strictEqual(data.maxCacheMB, 300);
   assert.deepStrictEqual(data.siteList, ['a.com']);
+  assert.strictEqual(data.batchContextWindow, false);
   assert.ok(!('translateStyle' in data));
   assert.deepStrictEqual(H.pickModuleConfig('diagnostics', values), {});
   assert.deepStrictEqual(H.pickModuleConfig('preference', null), {});
