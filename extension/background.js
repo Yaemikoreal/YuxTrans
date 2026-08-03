@@ -1652,9 +1652,11 @@ async function lookupWord(word, sourceLang = 'auto', targetLang = 'zh') {
   try {
     const prompt = buildDictionaryPrompt(word, resolvedSourceLang, targetLang);
     // jsonMode + 自定义 prompt，复用 translateWithCloud 的请求/限流/超时路径
+    // 方案 4：词典查询用 0.0 温度，事实性输出最稳
     const raw = await translateWithCloud(word, resolvedSourceLang, targetLang, null, null, {
       promptOverride: prompt,
-      jsonMode: true
+      jsonMode: true,
+      temperature: 0.0
     });
     // 解析降级链：JSON.parse -> 失败则 { word, senses: [], raw } 纯文本降级
     const dict = parseDictionaryResult(raw, word);
@@ -1790,14 +1792,27 @@ function supportsJsonMode(provider) {
 
 /**
  * 构建 API 请求参数
+ * 方案 1：支持 systemPrompt（批量规则移入 system message，user message 只带数据）
+ * 方案 4：支持 temperature 按场景分流
+ * @param {string} prompt - user message 内容
+ * @param {boolean} stream
+ * @param {object|null} [providerOverride]
+ * @param {boolean} [jsonMode]
+ * @param {string} [systemPrompt] - system message（可选）
+ * @param {number} [temperature=0.3] - 采样温度
  */
-function buildRequest(prompt, stream = false, providerOverride = null, jsonMode = false) {
+function buildRequest(prompt, stream = false, providerOverride = null, jsonMode = false, systemPrompt = null, temperature = 0.3) {
   const p = resolveProviderConfig(providerOverride);
   const format = getFormat(p);
   const model = getModel(p);
   const apiKey = getApiKey(p);
   let headers = { 'Content-Type': 'application/json' };
   let body;
+
+  // 构建 messages：有 systemPrompt 时插入 system 角色
+  const messages = systemPrompt
+    ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }]
+    : [{ role: 'user', content: prompt }];
 
   if (format === 'anthropic') {
     headers['x-api-key'] = apiKey;
@@ -1806,20 +1821,20 @@ function buildRequest(prompt, stream = false, providerOverride = null, jsonMode 
       model,
       max_tokens: 4096,
       stream,
-      messages: [{ role: 'user', content: prompt }]
+      messages
     };
   } else if (p.provider === 'local') {
     body = {
       model,
-      messages: [{ role: 'user', content: prompt }],
+      messages,
       stream
     };
   } else {
     headers['Authorization'] = `Bearer ${apiKey}`;
     body = {
       model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
+      messages,
+      temperature,
       stream
     };
     if (jsonMode && !stream && supportsJsonMode(p.provider)) {
@@ -2045,7 +2060,9 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
 
     // F2：词典模式支持自定义 prompt + jsonMode（复用同一 fetch/限流/超时路径）
     const prompt = options.promptOverride || buildTranslationPrompt(text, sourceLang, targetLang, context);
-    const { headers, body } = buildRequest(prompt, false, p, options.jsonMode === true);
+    // 方案 4：温度按场景分流--词典 0.0 / 划词 0.2 / 默认 0.3
+    const temperature = typeof options.temperature === 'number' ? options.temperature : 0.2;
+    const { headers, body } = buildRequest(prompt, false, p, options.jsonMode === true, null, temperature);
     const logStart = performance.now();
 
     // AbortController 超时控制
@@ -2229,7 +2246,8 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
 
     const format = getFormat(p);
     const prompt = buildTranslationPrompt(text, sourceLang, targetLang, context);
-    const { headers, body } = buildRequest(prompt, true, p);
+    // 方案 4：流式翻译保持 0.3（逐字输出的体验感）
+    const { headers, body } = buildRequest(prompt, true, p, false, null, 0.3);
 
     const controller = new AbortController();
     // 接入整页取消会话：用户取消整页流式翻译时 abort 在途 SSE（与批量路径对齐，避免继续消耗配额）
@@ -2604,42 +2622,43 @@ function splitIntoCharBatches(items, maxChars = MAX_BATCH_CHARS) {
 }
 
 /**
- * 构建批量翻译 Prompt
- * 统一封装风格、上下文、输出格式要求，便于测试与维护
+ * 构建批量翻译 System Prompt（规则与风格指令，方案 1：移入 system message）
  */
-function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context = null) {
+function buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang) {
   const targetName = LANG_NAMES[groupTargetLang] || groupTargetLang;
   const sourceName = groupSourceLang === 'auto' ? null : (LANG_NAMES[groupSourceLang] || groupSourceLang);
   const styleHint = SW.resolveStylePrompt
     ? SW.resolveStylePrompt(config.translateStyle, config.stylePrompts)
     : (STYLE_PROMPTS[config.translateStyle] || '');
 
-  let prompt = `You are a professional translator. Translate the following JSON array of strings`;
-  if (sourceName) prompt += ` from ${sourceName}`;
-  prompt += ` to ${targetName}.`;
-
-  if (styleHint) {
-    prompt += `\nStyle: ${styleHint}`;
-  }
-
-  prompt += `\nSTRICT OUTPUT RULES:
+  let system = `You are a professional translator. Translate the following JSON array of strings`;
+  if (sourceName) system += ` from ${sourceName}`;
+  system += ` to ${targetName}.`;
+  if (styleHint) system += `\nStyle: ${styleHint}`;
+  system += `\nSTRICT OUTPUT RULES:
 1. Return ONLY a valid JSON array of strings. The array length MUST be exactly ${groupTexts.length} and the order MUST match the input exactly.
 2. Translate each item independently. Do not summarize, infer, or reuse text from one item for another.
 3. Do NOT include any markdown, code fences, explanations, notes, or page-level context.
 4. If an item is already in the target language or contains only proper nouns/code/numbers, return it unchanged.
 5. Keep HTML tags, placeholders, formatting and line breaks intact.
 6. Violating any of these rules will cause the response to be rejected.`;
+  system += `\n\nExample:\nInput: ["Hello", "GitHub"]\nOutput: ["你好", "GitHub"]`;
+  return system;
+}
 
-  prompt += `\n\nExample:\nInput: ["Hello", "GitHub"]\nOutput: ["你好", "GitHub"]`;
-
+/**
+ * 构建批量翻译 User Prompt（仅输入数据与滑动窗口上下文）
+ */
+function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context = null) {
+  let prompt = '';
   // 批量翻译不注入页面级上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
   // 但注入上一批末尾的「原文+译文」作为滑动窗口，提升跨段指代与连贯性（明确标记勿重译）。
   if (context && context.prevContext && context.prevContext.source) {
-    prompt += `\n\nPrevious segment (for reference ONLY, do NOT re-translate or include in output):`;
+    prompt += `Previous segment (for reference ONLY, do NOT re-translate or include in output):`;
     prompt += `\nSource: ${String(context.prevContext.source).slice(0, 300)}`;
-    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 300)}`;
+    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 300)}\n\n`;
   }
-  prompt += `\n\nInput:\n${JSON.stringify(groupTexts)}`;
+  prompt += `Input:\n${JSON.stringify(groupTexts)}`;
   return prompt;
 }
 
@@ -2737,6 +2756,8 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
 
       const groupTexts = uniqueItems.map((item) => item.text);
       const prompt = buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, { prevContext: windowContext });
+      // 方案 1：批量规则移入 system message，user message 只带输入数据
+      const batchSystemPrompt = buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang);
 
       // 发送请求并解析（先应用速率延迟）
       let jsonParsed = false;
@@ -2755,7 +2776,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         // 出站并发闸门：批量请求以 LOW 优先级排队（让位划词/流式），同样受限速上限约束
         await apiConcurrencyGate.acquire(SW.SCHEDULER_PRIORITY.LOW);
         try {
-          const { headers, body } = buildRequest(prompt, false, null, true);
+          const { headers, body } = buildRequest(prompt, false, null, true, batchSystemPrompt, 0.1);
           const endpoint = getEndpoint();
           const timeout = resolveProviderConfig().provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
           const controller = new AbortController();
@@ -3935,6 +3956,7 @@ if (typeof module !== 'undefined' && module.exports) {
     rateLimitState,
     RATE_LIMIT_CONFIG,
     buildBatchPrompt,
+    buildBatchSystemPrompt,
     buildTranslationPrompt,
     buildDictionaryPrompt,
     lookupWord,

@@ -11,7 +11,7 @@ const bg = require('../background.js');
 
 test('generateCacheKey 拼接规则', () => {
   const k = bg.generateCacheKey('Hello', 'auto', 'zh');
-  assert.ok(k.startsWith('v3:p1:'), '含 version + promptVersion');
+  assert.ok(k.startsWith('v3:p2:'), '含 version + promptVersion');
   assert.ok(k.endsWith(':auto:zh:normal:Hello'), 'lang/style/text 后缀');
   // model 段非空（包装函数注入了当前模型）
   assert.ok(k.split(':')[2].length > 0, 'model 段非空');
@@ -203,15 +203,25 @@ test('getBatchConfig 按 provider/model 返回动态 batch 参数', () => {
   );
 });
 
-test('buildBatchPrompt 包含必要格式要求但不注入页面上下文', () => {
+test('buildBatchSystemPrompt 包含必要格式要求但不注入页面上下文', () => {
+  const system = bg.buildBatchSystemPrompt(['Hello', 'World'], 'en', 'zh');
+  assert.ok(system.includes('JSON array of strings'));
+  assert.ok(system.includes('Simplified Chinese'));
+  assert.ok(system.includes('exactly 2'));
+  assert.ok(system.includes('HTML tags'));
+  // 批量翻译不注入页面上下文，避免模型把任意片段偏向页面标题
+  assert.ok(!system.includes('Test Page'));
+  assert.ok(!system.includes('example.com'));
+});
+
+test('buildBatchPrompt 只包含输入数据与滑动窗口上下文', () => {
   const prompt = bg.buildBatchPrompt(['Hello', 'World'], 'en', 'zh', { pageTitle: 'Test Page', pageUrl: 'https://example.com/path' });
-  assert.ok(prompt.includes('JSON array of strings'));
   assert.ok(prompt.includes('Hello'));
   assert.ok(prompt.includes('World'));
-  assert.ok(prompt.includes('Simplified Chinese'));
-  assert.ok(prompt.includes('exactly 2'));
-  assert.ok(prompt.includes('HTML tags'));
-  // 批量翻译不注入页面上下文，避免模型把任意片段偏向页面标题
+  // 规则已移入 system message，user prompt 不含规则文案
+  assert.ok(!prompt.includes('JSON array of strings'));
+  assert.ok(!prompt.includes('STRICT OUTPUT RULES'));
+  // 批量翻译不注入页面上下文
   assert.ok(!prompt.includes('Test Page'));
   assert.ok(!prompt.includes('example.com'));
 });

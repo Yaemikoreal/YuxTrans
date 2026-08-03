@@ -80,7 +80,8 @@
   SW.DEFAULT_BATCH_SIZE = 20;
   // Prompt 规则版本：STRICT OUTPUT RULES / 上下文注入等 prompt 结构变更时 bump，
   // 配合 CACHE_KEY_VERSION 让旧缓存自动失效，避免译文错配。
-  SW.PROMPT_VERSION = 'p1';
+  // p2: 批量规则移入 system message + 温度按场景分流（划词 0.2 / 批量 0.1 / 词典 0.0 / 流式 0.3）
+  SW.PROMPT_VERSION = 'p2';
   // v3：键内编入 promptVersion + model，术语表/模型/prompt 变更后旧缓存不再误命中。
   SW.CACHE_KEY_VERSION = 'v3';
 
