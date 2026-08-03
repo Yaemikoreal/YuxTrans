@@ -399,8 +399,20 @@ async function loadUsageStats() {
 
 function estimateTokens(text) {
   if (!text) return 0;
-  // 轻量估算：英文约 1 token / 4 字符，中文约 1 token / 1.5 字符；取折中
-  return Math.ceil(text.length / 3);
+  // 区分 CJK 与 Latin：CJK 约 1.5 字符/token，Latin 约 4 字符/token
+  let cjk = 0, other = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    if ((code >= 0x4E00 && code <= 0x9FFF) ||  // CJK 统一表意
+        (code >= 0x3040 && code <= 0x30FF) ||  // 平假名+片假名
+        (code >= 0xAC00 && code <= 0xD7AF) ||  // 韩文音节
+        (code >= 0x3400 && code <= 0x4DBF)) {  // CJK 扩展A
+      cjk++;
+    } else {
+      other++;
+    }
+  }
+  return Math.ceil(cjk / 1.5 + other / 4);
 }
 
 function saveUsageStatsDeferred() {
@@ -2731,69 +2743,105 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       let batchOutput = [];
       let parseError = null;
       const batchLogStart = performance.now();
-      await applyRateDelay();
-      // 出站并发闸门：批量请求以 LOW 优先级排队（让位划词/流式），同样受限速上限约束
-      await apiConcurrencyGate.acquire(SW.SCHEDULER_PRIORITY.LOW);
-      try {
-        const { headers, body } = buildRequest(prompt, false, null, true);
-        const endpoint = getEndpoint();
-        const timeout = resolveProviderConfig().provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
-        const controller = new AbortController();
-        registerSessionController(sessionId, controller);
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+      // 方案 2：批次级 429 退避--限流时整批重试，不拆单句，避免请求放大
+      let batch429Retries = 0;
+      let needRetry429 = false;
+      do {
+        jsonParsed = false;
+        batchOutput = [];
+        parseError = null;
+        needRetry429 = false;
+        await applyRateDelay();
+        // 出站并发闸门：批量请求以 LOW 优先级排队（让位划词/流式），同样受限速上限约束
+        await apiConcurrencyGate.acquire(SW.SCHEDULER_PRIORITY.LOW);
+        try {
+          const { headers, body } = buildRequest(prompt, false, null, true);
+          const endpoint = getEndpoint();
+          const timeout = resolveProviderConfig().provider === 'local' ? LOCAL_TIMEOUT_MS : (CLOUD_TIMEOUT_MS * 2);
+          const controller = new AbortController();
+          registerSessionController(sessionId, controller);
+          const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const response = await fetch(endpoint, {
-          method: 'POST', headers, body, signal: controller.signal
-        });
+          const response = await fetch(endpoint, {
+            method: 'POST', headers, body, signal: controller.signal
+          });
 
-        clearTimeout(timeoutId);
+          clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const data = await response.json();
-          const rawOutput = parseResponse(data, getFormat()).trim();
+          if (response.ok) {
+            const data = await response.json();
+            const rawOutput = parseResponse(data, getFormat()).trim();
 
-          try {
-            batchOutput = JSON.parse(rawOutput);
-          } catch (e1) {
-            const jsonBlockMatch = rawOutput.match(/```json\s*([\s\S]*?)\s*```/);
-            if (jsonBlockMatch) {
-              batchOutput = JSON.parse(jsonBlockMatch[1]);
-            } else {
-              const arrayMatch = rawOutput.match(/\[[\s\S]*?\]/);
-              if (arrayMatch) {
-                batchOutput = JSON.parse(arrayMatch[0]);
+            try {
+              batchOutput = JSON.parse(rawOutput);
+            } catch (e1) {
+              const jsonBlockMatch = rawOutput.match(/```json\s*([\s\S]*?)\s*```/);
+              if (jsonBlockMatch) {
+                batchOutput = JSON.parse(jsonBlockMatch[1]);
+              } else {
+                const arrayMatch = rawOutput.match(/\[[\s\S]*?\]/);
+                if (arrayMatch) {
+                  batchOutput = JSON.parse(arrayMatch[0]);
+                }
               }
             }
-          }
 
-          if (Array.isArray(batchOutput) && batchOutput.length === groupTexts.length) {
-            // Sanity check：如果模型把多段不同原文都译成了同一个结果（常见为页面标题），
-            // 说明 prompt 上下文存在偏差，直接按解析失败处理并降级为单句补全。
-            const distinctOutputs = new Set(
-              batchOutput.map(t => typeof t === 'string' ? t.trim() : '').filter(Boolean)
-            );
-            if (uniqueItems.length > 2 && distinctOutputs.size <= 1) {
-              jsonParsed = false;
-              batchOutput = [];
-              parseError = '模型返回了重复译文，疑似上下文偏差';
+            if (Array.isArray(batchOutput) && batchOutput.length === groupTexts.length) {
+              // 方案 3：sanity check 区分回显 vs 合法同译
+              const distinctOutputs = new Set(
+                batchOutput.map(t => typeof t === 'string' ? t.trim() : '').filter(Boolean)
+              );
+              if (uniqueItems.length > 2 && distinctOutputs.size <= 1) {
+                // 第一层：译文全部等于原文 -> 回显，判失败（模型未翻译）
+                const allEcho = batchOutput.every((t, i) =>
+                  typeof t === 'string' && t.trim() === groupTexts[i].trim()
+                );
+                if (allEcho) {
+                  jsonParsed = false;
+                  batchOutput = [];
+                  parseError = '模型回显原文，未翻译';
+                } else {
+                  // 第二层：译文统一但不等于原文 -> 按源文长度判断
+                  const avgSourceLen = groupTexts.reduce((s, t) => s + t.length, 0) / groupTexts.length;
+                  if (avgSourceLen > 20) {
+                    // 长文本统一译文：疑似模型上下文偏差，判失败
+                    jsonParsed = false;
+                    batchOutput = [];
+                    parseError = '模型返回了重复译文，疑似上下文偏差';
+                  } else {
+                    // 短文本统一译文：合法近义词（如 Settings/Configuration/Preferences -> 设置），通过
+                    jsonParsed = true;
+                  }
+                }
+              } else {
+                jsonParsed = true;
+              }
             } else {
-              jsonParsed = true;
+              parseError = `长度不匹配 (预期 ${groupTexts.length}, 实得 ${batchOutput.length})`;
             }
           } else {
-            parseError = `长度不匹配 (预期 ${groupTexts.length}, 实得 ${batchOutput.length})`;
+            const isRateLimit = response.status === 429;
+            updateRateLimitState(false, isRateLimit);
+            // 方案 2：429 时批次级退避重试，不立即拆单句
+            if (isRateLimit && batch429Retries < 2) {
+              batch429Retries++;
+              needRetry429 = true;
+            } else {
+              parseError = `HTTP ${response.status}`;
+            }
           }
-        } else {
-          const isRateLimit = response.status === 429;
-          updateRateLimitState(false, isRateLimit);
-          parseError = `HTTP ${response.status}`;
+        } catch (e) {
+          parseError = e.message;
+          console.warn('[YuxTrans] Batch translation for group ' + groupTargetLang + ' parse error:', e);
+        } finally {
+          // 会话 abort / 网络出错 / 解析异常均经此处释放槽位，不泄漏
+          apiConcurrencyGate.release();
         }
-      } catch (e) {
-        parseError = e.message;
-        console.warn('[YuxTrans] Batch translation for group ' + groupTargetLang + ' parse error:', e);
-      } finally {
-        // 会话 abort / 网络出错 / 解析异常均经此处释放槽位，不泄漏
-        apiConcurrencyGate.release();
-      }
+        // 429 退避：gate 已释放，sleep 期间不阻塞其他请求
+        if (needRetry429 && !isSessionCancelled(sessionId)) {
+          await new Promise(r => setTimeout(r, batch429Retries * 5000 + 5000));
+        }
+      } while (needRetry429 && !isSessionCancelled(sessionId));
 
       logRequest({
         action: 'translateBatch',
@@ -3311,7 +3359,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         // 先查缓存（Q3：异步——内存未命中时回查 IndexedDB 冷数据）
-        getFromCache(cacheKey).then((cached) => {
+        getFromCache(cacheKey).then(async (cached) => {
           if (cached) {
             recordUsage(true, 1);
             recordMetric({
@@ -3324,6 +3372,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               success: true,
               errorType: ''
             });
+            // 方案 6：伪流式回放--缓存命中时将完整译文切块推送，保持与真流式一致的视觉反馈
+            const reqId = request.requestId || null;
+            const chunks = cached.match(/[\s\S]{1,8}/g) || [cached];
+            for (let i = 0; i < chunks.length; i++) {
+              const partial = chunks.slice(0, i + 1).join('');
+              if (tabId) {
+                chrome.tabs.sendMessage(tabId, {
+                  action: 'streamChunk', requestId: reqId, chunk: chunks[i], fullText: partial
+                }).catch(() => { /* tab 可能已关闭 */ });
+              } else {
+                chrome.runtime.sendMessage({
+                  action: 'streamChunk', requestId: reqId, chunk: chunks[i], fullText: partial
+                }).catch(() => { /* popup 可能未打开 */ });
+              }
+              if (i < chunks.length - 1) {
+                await new Promise(r => setTimeout(r, 15));
+              }
+            }
             sendResponse(withRequestId({ success: true, text: cached, cached: true, engine: 'cache' }));
             return;
           }
@@ -3882,6 +3948,7 @@ if (typeof module !== 'undefined' && module.exports) {
     sanitizeProfileForClient,
     buildSanitizedConfig,
     getStoredApiKeyForProvider,
+    estimateTokens,
     ProductHelpers,
     SW,
     // 便于测试直接调用 helpers / SW modules

@@ -530,3 +530,36 @@ test('速率限制：连续成功满 5 次才恢复，恢复至满并发零延�
   }
   resetRateLimitState();
 });
+
+// 方案 3：短文本合法同译不触发降级（Settings/Configuration/Preferences -> 设置）
+test('批量翻译：短文本统一译文视为合法近义词，不降级单句补全', async () => {
+  useQwenProfile();
+  const originalFetch = global.fetch;
+  const restoreTimers = accelerateShortTimers();
+  try {
+    const texts = ['Settings', 'Configuration', 'Preferences'];
+    const calls = installFetchMock({
+      batchContent: JSON.stringify(['设置', '设置', '设置']),
+      singles: {}
+    });
+
+    const results = await bg.translateBatchInternal(texts, 'en', 'zh', null, null);
+
+    assert.ok(results.every(r => r.success));
+    assert.deepStrictEqual(results.map(r => r.text), ['设置', '设置', '设置']);
+    assert.strictEqual(calls.batch, 1);
+    assert.strictEqual(calls.single, 0);
+  } finally {
+    global.fetch = originalFetch;
+    restoreTimers();
+  }
+});
+
+// 方案 9：estimateTokens 区分 CJK 与 Latin
+test('estimateTokens：CJK 与 Latin 分别估算', () => {
+  assert.strictEqual(bg.estimateTokens('你好世界'), 3);
+  assert.strictEqual(bg.estimateTokens('Hello World'), 3);
+  assert.strictEqual(bg.estimateTokens('Hello 你好'), 3);
+  assert.strictEqual(bg.estimateTokens(''), 0);
+  assert.strictEqual(bg.estimateTokens('量子计算是未来科技发展的核心方向'), 11);
+});
