@@ -414,7 +414,7 @@
    * @returns {'local'|'cloud'|null}
    */
   function resolveFirstRunPath(path) {
-    if (path === 'local' || path === 'cloud') return path;
+    if (path === 'local' || path === 'cloud' || path === 'free') return path;
     return null;
   }
 
@@ -428,9 +428,12 @@
     if (step === 1) return !!resolveFirstRunPath(state.path);
     if (step === 2) {
       if (state.path === 'local') return !!state.ollamaOk;
+      if (state.path === 'free') return true; // 免费路径零配置，直接可进入试译
       if (state.path === 'cloud') {
         const key = String(state.apiKey || '').trim();
         const provider = state.provider || '';
+        // google 免 Key，其他供应商需要 Key
+        if (provider === 'google') return true;
         return !!(provider && provider !== 'local' && key);
       }
       return false;
@@ -453,6 +456,16 @@
         model: '',
         apiEndpoint: '',
         label: '本地 Ollama（首次引导）'
+      };
+    }
+    if (state.path === 'free') {
+      return {
+        provider: 'google',
+        apiKey: '',
+        model: '',
+        localModel: '',
+        apiEndpoint: '',
+        label: '谷歌免费翻译（首次引导）'
       };
     }
     const provider = state.provider || 'qwen';

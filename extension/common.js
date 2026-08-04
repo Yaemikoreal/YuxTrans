@@ -12,6 +12,7 @@ const PROVIDER_NAMES = {
   moonshot: 'Moonshot',
   siliconflow: 'SiliconFlow',
   google: '谷歌免费翻译',
+  microsoft: '微软翻译',
   local: 'Ollama',
   custom: '自定义'
 };

@@ -26,13 +26,17 @@
       <div class="first-run-pane active" data-step-pane="1">
         <h3 class="first-run-pane-title">第 1 步 · 选择翻译路径</h3>
         <div class="first-run-path-grid">
-          <button type="button" class="first-run-path-card" data-path="local" id="firstRunPathLocal">
-            <strong>本地 Ollama</strong>
-            <span>数据不出本机，适合隐私与离线场景</span>
+          <button type="button" class="first-run-path-card" data-path="free" id="firstRunPathFree">
+            <strong>免费在线翻译</strong>
+            <span>零配置即用，谷歌翻译质量好但国内可能连不上</span>
           </button>
           <button type="button" class="first-run-path-card" data-path="cloud" id="firstRunPathCloud">
             <strong>云端 API</strong>
-            <span>填写服务商 API Key，质量与速度通常更好</span>
+            <span>填写服务商 Key，质量与速度通常更好（含微软 Azure 免费额度）</span>
+          </button>
+          <button type="button" class="first-run-path-card" data-path="local" id="firstRunPathLocal">
+            <strong>本地 Ollama</strong>
+            <span>数据不出本机，适合隐私与离线场景</span>
           </button>
         </div>
       </div>
@@ -51,6 +55,7 @@
               <option value="groq">Groq</option>
               <option value="anthropic">Anthropic</option>
               <option value="google">谷歌免费翻译（免 Key）</option>
+              <option value="microsoft">微软翻译（Azure 免费额度）</option>
             </select>
             <p class="hint" id="firstRunKeyLink">还没有 API Key？<a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener">前往申请 →</a></p>
           </div>
@@ -59,6 +64,11 @@
             <input type="password" id="firstRunApiKey" placeholder="粘贴 API Key">
             <p class="hint">仅保存在本机浏览器，不会上传到 YuxTrans 服务器（未做额外加密）</p>
           </div>
+        </div>
+        <div id="firstRunFreeForm" hidden>
+          <p class="hint">已为你预配谷歌免费翻译，无需任何 Key，直接进入下一步试译。</p>
+          <p class="hint"><strong>提示：</strong>谷歌翻译在国内网络环境下可能无法连接。如遇连接失败，可改选「云端 API」路径并注册微软 Azure 翻译（每月 200 万字符免费额度，国内可正常访问）。</p>
+          <a href="https://azure.microsoft.com/free/ai-services/translator/" target="_blank" rel="noopener" class="btn-secondary">了解微软 Azure 翻译免费额度</a>
         </div>
         <div id="firstRunLocalForm" hidden>
           <p class="hint" id="firstRunOllamaStatus">正在检测本机 Ollama…</p>
@@ -150,6 +160,7 @@
               <option value="moonshot">Moonshot (月之暗面)</option>
               <option value="siliconflow">SiliconFlow</option>
               <option value="google">谷歌免费翻译（免 Key）</option>
+              <option value="microsoft">微软翻译（Azure 免费额度）</option>
               <option value="local">本地模型 (Ollama)</option>
               <option value="custom">自定义供应商</option>
             </select>

@@ -621,7 +621,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       siliconflow: 'https://cloud.siliconflow.cn/account/ak',
       groq: 'https://console.groq.com/keys',
       anthropic: 'https://console.anthropic.com/settings/keys',
-      google: ''
+      google: '',
+      microsoft: 'https://azure.microsoft.com/free/ai-services/translator/'
     };
 
     /** 切换供应商时更新 Key 申请链接 */
@@ -657,7 +658,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       if (state.step === 1) return !!state.path;
       if (state.step === 2) {
-        return state.path === 'local' ? !!state.ollamaOk : !!(state.apiKey && state.provider);
+        if (state.path === 'local') return !!state.ollamaOk;
+        if (state.path === 'free') return true;
+        return !!(state.apiKey && state.provider);
       }
       return !!state.trialOk;
     }
@@ -679,6 +682,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       if (cloudForm) cloudForm.hidden = state.path !== 'cloud';
       if (localForm) localForm.hidden = state.path !== 'local';
+      const freeForm = getById('firstRunFreeForm');
+      if (freeForm) freeForm.hidden = state.path !== 'free';
       if (backBtn) backBtn.hidden = state.step === 1;
       if (nextBtn) {
         nextBtn.disabled = !canAdvance();
@@ -972,15 +977,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isCustom = provider === 'custom';
     // F7：谷歌免费接口零配置（免 Key / 端点 / 模型选择），与 local/custom 一样隐藏配置字段
     const isGoogle = provider === 'google';
+    // 微软 Azure Translator 需 Key 和端点，但无需选择模型
+    const isMicrosoft = provider === 'microsoft';
     const isNoConfig = isLocal || isCustom || isGoogle;
     if (apiKeyGroup) apiKeyGroup.style.display = isNoConfig ? 'none' : 'block';
     if (endpointGroup) endpointGroup.style.display = isNoConfig ? 'none' : 'block';
-    if (modelSelectGroup) modelSelectGroup.style.display = isNoConfig ? 'none' : 'block';
+    // google/microsoft 无需选择模型；local 用独立输入框；custom 用自定义段
+    if (modelSelectGroup) modelSelectGroup.style.display = (isNoConfig || isMicrosoft) ? 'none' : 'block';
     if (localModelGroup) localModelGroup.style.display = isLocal ? 'block' : 'none';
     if (customProviderSection) customProviderSection.style.display = isCustom ? 'block' : 'none';
     const activeProfile = getActiveProfile(config);
     const selectedModel = activeProfile?.model || config?.model || '';
-    if (!isLocal && !isCustom && !isGoogle) loadModelOptions(provider, selectedModel);
+    if (!isLocal && !isCustom && !isGoogle && !isMicrosoft) loadModelOptions(provider, selectedModel);
   }
 
   providerSelect?.addEventListener('change', updateProviderUI);

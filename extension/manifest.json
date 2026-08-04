@@ -23,6 +23,8 @@
     "https://api.moonshot.cn/*",
     "https://api.siliconflow.cn/*",
     "https://translate.googleapis.com/*",
+    "https://*.api.cognitive.microsofttranslator.com/*",
+    "https://api.cognitive.microsofttranslator.com/*",
     "http://localhost:11434/*"
   ],
 

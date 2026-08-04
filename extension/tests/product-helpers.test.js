@@ -157,6 +157,7 @@ test('addHostnameToList / removeHostnameFromList', () => {
 test('首次引导：路径解析与步骤门禁', () => {
   assert.strictEqual(H.resolveFirstRunPath('local'), 'local');
   assert.strictEqual(H.resolveFirstRunPath('cloud'), 'cloud');
+  assert.strictEqual(H.resolveFirstRunPath('free'), 'free');
   assert.strictEqual(H.resolveFirstRunPath('other'), null);
 
   assert.strictEqual(H.canAdvanceFirstRunStep(1, { path: 'local' }), true);
@@ -171,6 +172,13 @@ test('首次引导：路径解析与步骤门禁', () => {
   assert.strictEqual(
     H.canAdvanceFirstRunStep(2, { path: 'cloud', provider: 'qwen', apiKey: '' }),
     false
+  );
+  // free 路径零配置，直接可进入试译
+  assert.strictEqual(H.canAdvanceFirstRunStep(2, { path: 'free' }), true);
+  // cloud 路径选 google 时免 Key
+  assert.strictEqual(
+    H.canAdvanceFirstRunStep(2, { path: 'cloud', provider: 'google', apiKey: '' }),
+    true
   );
 
   assert.strictEqual(H.canAdvanceFirstRunStep(3, { trialOk: true }), true);
@@ -189,6 +197,12 @@ test('首次引导：档案草稿与试译句', () => {
   });
   assert.strictEqual(cloud.provider, 'deepseek');
   assert.strictEqual(cloud.apiKey, 'sk-test');
+
+  // free 路径预配 google 免 Key 档案
+  const free = H.buildFirstRunProfileDraft({ path: 'free' });
+  assert.strictEqual(free.provider, 'google');
+  assert.strictEqual(free.apiKey, '');
+
   assert.strictEqual(H.getFirstRunTrialText(), 'Hello');
   assert.strictEqual(H.FIRST_RUN_TRIAL_TEXT, 'Hello');
 });
