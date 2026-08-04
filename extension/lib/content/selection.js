@@ -65,9 +65,9 @@
           ? this.helpers.resolveTriggerAction(this.config.triggerMode)
           : (this.config.triggerMode || 'auto');
         if (inputMode === 'contextMenu') return; // 仅右键菜单触发
-        // modifier 模式：输入框内划选同样要求按住修饰键
+        // modifier 模式：输入框内划选同样要求按住修饰键（mousedown 后备：先松键后松鼠标亦生效）
         if (inputMode === 'modifier' &&
-            !this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)) return;
+            !this._isModifierActive(e)) return;
         const sel = this._getInputSelection(inputEl);
         if (!sel) { this._lastInputElement = null; return; }
         this._lastInputElement = inputEl;
@@ -131,7 +131,8 @@
         if (mode === 'modifier') {
           this.hideFloatButton();
           // 松手瞬间校验修饰键：未按住则静默（不干扰复制/全选/链接点击等原生行为）
-          if (!this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)) return;
+          // mousedown 后备：用户先松 Ctrl 再松鼠标时仍能生效
+          if (!this._isModifierActive(e)) return;
           this.translateText(selection, e.clientX, e.clientY);
           return;
         }
@@ -151,6 +152,25 @@
           '.yuxtrans-hover-translation, .yuxtrans-hover-guide')) {
         this.hidePopup();
       }
+      // 记录 mousedown 时的修饰键状态：用户常在划选后先松 Ctrl 再松鼠标，
+      // 此时 mouseup.ctrlKey 已为 false。用 mousedown 时的状态作为后备，
+      // 只要按下时按住了修饰键即视为有效触发。
+      this._mouseDownModifierActive = this.helpers.isSelectionModifierPressed
+        ? this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)
+        : false;
+    },
+
+    /**
+     * 判断 modifier 模式下的修饰键是否生效
+     * 优先检查 mouseup 事件属性；若 mousedown 时按住了修饰键也视为生效，
+     * 兼容「先松键后松鼠标」的操作习惯。
+     * @param {MouseEvent} e - mouseup 事件
+     * @returns {boolean}
+     */
+    _isModifierActive(e) {
+      if (!this.helpers || !this.helpers.isSelectionModifierPressed) return false;
+      return this.helpers.isSelectionModifierPressed(e, this.config.selectionModifier)
+        || !!this._mouseDownModifierActive;
     },
 
     showFloatButton(x, y, text) {

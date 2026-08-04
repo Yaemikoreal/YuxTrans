@@ -1348,7 +1348,11 @@
         };
 
         const submit = async () => {
-          if (pendingBatch.length === 0) { finish(); return; }
+          if (pendingBatch.length === 0) {
+            // 没有待翻译项：仅当全部处理完才结束，否则继续等待 viewport observer
+            if (pending.size === 0 && activeBatches === 0) finish();
+            return;
+          }
           const batch = pendingBatch;
           pendingBatch = [];
           activeBatches++;
@@ -1358,10 +1362,18 @@
             }
           } catch (e) { /* 单批异常不中断整体 */ }
           activeBatches--;
-          finish();
+          // await 期间 fallback/observer 可能又添加了新项到 pendingBatch，继续处理避免遗留
+          if (pendingBatch.length > 0) {
+            submit();
+            return;
+          }
+          // 全部完成才结束；pending 还有项时继续等待 viewport observer 触发新批次
+          if (pending.size === 0 && activeBatches === 0) {
+            finish();
+          }
         };
 
-        // 超时回退：2s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
+        // 超时回退：6s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
         fallbackTimer = setTimeout(() => {
           for (const it of pending) pendingBatch.push(it);
           pending.clear();

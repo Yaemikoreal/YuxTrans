@@ -27,8 +27,8 @@
     ADDED_NODES_DEBOUNCE_MS: 500,
     // belowFold 视口感知的预加载边距：节点入视口前 200px 即提交翻译
     VIEWPORT_ROOT_MARGIN: '200px',
-    // belowFold 超时回退：2s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
-    VIEWPORT_FALLBACK_MS: 2000,
+    // belowFold 超时回退：6s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
+    VIEWPORT_FALLBACK_MS: 6000,
     // belowFold 入视口段落的批次提交防抖（合并连续入视口事件）
     VIEWPORT_SUBMIT_DEBOUNCE_MS: 100
   };
