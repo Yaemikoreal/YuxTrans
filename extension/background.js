@@ -2225,7 +2225,7 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
 /**
  * 微软 Azure Translator 翻译（需 API Key，200 万字符/月免费额度）
  * 与 OpenAI 格式不同，走专门请求路径：POST + JSON 数组响应
- * 端点格式：https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=<lang>
+ * 端点格式：https://api.cognitive.microsofttranslator.com/translate?api-version=2026-06-06&to=<lang>
  * 认证：Ocp-Apim-Subscription-Key 头 + 可选 Ocp-Apim-Subscription-Region
  * @param {string} text - 待翻译文本
  * @param {string} sourceLang - 源语言（auto 时 Azure 不传 from 参数，自动检测）
@@ -2246,7 +2246,7 @@ async function microsoftTranslate(text, sourceLang, targetLang, providerOverride
   }
 
   // 构建查询参数
-  const params = new URLSearchParams({ 'api-version': '3.0', to: targetLang });
+  const params = new URLSearchParams({ 'api-version': '2026-06-06', to: targetLang });
   if (sourceLang && sourceLang !== 'auto') {
     params.set('from', sourceLang);
   }
@@ -3222,7 +3222,7 @@ async function testProviderConnection(testConfig) {
       if (!msEndpoint.includes('/translate')) {
         msEndpoint = msEndpoint.replace(/\/+$/, '') + '/translate';
       }
-      const params = new URLSearchParams({ 'api-version': '3.0', to: 'zh' });
+      const params = new URLSearchParams({ 'api-version': '2026-06-06', to: 'zh' });
       const url = `${msEndpoint}?${params.toString()}`;
 
       let region = '';
