@@ -658,7 +658,8 @@ test('#54 关闭控制条收起为挂耳：控制条隐藏保留，挂耳出现'
     assert.strictEqual(instance.pageControl, control, '控制条引用保留以维持进度/按钮状态');
     assert.ok(instance.sideTab, '挂耳应已创建');
     assert.strictEqual(instance.sideTab.className, 'yuxtrans-side-tab');
-    assert.strictEqual(instance.sideTab.parentElement, document.body, '挂耳挂在 body 上');
+    // Stage F：挂耳元素在 shadow host 内，host 才直接挂在 body 上
+    assert.strictEqual(instance.sideTab._yxtHost.parentElement, document.body, '挂耳 shadow host 挂在 body 上');
   } finally {
     cleanupPageControl(instance, control);
   }
@@ -763,4 +764,220 @@ test('Q2 _processAddedNodes：新增子树中的未翻译文本照常提交翻�
 
   assert.strictEqual(batches.length, 1, '提交一次批量翻译');
   assert.strictEqual(batches[0][0].text, 'Dynamically added paragraph text.');
+});
+
+// ===== v2.1 段落对照（bilingualStyle=block） =====
+// 利用 setup() 实例 + 带块容器 closest 的 FakeElement 直接驱动整页链路，
+// 验证：块尾聚合、同块增量更新、行内回退、三态切换、恢复原文无残留、流式直入 block-tr。
+
+/**
+ * 构造父元素为 p（closest 命中块容器选择器）的文本节点翻译项
+ */
+function makeBlockNodeInfo(text) {
+  const parent = new FakeElement('p');
+  // 模拟真实 DOM：closest 从元素自身起向上匹配，p 命中选择器列表中的 p
+  parent.closest = (sel) => (sel.includes('p') ? parent : null);
+  const node = {
+    nodeType: 3,
+    parentElement: parent,
+    parentNode: parent,
+    textContent: text,
+    nextSibling: null
+  };
+  parent.childNodes.push(node);
+  return { text, node, isInViewport: true };
+}
+
+/** 在块容器下查找段落对照译文块 */
+function findBlockTr(blockEl) {
+  return blockEl.childNodes.find(
+    (c) => c instanceof FakeElement && c.className === 'yuxtrans-block-tr'
+  );
+}
+
+function blockTrBody(blockEl) {
+  const div = findBlockTr(blockEl);
+  if (!div) return null;
+  return div.childNodes.find((c) => c.className === 'yuxtrans-block-tr-body') || null;
+}
+
+test('段落对照：block 模式译文聚合为块尾 block-tr，不插行内 span', async () => {
+  const { instance, mock } = setup({ enableStreaming: false, bilingualStyle: 'block' });
+  const nodes = [makeBlockNodeInfo('First block paragraph.'), makeBlockNodeInfo('Second block paragraph.')];
+  instance.collectTextNodes = () => nodes;
+  mock.handlers.translateBatch = (msg) => ({
+    success: true,
+    results: msg.texts.map((t) => ({ success: true, text: '块译:' + t, cached: false }))
+  });
+
+  await instance.translatePage();
+
+  for (const ni of nodes) {
+    const parent = ni.node.parentElement;
+    const body = blockTrBody(parent);
+    assert.ok(body, '块容器末尾应有 block-tr 且含 body');
+    assert.strictEqual(body.textContent, '块译:' + ni.text);
+    assert.ok(!findBilingualSpan(ni), 'block 模式不应插行内 span.yuxtrans-bilingual-text');
+    assert.ok(parent.classList.contains('yuxtrans-translated-bilingual'));
+    assert.ok(parent.classList.contains('yuxtrans-translated-block'));
+    assert.strictEqual(ni.node.textContent, ni.text, '原文文本节点保持不动');
+  }
+  assert.strictEqual(instance.pageTranslationState.isTranslated, true);
+});
+
+test('段落对照：同块多文本节点译文按顺序空格拼接并增量更新', async () => {
+  const { instance } = setup();
+  await new Promise((r) => setTimeout(r, 20)); // 等 loadConfig 落地后覆盖配置
+  instance.config.bilingualMode = true;
+  instance.config.bilingualStyle = 'block';
+
+  const parent = new FakeElement('p');
+  parent.closest = (sel) => (sel.includes('p') ? parent : null);
+  const mkNode = (text) => {
+    const node = { nodeType: 3, parentElement: parent, parentNode: parent, textContent: text, nextSibling: null };
+    parent.childNodes.push(node);
+    return { text, node, isInViewport: true };
+  };
+  const n1 = mkNode('Sentence one.');
+  const n2 = mkNode('Sentence two.');
+
+  instance.applyTranslation(n1, '译文一');
+  assert.strictEqual(blockTrBody(parent).textContent, '译文一', '首个节点落地即创建 block-tr');
+
+  instance.applyTranslation(n2, '译文二');
+  assert.strictEqual(blockTrBody(parent).textContent, '译文一 译文二', '同块译文按顺序空格拼接');
+  assert.strictEqual(
+    parent.childNodes.filter((c) => c.className === 'yuxtrans-block-tr').length,
+    1,
+    '同块只维护一个 block-tr 元素'
+  );
+});
+
+test('段落对照：找不到块容器时回退行内注脚模式', async () => {
+  const { instance } = setup();
+  await new Promise((r) => setTimeout(r, 20));
+  instance.config.bilingualMode = true;
+  instance.config.bilingualStyle = 'block';
+
+  // makeNodeInfo 的 FakeElement.closest 默认返回 null（无块容器）
+  const ni = makeNodeInfo('Inline fallback paragraph.');
+  instance.applyTranslation(ni, '行内译文');
+
+  const span = findBilingualSpan(ni);
+  assert.ok(span, '无块容器应回退行内 span');
+  assert.strictEqual(span.textContent, '行内译文');
+  assert.strictEqual(findBlockTr(ni.node.parentElement), undefined, '不应创建 block-tr');
+});
+
+test('段落对照：仅译文/段落双语/恢复原文三态切换行为正确', async () => {
+  const { instance } = setup();
+  await new Promise((r) => setTimeout(r, 20));
+  instance.config.bilingualMode = true;
+  instance.config.bilingualStyle = 'block';
+  // 测试 mock 的 FakeElement.style 无 removeProperty，关闭样式保持绕过（与实现无关）
+  instance.config.preserveStyles = false;
+
+  const ni = makeBlockNodeInfo('Original paragraph text.');
+  instance.applyTranslation(ni, '段落译文');
+  const parent = ni.node.parentElement;
+  assert.ok(blockTrBody(parent), '初始为段落对照');
+
+  // 段落对照 → 仅译文
+  instance.applyBilingualRender(false);
+  assert.strictEqual(findBlockTr(parent), undefined, '切仅译文后 block-tr 移除');
+  assert.strictEqual(ni.node.textContent, '段落译文', '仅译文模式文本节点为译文');
+  assert.ok(parent.classList.contains('yuxtrans-translated'));
+  assert.ok(!parent.classList.contains('yuxtrans-translated-block'));
+  assert.strictEqual(instance._blockTrMap.size, 0, '块映射应清空');
+
+  // 仅译文 → 段落对照
+  instance.applyBilingualRender(true);
+  assert.ok(blockTrBody(parent), '切回段落对照后 block-tr 重建');
+  assert.strictEqual(blockTrBody(parent).textContent, '段落译文');
+  assert.strictEqual(ni.node.textContent, 'Original paragraph text.', '原文恢复显示');
+
+  // 恢复原文：DOM 干净无残留
+  instance.restoreOriginalTexts();
+  assert.strictEqual(findBlockTr(parent), undefined, '恢复原文后无 block-tr 残留');
+  assert.strictEqual(ni.node.textContent, 'Original paragraph text.');
+  assert.ok(!parent.classList.contains('yuxtrans-translated-bilingual'));
+  assert.ok(!parent.classList.contains('yuxtrans-translated-block'));
+  assert.strictEqual(instance._blockTrMap.size, 0);
+});
+
+test('段落对照：行内双语 → 段落对照 → 行内双语双向迁移', async () => {
+  const { instance } = setup();
+  await new Promise((r) => setTimeout(r, 20));
+  instance.config.bilingualMode = true;
+  instance.config.bilingualStyle = 'inline';
+
+  const ni = makeBlockNodeInfo('Migrate paragraph text.');
+  instance.applyTranslation(ni, '迁移译文');
+  const parent = ni.node.parentElement;
+  assert.ok(findBilingualSpan(ni), '初始为行内注脚');
+
+  // 行内 → 块（模拟用户在 options 改 bilingualStyle 后重渲染）
+  instance.config.bilingualStyle = 'block';
+  instance.applyBilingualRender(true);
+  assert.ok(!findBilingualSpan(ni), '行内 span 应移除');
+  assert.ok(blockTrBody(parent), 'block-tr 应创建');
+  assert.strictEqual(blockTrBody(parent).textContent, '迁移译文');
+
+  // 块 → 行内
+  instance.config.bilingualStyle = 'inline';
+  instance.applyBilingualRender(true);
+  assert.strictEqual(findBlockTr(parent), undefined, 'block-tr 应移除');
+  const span = findBilingualSpan(ni);
+  assert.ok(span, '行内 span 应重建');
+  assert.strictEqual(span.textContent, '迁移译文');
+  assert.strictEqual(ni.node.textContent, 'Migrate paragraph text.');
+});
+
+test('段落对照：流式期间译文直入 block-tr，完成后聚合落地', async () => {
+  const { instance, mock } = setup({ enableStreaming: true, bilingualStyle: 'block' });
+  const nodes = [makeBlockNodeInfo('Streaming block paragraph.')];
+  instance.collectTextNodes = () => nodes;
+
+  const streamSnapshots = [];
+  mock.handlers.translateStream = (msg) => {
+    mock.emitToContent({ action: 'streamChunk', chunk: '半', fullText: '半', requestId: msg.requestId });
+    const st = instance.pageTranslationState.streamingNodes.get(msg.requestId);
+    const parent = msg.text ? nodes[0].node.parentElement : null;
+    streamSnapshots.push({
+      inBlockTr: !!(st && st.tempSpan.parentElement && st.tempSpan.parentElement.className === 'yuxtrans-block-tr'),
+      tempText: st ? st.tempSpan.textContent : null,
+      blockTrExists: !!(parent && findBlockTr(parent))
+    });
+    return { success: true, text: '流式块译文', cached: false, engine: 'qwen' };
+  };
+
+  await instance.translatePage();
+
+  assert.strictEqual(streamSnapshots.length, 1);
+  assert.ok(streamSnapshots[0].inBlockTr, '流式临时 span 应挂在 block-tr 内');
+  assert.strictEqual(streamSnapshots[0].tempText, '半', 'chunk 实时刷新临时 span');
+
+  const parent = nodes[0].node.parentElement;
+  const body = blockTrBody(parent);
+  assert.ok(body, '完成后 block-tr 保留');
+  assert.strictEqual(body.textContent, '流式块译文', '最终译文聚合到 body');
+  assert.ok(
+    !parent.childNodes.some((c) => c.className === 'yuxtrans-streaming-text') &&
+    !findBlockTr(parent).childNodes.some((c) => c.className === 'yuxtrans-streaming-text'),
+    '临时流式 span 应被清理'
+  );
+});
+
+test('段落对照：流式失败清理空 block-tr，不残留空壳', async () => {
+  const { instance, mock } = setup({ enableStreaming: true, bilingualStyle: 'block' });
+  const nodes = [makeBlockNodeInfo('Failing block paragraph.')];
+  instance.collectTextNodes = () => nodes;
+  mock.handlers.translateStream = () => ({ success: false, error: '服务暂时不可用' });
+
+  await instance.translatePage();
+
+  const parent = nodes[0].node.parentElement;
+  assert.strictEqual(findBlockTr(parent), undefined, '流式失败后空 block-tr 应被清理');
+  assert.ok(!parent.classList.contains('yuxtrans-translated-block'));
+  assert.strictEqual(instance._blockTrMap.size, 0);
 });

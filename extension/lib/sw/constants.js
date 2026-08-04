@@ -16,8 +16,6 @@
     siliconflow: 'https://api.siliconflow.cn/v1/chat/completions',
     // F7：谷歌免费翻译接口（无需 API Key，非 OpenAI 格式，走专门请求路径）
     google: 'https://translate.googleapis.com/translate_a/single',
-    // 微软 Azure Translator（需注册免费 Key，200 万字符/月免费额度，国内可访问）
-    microsoft: 'https://api.cognitive.microsofttranslator.com/translate',
     local: 'http://localhost:11434/api/chat'
   };
 
@@ -30,8 +28,6 @@
     moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     siliconflow: ['Qwen/Qwen2.5-7B-Instruct', 'Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'],
     google: [],
-    // Azure Translator 不需要选择模型，region 由用户在端点中配置
-    microsoft: [],
     local: []
   };
 

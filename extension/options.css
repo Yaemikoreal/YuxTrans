@@ -66,7 +66,7 @@ body::after {
   max-width: 900px;
   min-height: min(90vh, 800px);
   background: var(--yxt-bg-elevated);
-  border-radius: var(--yxt-radius-xl);
+  border-radius: var(--yxt-radius-window);
   display: grid;
   grid-template-columns: 220px 1fr;
   box-shadow: var(--yxt-shadow-md);
@@ -121,7 +121,7 @@ body::after {
 .sidebar .subtitle {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-sm);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   margin-bottom: 0;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -144,7 +144,7 @@ body::after {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-base);
   font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   cursor: pointer;
   text-align: left;
   transition: all var(--yxt-transition-fast);
@@ -301,7 +301,8 @@ body::after {
 /* ===== 主内容区 ===== */
 .main-content {
   padding: var(--yxt-space-6) var(--yxt-space-8) var(--yxt-space-8);
-  background: var(--yxt-bg-secondary);
+  /* v2.1：主体底色暖纸（底深），分组卡片 paper-open 浮起（卡浅） */
+  background: var(--yxt-bg-tertiary);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -381,7 +382,7 @@ body::after {
 .hint {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   margin-top: var(--yxt-space-2);
   line-height: 1.6;
 }
@@ -406,7 +407,7 @@ code {
 .yxt-note {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   line-height: 1.6;
   background: var(--yxt-accent-soft);
   border-left: 2px solid var(--yxt-dusk);
@@ -440,7 +441,8 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--yxt-text-tertiary);
+  /* 占位符保留批注色（装饰性，非阅读文字） */
+  color: var(--yxt-annotation);
 }
 
 input:focus, select:focus, textarea:focus {
@@ -642,7 +644,7 @@ select {
   margin-top: 2px;
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   line-height: 1.5;
 }
 
@@ -657,7 +659,7 @@ select {
 }
 
 .setting-row--sub .form-label {
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
 }
 
 /* 行内右侧控件：收为内容宽度，不再撑满整行 */
@@ -777,7 +779,7 @@ details[open] > .pref-summary {
   margin-right: auto;
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
 }
 
 /* 行内按钮组（设置行右侧）：取消默认上边距（选择器需压过后文的 .button-group） */
@@ -790,7 +792,7 @@ details[open] > .pref-summary {
 button {
   padding: var(--yxt-space-2) var(--yxt-space-4);
   border: none;
-  border-radius: var(--yxt-radius-md);
+  border-radius: var(--yxt-radius-btn);
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-sm);
   font-weight: var(--yxt-font-normal);
@@ -814,7 +816,7 @@ button {
 
 .btn-secondary {
   background: transparent;
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   border: 1px solid var(--yxt-border);
 }
 
@@ -829,7 +831,7 @@ label.btn-secondary {
   align-items: center;
   justify-content: center;
   padding: var(--yxt-space-2) var(--yxt-space-4);
-  border-radius: var(--yxt-radius-md);
+  border-radius: var(--yxt-radius-btn);
   font-size: var(--yxt-text-sm);
   font-weight: var(--yxt-font-normal);
   cursor: pointer;
@@ -841,11 +843,11 @@ label.btn-secondary {
 
 .btn-test {
   background: var(--yxt-bg-tertiary);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-xs);
   padding: var(--yxt-space-2) var(--yxt-space-3);
   border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius-md);
+  border-radius: var(--yxt-radius-btn);
 }
 
 .btn-test:hover {
@@ -900,7 +902,7 @@ label.btn-secondary {
 .stat-card-label {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-2xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-weight: var(--yxt-font-normal);
   letter-spacing: 0.02em;
 }
@@ -986,7 +988,7 @@ label.btn-secondary {
 }
 .update-info { flex: 1; }
 .update-title { display: block; font-weight: var(--yxt-font-medium); color: var(--yxt-text); font-size: var(--yxt-text-sm); }
-.update-desc { display: block; font-size: var(--yxt-text-xs); color: var(--yxt-text-secondary); margin-top: 2px; }
+.update-desc { display: block; font-size: var(--yxt-text-xs); color: var(--yxt-label); margin-top: 2px; }
 .update-actions { display: flex; gap: var(--yxt-space-2); }
 
 /* 弹窗指引 */
@@ -1057,7 +1059,7 @@ label.btn-secondary {
 .style-hint {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   line-height: 1.5;
 }
 
@@ -1086,7 +1088,7 @@ label.btn-secondary {
 .active-config-detail {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   margin-top: var(--yxt-space-1);
 }
 
@@ -1189,7 +1191,7 @@ label.btn-secondary {
 .model-card-meta {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
 }
 
 .model-card-actions {
@@ -1225,7 +1227,7 @@ label.btn-secondary {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
   font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   min-width: 36px;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1236,7 +1238,7 @@ label.btn-secondary {
 .yxt-empty {
   padding: var(--yxt-space-8) var(--yxt-space-5);
   text-align: center;
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-sm);
 }
 
@@ -1289,7 +1291,7 @@ label.btn-secondary {
 .model-list-detail {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   margin-top: 2px;
 }
 
@@ -1302,7 +1304,7 @@ label.btn-secondary {
 .model-list-active-badge {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-weight: var(--yxt-font-normal);
   padding: var(--yxt-space-1) var(--yxt-space-2);
 }
@@ -1353,7 +1355,7 @@ label.btn-secondary {
 
 .metrics-table th {
   background: var(--yxt-bg);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-weight: var(--yxt-font-medium);
 }
 
@@ -1380,13 +1382,13 @@ label.btn-secondary {
 }
 
 .metrics-error-item .error-time {
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-2xs);
   margin-bottom: var(--yxt-space-1);
 }
 
 .metrics-error-item .error-action {
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   margin-right: var(--yxt-space-2);
 }
 
@@ -1394,8 +1396,8 @@ label.btn-secondary {
   display: inline-block;
   padding: 2px 6px;
   border-radius: var(--yxt-radius-sm);
-  background: rgba(216, 81, 81, 0.1);
-  color: #b94a4a;
+  background: var(--yxt-error-soft);
+  color: var(--yxt-error);
   font-size: var(--yxt-text-2xs);
   font-weight: var(--yxt-font-medium);
 }
@@ -1437,7 +1439,7 @@ label.btn-secondary {
 }
 
 .request-log-item .log-meta {
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-2xs);
 }
 
@@ -1450,13 +1452,13 @@ label.btn-secondary {
 }
 
 .request-log-item .log-status.success {
-  background: rgba(81, 142, 81, 0.1);
-  color: #4a8b4a;
+  background: var(--yxt-success-soft);
+  color: var(--yxt-success);
 }
 
 .request-log-item .log-status.error {
-  background: rgba(216, 81, 81, 0.1);
-  color: #b94a4a;
+  background: var(--yxt-error-soft);
+  color: var(--yxt-error);
 }
 
 .request-log-item .log-block {
@@ -1474,7 +1476,7 @@ label.btn-secondary {
 }
 
 .request-log-item .log-label {
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-2xs);
   margin-bottom: var(--yxt-space-1);
 }
@@ -1569,7 +1571,7 @@ label.btn-secondary {
   width: min(520px, 100%);
   background: var(--yxt-bg-elevated);
   border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius-xl);
+  border-radius: var(--yxt-radius-window);
   box-shadow: var(--yxt-shadow-md);
   padding: var(--yxt-space-6);
 }
@@ -1586,7 +1588,7 @@ label.btn-secondary {
 }
 
 .first-run-sub {
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   font-size: var(--yxt-text-sm);
   margin-bottom: var(--yxt-space-4);
 }
@@ -1614,7 +1616,7 @@ label.btn-secondary {
 .first-run-step-dot.active,
 .first-run-step-dot.done {
   color: var(--yxt-bg-elevated);
-  background: var(--yxt-accent, #8b6914);
+  background: var(--yxt-accent);
   border-color: transparent;
 }
 
@@ -1656,7 +1658,7 @@ label.btn-secondary {
 
 .first-run-path-card span {
   font-size: var(--yxt-text-sm);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   line-height: 1.4;
 }
 
@@ -1727,7 +1729,7 @@ label.btn-secondary {
   width: min(420px, 100%);
   background: var(--yxt-paper-open);
   border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius-xl);
+  border-radius: var(--yxt-radius-window);
   box-shadow: var(--yxt-shadow-lg);
   overflow: hidden;
 }
@@ -1762,7 +1764,7 @@ label.btn-secondary {
 .yxt-guide-note {
   margin: var(--yxt-space-4) 0 0;
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   text-align: center;
 }
 
@@ -1800,7 +1802,7 @@ label.btn-secondary {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
   font-weight: var(--yxt-font-medium);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-label);
   letter-spacing: 0.04em;
 }
 
@@ -1847,5 +1849,181 @@ a:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   v2.1 Stage C：macOS 系统设置骨架
+   导航图标块 / .yxt-group 分组卡片 / iOS 胶囊开关挂载 / 深色底深卡浅
+   ============================================================ */
+
+/* --- 侧边栏导航图标：22px 圆角块，分区色 soft 底 + zone 纯色 14px 线性 SVG --- */
+.tab {
+  gap: 9px;
+}
+
+.tab-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--yxt-radius-btn);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tab-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.tab[data-zone="profiles"] .tab-icon { background: var(--yxt-zone-profiles-soft); color: var(--yxt-zone-profiles); }
+.tab[data-zone="preference"] .tab-icon { background: var(--yxt-zone-preference-soft); color: var(--yxt-zone-preference); }
+.tab[data-zone="interaction"] .tab-icon { background: var(--yxt-zone-interaction-soft); color: var(--yxt-zone-interaction); }
+.tab[data-zone="data"] .tab-icon { background: var(--yxt-zone-data-soft); color: var(--yxt-zone-data); }
+.tab[data-zone="diagnostics"] .tab-icon { background: var(--yxt-zone-diagnostics-soft); color: var(--yxt-zone-diagnostics); }
+
+/* --- 分组卡片：paper-open 底 / radius-card / shadow-sm，行间 0.5px 分隔 --- */
+.yxt-group {
+  background: var(--yxt-bg-secondary);
+  border-radius: var(--yxt-radius-card);
+  box-shadow: var(--yxt-shadow-sm);
+  padding: var(--yxt-space-3) var(--yxt-space-4);
+  margin-bottom: var(--yxt-space-4);
+}
+
+.yxt-group:last-child {
+  margin-bottom: 0;
+}
+
+/* 组前 11px 小标题（label 色），紧贴卡片 */
+.yxt-group-label {
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  font-weight: var(--yxt-font-medium);
+  color: var(--yxt-label);
+  letter-spacing: 0.02em;
+  margin: var(--yxt-space-3) var(--yxt-space-1) var(--yxt-space-2);
+}
+
+.pref-group > .yxt-group-label:first-child {
+  margin-top: 0;
+}
+
+/* 卡片内设置行：0.5px 分隔线（覆盖全局 1px，子选项行仍无线） */
+.yxt-group .setting-row {
+  border-top: 0.5px solid var(--yxt-divider);
+}
+
+.yxt-group .setting-row--sub,
+.yxt-group .setting-row:first-of-type {
+  border-top: none;
+}
+
+.yxt-group .setting-row:first-of-type {
+  padding-top: 0;
+}
+
+/* 卡片内收尾控件不再叠加外边距 */
+.yxt-group .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.yxt-group > .hint:first-child {
+  margin-top: 0;
+  margin-bottom: var(--yxt-space-3);
+}
+
+/* 嵌套卡片压平：当前使用卡 / 供应商分布表不再双层描边 */
+.yxt-group > .active-config-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: var(--yxt-space-1) 0;
+}
+
+.yxt-group > .active-config-card:hover {
+  background: var(--yxt-bg-hover);
+  border: none;
+}
+
+.yxt-group > .table-container {
+  border: none;
+  border-radius: 0;
+}
+
+/* details 折叠组作为卡片：summary 撑满点击区，展开体自带内边距 */
+details.yxt-group {
+  padding: 0;
+}
+
+details.yxt-group > .pref-summary {
+  padding: var(--yxt-space-3) var(--yxt-space-4);
+}
+
+details.yxt-group > .pref-details-body {
+  margin-top: 0;
+  padding: 0 var(--yxt-space-4) var(--yxt-space-3);
+}
+
+/* 危险操作：虚线卡片替代虚线分隔线 */
+.danger-zone {
+  padding-top: 0;
+  border-top: none;
+}
+
+.danger-zone .yxt-group {
+  border: 1px dashed var(--yxt-error);
+}
+
+/* --- iOS 胶囊开关挂载：label 包真实 checkbox + .yxt-switch 视觉层 ---
+   保留 checkbox 语义（checked / change / disabled 全由原生控件承担，JS 零改动），
+   视觉态用 :checked 镜像 design-tokens 中 [aria-checked="true"] 的样式。 */
+.yxt-switch-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.yxt-switch-label input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.yxt-switch-label .yxt-switch {
+  display: inline-block;
+}
+
+.yxt-switch-label input:checked + .yxt-switch {
+  background: var(--yxt-ink);
+}
+
+.yxt-switch-label input:checked + .yxt-switch::after {
+  left: 18px;
+}
+
+.yxt-switch-label input:focus-visible + .yxt-switch {
+  box-shadow: var(--yxt-shadow-glow);
+}
+
+.yxt-switch-label input:disabled + .yxt-switch {
+  opacity: 0.4;
+}
+
+.yxt-switch-label:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+/* v2.1 深色：主区压到黄昏书房最深处，分组卡片浮起一度，「底深卡浅」成立 */
+@media (prefers-color-scheme: dark) {
+  .main-content {
+    background: var(--yxt-bg);
   }
 }

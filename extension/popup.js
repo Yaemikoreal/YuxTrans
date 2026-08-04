@@ -123,7 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function setConnectionStatus(type, text) {
-    connectionStatus.className = `status-pill ${type}`;
+    // v2.1：状态点承载四态 class（ok/error/warn/checking），右侧状态文字经 CSS 兄弟选择器同步着色
+    connectionStatus.className = `status-dot ${type}`;
     connectionText.textContent = text;
   }
 

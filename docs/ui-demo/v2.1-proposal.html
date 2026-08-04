@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YuxTrans UI v2.1 提案 Demo</title>
+<style>
+/* ============================================================
+   设计令牌（与 extension/design-tokens.css 对齐 + v2.1 新增候选）
+   ============================================================ */
+:root {
+  --yxt-ink: #2C2825;
+  --yxt-ink-80: rgba(44, 40, 37, 0.8);
+  --yxt-ink-60: rgba(44, 40, 37, 0.6);
+  --yxt-ink-40: rgba(44, 40, 37, 0.4);
+  --yxt-ink-25: rgba(44, 40, 37, 0.25);
+  --yxt-ink-15: rgba(44, 40, 37, 0.15);
+  --yxt-ink-08: rgba(44, 40, 37, 0.08);
+  --yxt-ink-06: rgba(44, 40, 37, 0.06);
+  --yxt-ink-04: rgba(44, 40, 37, 0.04);
+
+  --yxt-paper: #F5F1EA;
+  --yxt-paper-98: rgba(245, 241, 234, 0.98);
+  --yxt-paper-95: rgba(245, 241, 234, 0.95);
+  --yxt-paper-92: rgba(245, 241, 234, 0.92);
+  --yxt-paper-warm: #EDE8DF;
+  --yxt-paper-open: #FAF8F3;
+
+  /* 现状批注色（v2.1 降级为纯装饰：占位符/分割线/禁用态） */
+  --yxt-annotation: #9E968A;
+  --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+  --yxt-annotation-30: rgba(158, 150, 138, 0.3);
+
+  /* v2.1 新增：三级文字层级 */
+  --yxt-translation-a: #5C564E;   /* 提案A：译文色 6.4:1 */
+  --yxt-translation-b: #4A453F;   /* 提案B：译文色 8.6:1（更接近墨韵） */
+  --yxt-label: #6B655C;           /* 标签/元信息 5.1:1 */
+
+  --yxt-dusk: #B8A5C4;
+  --yxt-dusk-40: rgba(184, 165, 196, 0.4);
+  --yxt-dusk-25: rgba(184, 165, 196, 0.25);
+  --yxt-dusk-12: rgba(184, 165, 196, 0.12);
+  --yxt-dusk-08: rgba(184, 165, 196, 0.08);
+
+  --yxt-success: #7A9E8A;
+  --yxt-error: #B87878;
+
+  --yxt-shadow-lg: 0 12px 32px var(--yxt-ink-08), 0 2px 8px var(--yxt-ink-04);
+  --yxt-shadow-md: 0 2px 8px var(--yxt-ink-06);
+  --yxt-shadow-glow: 0 0 0 2px var(--yxt-dusk-25);
+
+  --yxt-font-serif: 'Source Serif 4', 'Literata', 'Merriweather',
+    'Source Han Serif SC', 'Noto Serif SC', 'FangSong', 'STSong', 'SimSun', serif;
+  --yxt-font-sans: 'Inter', -apple-system, BlinkMacSystemFont,
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --yxt-font-cjk: 'Source Han Serif SC', 'FZShuSong-Z01S', 'LXGW WenKai',
+    'STKaiti', 'KaiTi', 'FangSong', serif;
+
+  --yxt-ease-paper: cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--yxt-paper-warm);
+  font-family: var(--yxt-font-serif);
+  color: var(--yxt-ink);
+  line-height: 1.75;
+  padding: 48px 24px 96px;
+}
+
+.demo-wrap { max-width: 1160px; margin: 0 auto; }
+
+/* ===== demo 页面自身的排版 ===== */
+.demo-title {
+  font-family: var(--yxt-font-cjk);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.demo-subtitle {
+  font-family: var(--yxt-font-sans);
+  font-size: 13px;
+  color: var(--yxt-label);
+  margin-bottom: 48px;
+}
+.demo-section { margin-bottom: 64px; }
+.demo-section-title {
+  font-size: 17px;
+  font-weight: 500;
+  padding-left: 10px;
+  border-left: 2px solid var(--yxt-dusk);
+  margin-bottom: 6px;
+}
+.demo-section-note {
+  font-family: var(--yxt-font-sans);
+  font-size: 12px;
+  color: var(--yxt-label);
+  margin-bottom: 24px;
+  max-width: 720px;
+}
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.panel {
+  background: var(--yxt-paper);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 8px;
+  padding: 24px;
+}
+.panel-tag {
+  display: inline-block;
+  font-family: var(--yxt-font-sans);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 2px;
+  margin-bottom: 16px;
+}
+.panel-tag.current { background: var(--yxt-ink-06); color: var(--yxt-label); }
+.panel-tag.proposal { background: var(--yxt-dusk-12); color: #7A6A8A; }
+.panel-tag.ratio { background: transparent; border: 1px solid var(--yxt-annotation-30); color: var(--yxt-annotation); margin-left: 6px; }
+
+/* ===== 1. 文字层级对比：模拟网页正文 + 译文 ===== */
+.mock-article { font-size: 15px; }
+.mock-article p { margin-bottom: 1em; }
+.mock-article .en { color: var(--yxt-ink); }
+.tr-current { color: var(--yxt-annotation); font-size: 0.9em; }
+.tr-a { color: var(--yxt-translation-a); font-size: 0.9em; }
+.tr-b { color: var(--yxt-translation-b); font-size: 0.9em; }
+.label-current { font-family: var(--yxt-font-sans); font-size: 11px; color: var(--yxt-annotation); }
+.label-new { font-family: var(--yxt-font-sans); font-size: 11px; color: var(--yxt-label); }
+.meta-row { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--yxt-ink-06); }
+
+/* ===== 2. 双语呈现模式 ===== */
+.mock-page {
+  background: var(--yxt-paper-open);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 8px;
+  padding: 32px 36px;
+}
+.mock-page h2 { font-size: 20px; font-weight: 500; margin-bottom: 16px; }
+.mock-page p { font-size: 15px; margin-bottom: 1em; }
+
+/* 行内注脚模式（现状的精修版：2px 竖线 + 新译文色） */
+.inline-tr {
+  color: var(--yxt-translation-a);
+  font-size: 0.9em;
+  margin-left: 0.35em;
+  padding-left: 0.45em;
+  border-left: 2px solid var(--yxt-dusk-40);
+}
+
+/* 段落对照模式（新增）：译文块级整段跟随 */
+.block-tr {
+  display: block;
+  color: var(--yxt-translation-a);
+  font-size: 0.88em;
+  line-height: 1.7;
+  margin: 0.35em 0 1.2em;
+  padding-left: 14px;
+  border-left: 2px solid var(--yxt-dusk-40);
+}
+
+/* ===== 3. Popup 弹窗 ===== */
+.popup-mock {
+  width: 320px;
+  background: var(--yxt-paper-98);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 8px;
+  padding: 20px;
+  font-family: var(--yxt-font-sans);
+  box-shadow: var(--yxt-shadow-lg);
+}
+.popup-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.popup-logo {
+  width: 28px; height: 28px; border-radius: 4px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--yxt-font-cjk); font-size: 13px;
+}
+.popup-header h1 { font-family: var(--yxt-font-cjk); font-size: 18px; font-weight: 500; flex: 1; }
+.popup-icon-btn {
+  width: 28px; height: 28px; border: none; background: transparent;
+  color: var(--yxt-label); cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 200ms var(--yxt-ease-paper), color 200ms var(--yxt-ease-paper);
+}
+.popup-icon-btn:hover { background: var(--yxt-dusk-12); color: var(--yxt-ink); }
+.popup-control-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--yxt-success); flex-shrink: 0; }
+.status-text { font-size: 11px; color: var(--yxt-label); }
+.model-select {
+  flex: 1; border: none; border-bottom: 1px solid var(--yxt-annotation-50);
+  background: transparent; font-family: var(--yxt-font-sans); font-size: 13px;
+  color: var(--yxt-ink); padding: 4px 2px; outline: none;
+}
+.action-btn {
+  width: 100%; padding: 11px; border: none; border-radius: 4px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  font-family: var(--yxt-font-sans); font-size: 14px; font-weight: 500;
+  cursor: pointer; margin-bottom: 16px;
+  transition: background 200ms var(--yxt-ease-paper);
+}
+.action-btn:hover { background: var(--yxt-ink-80); }
+.action-btn.ghost {
+  background: transparent; color: var(--yxt-ink);
+  border: 1px solid var(--yxt-ink-15);
+}
+.action-btn.ghost:hover { background: var(--yxt-paper-warm); }
+.popup-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-top: 1px solid var(--yxt-ink-06);
+}
+.popup-row-label { font-size: 13px; color: var(--yxt-ink); }
+.popup-row-sub { font-size: 11px; color: var(--yxt-label); margin-top: 1px; }
+.mode-toggle {
+  display: flex; position: relative;
+  border: 1px solid var(--yxt-ink-08); border-radius: 4px;
+  background: var(--yxt-paper-warm); padding: 2px;
+}
+.mode-toggle span {
+  font-size: 12px; padding: 4px 12px; color: var(--yxt-label);
+  cursor: pointer; position: relative; z-index: 1;
+}
+.mode-toggle span.active { color: var(--yxt-ink); }
+.mode-toggle .indicator {
+  position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px);
+  background: var(--yxt-paper); border: 1px solid var(--yxt-ink-08);
+  border-radius: 3px; box-shadow: var(--yxt-shadow-md);
+}
+.paper-toggle-track {
+  display: block; width: 28px; height: 16px;
+  background: var(--yxt-ink-08); border: 1px solid var(--yxt-ink-40);
+  border-radius: 4px; position: relative; cursor: pointer;
+}
+.paper-toggle-thumb {
+  position: absolute; top: 1px; left: 13px; width: 12px; height: 12px;
+  border-radius: 2px; background: var(--yxt-ink);
+}
+
+/* ===== 4. 划词浮窗 ===== */
+.selection-scene {
+  background: var(--yxt-paper-open);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 8px;
+  padding: 40px 36px 56px;
+  position: relative;
+}
+.selection-scene p { font-size: 15px; max-width: 560px; }
+.selected-text { background: var(--yxt-dusk-25); border-radius: 2px; }
+.yux-popup {
+  position: absolute;
+  width: 300px;
+  background: var(--yxt-paper-95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--yxt-ink-08);
+  border-left: 2px solid var(--yxt-dusk-40);
+  border-radius: 6px;
+  border-top-left-radius: 2px;
+  box-shadow: var(--yxt-shadow-lg);
+  font-family: var(--yxt-font-serif);
+}
+.yux-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 0; cursor: grab;
+}
+.yux-popup-title { font-family: var(--yxt-font-sans); font-size: 10px; color: var(--yxt-label); letter-spacing: 0.02em; }
+.yux-popup-close {
+  width: 28px; height: 28px; border: none; background: transparent;
+  color: var(--yxt-label); font-size: 14px; cursor: pointer; border-radius: 4px;
+}
+.yux-popup-close:hover { background: var(--yxt-dusk-12); color: var(--yxt-ink); }
+.yux-popup-content { padding: 4px 14px 10px; }
+.yux-source {
+  font-size: 13px; font-style: italic; color: var(--yxt-label);
+  line-height: 1.6; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--yxt-ink-06);
+}
+.yux-target { font-size: 15px; line-height: 1.75; color: var(--yxt-ink); }
+.yux-popup-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px 10px; border-top: 1px solid var(--yxt-ink-06);
+}
+.yux-badge { display: flex; align-items: center; gap: 5px; font-family: var(--yxt-font-sans); font-size: 10px; color: var(--yxt-label); }
+.yux-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--yxt-ink); font-style: normal; }
+.yux-actions { display: flex; gap: 2px; }
+.yux-action-btn {
+  width: 28px; height: 28px; border: none; background: transparent;
+  color: var(--yxt-ink-60); cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 200ms var(--yxt-ease-paper);
+}
+.yux-action-btn:hover { background: var(--yxt-dusk-12); color: var(--yxt-ink); }
+.yux-float-btn {
+  position: absolute;
+  height: 34px; padding: 0 14px;
+  background: var(--yxt-paper-95); backdrop-filter: blur(12px);
+  border: 1px solid var(--yxt-ink-08); border-radius: 6px;
+  box-shadow: var(--yxt-shadow-md);
+  font-family: var(--yxt-font-sans); font-size: 12px; color: var(--yxt-ink);
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.yux-float-btn svg { color: var(--yxt-ink-60); }
+
+/* ===== 5. Options 片段 ===== */
+.options-mock {
+  display: grid; grid-template-columns: 200px 1fr;
+  background: var(--yxt-paper-open); border: 1px solid var(--yxt-ink-08);
+  border-radius: 8px; overflow: hidden; min-height: 380px;
+}
+.options-sidebar {
+  background: var(--yxt-paper); border-right: 1px solid var(--yxt-ink-06);
+  padding: 24px 16px; font-family: var(--yxt-font-sans);
+}
+.options-brand { font-family: var(--yxt-font-cjk); font-size: 17px; font-weight: 500; margin-bottom: 2px; }
+.options-brand-sub { font-size: 11px; color: var(--yxt-label); margin-bottom: 24px; }
+.options-nav { display: flex; flex-direction: column; gap: 2px; }
+.options-nav-item {
+  font-size: 13px; color: var(--yxt-ink-60); padding: 7px 10px;
+  border-radius: 4px; cursor: pointer; border-left: 2px solid transparent;
+}
+.options-nav-item.active {
+  color: var(--yxt-ink); background: var(--yxt-dusk-08);
+  border-left-color: var(--yxt-dusk);
+}
+.options-main { padding: 28px 32px; }
+.options-section-title {
+  font-size: 16px; font-weight: 500; padding-left: 10px;
+  border-left: 2px solid #A89880; margin-bottom: 20px;
+}
+.form-row { margin-bottom: 22px; }
+.form-label { font-family: var(--yxt-font-sans); font-size: 12px; color: var(--yxt-ink); margin-bottom: 6px; }
+.form-input {
+  width: 100%; max-width: 420px; border: none;
+  border-bottom: 1px solid var(--yxt-annotation-50);
+  background: transparent; font-family: var(--yxt-font-sans); font-size: 14px;
+  color: var(--yxt-ink); padding: 6px 2px; outline: none;
+  transition: border-color 200ms var(--yxt-ease-paper);
+}
+.form-input:focus { border-bottom-color: var(--yxt-dusk); }
+.form-hint { font-family: var(--yxt-font-sans); font-size: 11px; color: var(--yxt-label); margin-top: 5px; }
+.btn-primary {
+  padding: 9px 20px; border: none; border-radius: 4px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  font-family: var(--yxt-font-sans); font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.btn-secondary {
+  padding: 9px 20px; border: 1px solid var(--yxt-ink-15); border-radius: 4px;
+  background: transparent; color: var(--yxt-ink);
+  font-family: var(--yxt-font-sans); font-size: 13px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="demo-wrap">
+
+  <div class="demo-title">YuxTrans UI v2.1 提案预览</div>
+  <div class="demo-subtitle">书房衬纸 · 精修方案对比 — 左现状 / 右提案，所有色值可现场决策</div>
+
+  <!-- ================= 1. 文字层级（核心决策点） ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">一、三级文字层级 — 解决「颜色太相近伤眼」</div>
+    <div class="demo-section-note">
+      现状把批注灰 #9E968A（对比度 2.6:1，远低于 AA 标准 4.5:1）同时用作装饰色和阅读色。
+      提案新增「译文灰」中间层。下面用同一段双语对照文本对比，请重点看<strong>译文段落长时间阅读的舒适度</strong>。
+    </div>
+    <div class="compare-grid">
+      <div class="panel">
+        <span class="panel-tag current">现状</span><span class="panel-tag ratio">译文 2.6:1 ✗</span>
+        <div class="mock-article">
+          <p class="en">LangGraph is a low-level orchestration framework for building stateful, multi-actor applications with LLMs.</p>
+          <p class="tr-current">LangGraph 是一个用于构建有状态、多参与者 LLM 应用的底层编排框架。它让开发者能够精细控制代理的执行流程与状态持久化。</p>
+          <p class="en">Inspired by Pregel and Apache Beam, it provides fine-grained control over flow and state persistence.</p>
+          <p class="tr-current">它的设计灵感来自 Pregel 与 Apache Beam，提供对流控和状态持久化的细粒度控制，适合构建长时间运行的可靠代理。</p>
+        </div>
+        <div class="meta-row"><span class="label-current">缓存命中 · qwen-turbo · 0.8s（标签色 2.75:1 ✗）</span></div>
+      </div>
+      <div class="panel">
+        <span class="panel-tag proposal">提案 A</span><span class="panel-tag ratio">#5C564E · 6.4:1 ✓ AA</span>
+        <div class="mock-article">
+          <p class="en">LangGraph is a low-level orchestration framework for building stateful, multi-actor applications with LLMs.</p>
+          <p class="tr-a">LangGraph 是一个用于构建有状态、多参与者 LLM 应用的底层编排框架。它让开发者能够精细控制代理的执行流程与状态持久化。</p>
+          <p class="en">Inspired by Pregel and Apache Beam, it provides fine-grained control over flow and state persistence.</p>
+          <p class="tr-a">它的设计灵感来自 Pregel 与 Apache Beam，提供对流控和状态持久化的细粒度控制，适合构建长时间运行的可靠代理。</p>
+        </div>
+        <div class="meta-row"><span class="label-new">缓存命中 · qwen-turbo · 0.8s（标签色 #6B655C · 5.1:1 ✓）</span></div>
+      </div>
+      <div class="panel">
+        <span class="panel-tag proposal">提案 B</span><span class="panel-tag ratio">#4A453F · 8.6:1 ✓ AAA</span>
+        <div class="mock-article">
+          <p class="en">LangGraph is a low-level orchestration framework for building stateful, multi-actor applications with LLMs.</p>
+          <p class="tr-b">LangGraph 是一个用于构建有状态、多参与者 LLM 应用的底层编排框架。它让开发者能够精细控制代理的执行流程与状态持久化。</p>
+          <p class="en">Inspired by Pregel and Apache Beam, it provides fine-grained control over flow and state persistence.</p>
+          <p class="tr-b">它的设计灵感来自 Pregel 与 Apache Beam，提供对流控和状态持久化的细粒度控制，适合构建长时间运行的可靠代理。</p>
+        </div>
+        <div class="meta-row"><span class="label-new">缓存命中 · qwen-turbo · 0.8s（更接近墨韵，从属感最弱）</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 双语呈现模式 ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">二、整页双语：行内注脚（精修）vs 段落对照（新增）</div>
+    <div class="demo-section-note">
+      左侧为现有行内模式的精修版（竖线 1.5px→2px、译文色升级、pair-hover 补齐）；右侧为新增的段落对照模式——译文整段跟随，原文排版零改动，适合深阅读连续读完原文再读译文。
+    </div>
+    <div class="compare-grid">
+      <div class="mock-page">
+        <span class="panel-tag current">行内注脚（精修）</span>
+        <h2>LangGraph overview</h2>
+        <p>Trusted by companies shaping the future of agents—including Klarna, Uber, and J.P. Morgan—LangGraph is a low-level orchestration framework.<span class="inline-tr">受到 Klarna、Uber、摩根大通等塑造智能体未来的公司信赖，LangGraph 是一个底层编排框架。</span></p>
+        <p>It provides fine-grained control over both the flow and state of your application, with built-in persistence for long-running workflows.<span class="inline-tr">它对应用的流程与状态提供细粒度控制，并内置持久化能力以支撑长时间运行的工作流。</span></p>
+      </div>
+      <div class="mock-page">
+        <span class="panel-tag proposal">段落对照（新增）</span>
+        <h2>LangGraph overview</h2>
+        <p>Trusted by companies shaping the future of agents—including Klarna, Uber, and J.P. Morgan—LangGraph is a low-level orchestration framework.
+          <span class="block-tr">受到 Klarna、Uber、摩根大通等塑造智能体未来的公司信赖，LangGraph 是一个底层编排框架。</span></p>
+        <p>It provides fine-grained control over both the flow and state of your application, with built-in persistence for long-running workflows.
+          <span class="block-tr">它对应用的流程与状态提供细粒度控制，并内置持久化能力以支撑长时间运行的工作流。</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. Popup ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">三、Popup 弹窗 — 实心墨主按钮 + 图标化设置</div>
+    <div class="demo-section-note">
+      左侧为拍板方案：实心墨主按钮作为视觉锚点（修订设计文档 §6.1 追认）、「设置」改为 16px 线性图标、mode-toggle 标签纸化、状态/标签文字升级为新标签色。右侧对照：文档原方案的轻盈主按钮（供你最终确认）。
+    </div>
+    <div class="compare-grid">
+      <div class="popup-mock">
+        <span class="panel-tag proposal">提案（实心墨）</span>
+        <div class="popup-header">
+          <div class="popup-logo">译</div>
+          <h1>YuxTrans</h1>
+          <button class="popup-icon-btn" title="设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+        </div>
+        <div class="popup-control-row">
+          <span class="status-dot"></span>
+          <span class="status-text">已连接</span>
+          <select class="model-select"><option>DeepSeek · deepseek-v4-flash</option></select>
+        </div>
+        <button class="action-btn">翻译整页</button>
+        <div class="popup-row">
+          <div><div class="popup-row-label">翻译模式</div><div class="popup-row-sub">整页显示方式</div></div>
+          <div class="mode-toggle"><div class="indicator" style="left:calc(50%);"></div><span>仅译文</span><span class="active">双语</span></div>
+        </div>
+        <div class="popup-row">
+          <div><div class="popup-row-label">流式翻译</div><div class="popup-row-sub">逐字输出译文</div></div>
+          <span class="paper-toggle-track"><span class="paper-toggle-thumb"></span></span>
+        </div>
+      </div>
+      <div class="popup-mock">
+        <span class="panel-tag current">文档原方案（书页底墨边框）</span>
+        <div class="popup-header">
+          <div class="popup-logo">译</div>
+          <h1>YuxTrans</h1>
+          <button class="popup-icon-btn" title="设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h13"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+        </div>
+        <div class="popup-control-row">
+          <span class="status-dot"></span>
+          <span class="status-text">已连接</span>
+          <select class="model-select"><option>DeepSeek · deepseek-v4-flash</option></select>
+        </div>
+        <button class="action-btn ghost">翻译整页</button>
+        <div class="popup-row">
+          <div><div class="popup-row-label">翻译模式</div><div class="popup-row-sub">整页显示方式</div></div>
+          <div class="mode-toggle"><div class="indicator" style="left:calc(50%);"></div><span>仅译文</span><span class="active">双语</span></div>
+        </div>
+        <div class="popup-row">
+          <div><div class="popup-row-label">流式翻译</div><div class="popup-row-sub">逐字输出译文</div></div>
+          <span class="paper-toggle-track"><span class="paper-toggle-thumb"></span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 划词浮窗 ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">四、划词浮窗与操作条（精修后）</div>
+    <div class="demo-section-note">
+      精修点：原文区补斜体、图标改 1.5px 线性、bad 反馈收入次级、标签文字升级新色。浮窗形态（便签撕角、暮瞳竖线、毛玻璃）维持现状。
+    </div>
+    <div class="selection-scene">
+      <p>The framework provides <span class="selected-text">fine-grained control</span> over both the flow and state of your agent applications, with built-in persistence and human-in-the-loop support.</p>
+      <div class="yux-float-btn" style="top:110px; right:48px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        翻译
+      </div>
+      <div class="yux-popup" style="bottom:-8px; left:36px;">
+        <div class="yux-popup-header">
+          <span class="yux-popup-title">EN → 中文 · DeepSeek</span>
+          <button class="yux-popup-close">×</button>
+        </div>
+        <div class="yux-popup-content">
+          <div class="yux-source">fine-grained control</div>
+          <div class="yux-target">细粒度控制</div>
+        </div>
+        <div class="yux-popup-footer">
+          <span class="yux-badge"><i></i>云端 · 0.6s</span>
+          <div class="yux-actions">
+            <button class="yux-action-btn" title="钉住">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>
+            </button>
+            <button class="yux-action-btn" title="插入原文旁">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button class="yux-action-btn" title="复制">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 5. Options ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">五、Options 设置页（精修后片段）</div>
+    <div class="demo-section-note">
+      精修点：说明文字从批注灰升级为标签色 #6B655C、诊断区硬编码红绿换低饱和令牌、章节节奏收紧。布局与分区竖线维持现状。
+    </div>
+    <div class="options-mock">
+      <div class="options-sidebar">
+        <div class="options-brand">YuxTrans</div>
+        <div class="options-brand-sub">设置</div>
+        <div class="options-nav">
+          <span class="options-nav-item active">服务档案</span>
+          <span class="options-nav-item">翻译偏好</span>
+          <span class="options-nav-item">交互与显示</span>
+          <span class="options-nav-item">数据与存储</span>
+          <span class="options-nav-item">诊断排障</span>
+        </div>
+      </div>
+      <div class="options-main">
+        <div class="options-section-title">服务商配置</div>
+        <div class="form-row">
+          <div class="form-label">API Key</div>
+          <input class="form-input" type="password" value="sk-xxxxxxxxxxxxxxxx">
+          <div class="form-hint">API Key 仅保存在本机浏览器本地存储中，不会上传到 YuxTrans 服务器</div>
+        </div>
+        <div class="form-row">
+          <div class="form-label">使用模型</div>
+          <input class="form-input" value="deepseek-v4-flash">
+        </div>
+        <div style="display:flex; gap:12px; margin-top:28px;">
+          <button class="btn-primary">保存并启用档案</button>
+          <button class="btn-secondary">连接测试</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

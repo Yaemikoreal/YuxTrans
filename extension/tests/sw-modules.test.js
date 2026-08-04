@@ -288,12 +288,6 @@ test('constants：google 免费接口端点', () => {
   assert.ok(SW.supportsJsonMode('google') === false);
 });
 
-test('constants：microsoft Azure Translator 端点', () => {
-  assert.ok(SW.API_ENDPOINTS.microsoft.includes('microsofttranslator.com'));
-  assert.ok(Array.isArray(SW.DEFAULT_MODELS.microsoft));
-  assert.strictEqual(SW.isNoConfigProvider('microsoft'), false);
-});
-
 test('message-actions：translateWithProfile 归入 translate 类', () => {
   assert.strictEqual(SW.isKnownMessageAction('translateWithProfile'), true);
   assert.strictEqual(SW.classifyMessageAction('translateWithProfile'), 'translate');

@@ -106,6 +106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dictModeInput = getById('dictMode');
   const dictDblclickInput = getById('dictDblclick');
   const originalStyleSelect = getById('originalStyle');
+  // v2.1：双语呈现方式 inline(行内注脚) | block(段落对照)
+  const bilingualStyleRadios = getAll('input[name="bilingualStyle"]');
   const inputTranslateInput = getById('inputTranslate');
   const smartContentDetectionInput = getById('smartContentDetection');
   // F4b：双档案对照
@@ -445,6 +447,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (dictModeInput) dictModeInput.checked = config.dictMode !== false;
     if (dictDblclickInput) dictDblclickInput.checked = config.dictDblclick !== false;
     if (originalStyleSelect) originalStyleSelect.value = ['normal', 'fade', 'blur'].includes(config.originalStyle) ? config.originalStyle : 'normal';
+    bilingualStyleRadios.forEach((radio) => {
+      radio.checked = radio.value === (config.bilingualStyle === 'block' ? 'block' : 'inline');
+    });
     if (inputTranslateInput) inputTranslateInput.checked = !!config.inputTranslate;
     if (smartContentDetectionInput) smartContentDetectionInput.checked = !!config.smartContentDetection;
     // F4b：对照档案下拉从 profiles 填充，回填当前值
@@ -622,8 +627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       siliconflow: 'https://cloud.siliconflow.cn/account/ak',
       groq: 'https://console.groq.com/keys',
       anthropic: 'https://console.anthropic.com/settings/keys',
-      google: '',
-      microsoft: 'https://learn.microsoft.com/zh-cn/azure/ai-services/translator/'
+      google: ''
     };
 
     /** 切换供应商时更新 Key 申请链接 */
@@ -633,7 +637,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const url = PROVIDER_KEY_URLS[provider] || '';
       if (url) {
         // eslint-disable-next-line no-unsanitized/property -- url 来自 PROVIDER_KEY_URLS 常量映射，非用户输入
-        keyLinkEl.innerHTML = `还没有 API Key？<a href="${url}" target="_blank" rel="noopener">前往申请 -></a>`;
+        keyLinkEl.innerHTML = `如需 API Key，可前往<a href="${url}" target="_blank" rel="noopener">服务商页面</a>获取`;
         keyLinkEl.style.display = '';
       } else {
         // google 免 Key
@@ -944,7 +948,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     siliconflow: 'https://cloud.siliconflow.cn/account/ak',
     groq: 'https://console.groq.com/keys',
     anthropic: 'https://console.anthropic.com/settings/keys',
-    microsoft: 'https://learn.microsoft.com/zh-cn/azure/ai-services/translator/',
     google: '',
     local: '',
     custom: ''
@@ -993,25 +996,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isCustom = provider === 'custom';
     // F7：谷歌免费接口零配置（免 Key / 端点 / 模型选择），与 local/custom 一样隐藏配置字段
     const isGoogle = provider === 'google';
-    // 微软 Azure Translator 需 Key 和端点，但无需选择模型
-    const isMicrosoft = provider === 'microsoft';
     const isNoConfig = isLocal || isCustom || isGoogle;
     if (apiKeyGroup) apiKeyGroup.style.display = isNoConfig ? 'none' : 'block';
     if (endpointGroup) endpointGroup.style.display = isNoConfig ? 'none' : 'block';
-    // google/microsoft 无需选择模型；local 用独立输入框；custom 用自定义段
-    if (modelSelectGroup) modelSelectGroup.style.display = (isNoConfig || isMicrosoft) ? 'none' : 'block';
+    // google 无需选择模型；local 用独立输入框；custom 用自定义段
+    if (modelSelectGroup) modelSelectGroup.style.display = isNoConfig ? 'none' : 'block';
     if (localModelGroup) localModelGroup.style.display = isLocal ? 'block' : 'none';
     if (customProviderSection) customProviderSection.style.display = isCustom ? 'block' : 'none';
     const activeProfile = getActiveProfile(config);
     const selectedModel = activeProfile?.model || config?.model || '';
-    if (!isLocal && !isCustom && !isGoogle && !isMicrosoft) loadModelOptions(provider, selectedModel);
+    if (!isLocal && !isCustom && !isGoogle) loadModelOptions(provider, selectedModel);
 
-    // 更新 Key 申请链接（microsoft 等需 Key 供应商显示申请入口）
+    // 更新 Key 申请链接（需 Key 供应商显示申请入口）
     if (apiKeyLink) {
       const url = MAIN_PROVIDER_KEY_URLS[provider] || '';
       if (url) {
         // eslint-disable-next-line no-unsanitized/property -- url 来自常量映射，非用户输入
-        apiKeyLink.innerHTML = `还没有 API Key？<a href="${url}" target="_blank" rel="noopener">前往申请 -></a>`;
+        apiKeyLink.innerHTML = `如需 API Key，可前往<a href="${url}" target="_blank" rel="noopener">服务商页面</a>获取`;
         apiKeyLink.style.display = '';
       } else {
         apiKeyLink.innerHTML = '';
@@ -1668,6 +1669,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       dictMode: dictModeInput ? getChecked(dictModeInput) : true,
       dictDblclick: dictDblclickInput ? getChecked(dictDblclickInput) : true,
       originalStyle: ['normal', 'fade', 'blur'].includes(getVal(originalStyleSelect)) ? getVal(originalStyleSelect) : 'normal',
+      bilingualStyle: document.querySelector('input[name="bilingualStyle"]:checked')?.value === 'block' ? 'block' : 'inline',
       inputTranslate: inputTranslateInput ? getChecked(inputTranslateInput) : false,
       smartContentDetection: smartContentDetectionInput ? getChecked(smartContentDetectionInput) : false,
       compareProfileId: compareProfileIdSelect ? (getVal(compareProfileIdSelect) || '') : ''

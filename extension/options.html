@@ -32,7 +32,7 @@
           </button>
           <button type="button" class="first-run-path-card" data-path="cloud" id="firstRunPathCloud">
             <strong>云端 API</strong>
-            <span>填写服务商 Key，质量与速度通常更好（含微软 Azure 免费额度）</span>
+            <span>填写服务商 Key，质量与速度通常更好</span>
           </button>
           <button type="button" class="first-run-path-card" data-path="local" id="firstRunPathLocal">
             <strong>本地 Ollama</strong>
@@ -55,9 +55,8 @@
               <option value="groq">Groq</option>
               <option value="anthropic">Anthropic</option>
               <option value="google">谷歌免费翻译（免 Key）</option>
-              <option value="microsoft">微软翻译（Azure 免费额度）</option>
             </select>
-            <p class="hint" id="firstRunKeyLink">还没有 API Key？<a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener">前往申请 →</a></p>
+            <p class="hint" id="firstRunKeyLink">如需 API Key，可前往<a href="https://dashscope.console.aliyun.com/apiKey" target="_blank" rel="noopener">服务商页面</a>获取</p>
           </div>
           <div class="form-group">
             <label class="form-label" for="firstRunApiKey">API Key</label>
@@ -67,8 +66,7 @@
         </div>
         <div id="firstRunFreeForm" hidden>
           <p class="hint">已为你预配谷歌免费翻译，无需任何 Key，直接进入下一步试译。</p>
-          <p class="hint"><strong>提示：</strong>谷歌翻译在国内网络环境下可能无法连接。如遇连接失败，可改选「云端 API」路径并注册微软 Azure 翻译（每月 200 万字符免费额度，国内可正常访问）。</p>
-          <a href="https://learn.microsoft.com/zh-cn/azure/ai-services/translator/" target="_blank" rel="noopener" class="btn-secondary">了解微软 Azure 翻译免费额度</a>
+          <p class="hint"><strong>提示：</strong>谷歌翻译在国内网络环境下可能无法连接。如遇连接失败，可改选「云端 API」路径并注册国内可用的服务商。</p>
         </div>
         <div id="firstRunLocalForm" hidden>
           <p class="hint" id="firstRunOllamaStatus">正在检测本机 Ollama…</p>
@@ -114,11 +112,11 @@
       </div>
 
       <nav class="tabs" aria-label="设置模块">
-        <button class="tab active" data-tab="profiles" data-zone="profiles">服务档案</button>
-        <button class="tab" data-tab="preference" data-zone="preference">翻译偏好</button>
-        <button class="tab" data-tab="interaction" data-zone="interaction">交互与显示</button>
-        <button class="tab" data-tab="data" data-zone="data">数据与存储</button>
-        <button class="tab" data-tab="diagnostics" data-zone="diagnostics">诊断排障</button>
+        <button class="tab active" data-tab="profiles" data-zone="profiles"><span class="tab-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="6" rx="1.5"/><rect x="3.5" y="14" width="17" height="6" rx="1.5"/><path d="M6.5 7h.01M6.5 17h.01"/></svg></span>服务档案</button>
+        <button class="tab" data-tab="preference" data-zone="preference"><span class="tab-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.3 3.7 5.2 3.7 8.5s-1.3 6.2-3.7 8.5c-2.4-2.3-3.7-5.2-3.7-8.5s1.3-6.2 3.7-8.5z"/></svg></span>翻译偏好</button>
+        <button class="tab" data-tab="interaction" data-zone="interaction"><span class="tab-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.5 16.5L13 13l6.5-2.5z"/></svg></span>交互与显示</button>
+        <button class="tab" data-tab="data" data-zone="data"><span class="tab-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>数据与存储</button>
+        <button class="tab" data-tab="diagnostics" data-zone="diagnostics"><span class="tab-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 5 14 2.5-7h4"/></svg></span>诊断排障</button>
       </nav>
 
       <div class="sidebar-footer">
@@ -147,178 +145,181 @@
 
       <!-- 1. 供应商档案 -->
       <div class="tab-content active" id="tab-profiles">
-        <div class="section">
+        <div class="section" data-zone="profiles">
           <h2 class="section-title">服务商配置</h2>
-          <div class="form-group">
-            <label class="form-label" for="provider">服务商</label>
-            <select id="provider">
-              <option value="qwen">通义千问 (Qwen)</option>
-              <option value="openai">OpenAI</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="groq">Groq</option>
-              <option value="moonshot">Moonshot (月之暗面)</option>
-              <option value="siliconflow">SiliconFlow</option>
-              <option value="google">谷歌免费翻译（免 Key）</option>
-              <option value="microsoft">微软翻译（Azure 免费额度）</option>
-              <option value="local">本地模型 (Ollama)</option>
-              <option value="custom">自定义供应商</option>
-            </select>
-          </div>
-
-          <div class="form-group" id="apiKeyGroup">
-            <label class="form-label" for="apiKey">API Key</label>
-            <input type="password" id="apiKey" placeholder="输入您的 API Key">
-            <p class="hint" id="apiKeyLink" style="display:none;"></p>
-          </div>
-
-          <div class="form-group" id="endpointGroup">
-            <label class="form-label" for="apiEndpoint">请求地址 (可选)</label>
-            <input type="text" id="apiEndpoint" placeholder="留空使用默认官方地址">
-          </div>
-
-          <div class="form-group" id="modelSelectGroup">
-            <label class="form-label" for="modelSelect">使用模型</label>
-            <select id="modelSelect">
-              <option value="">加载中...</option>
-            </select>
-            <div class="button-group">
-              <button class="btn-test" id="fetchModelsBtn">刷新列表</button>
-              <button class="btn-test" id="testProviderBtn">连接测试</button>
-            </div>
-            <div id="providerTestResult" class="status"></div>
-          </div>
-
-          <div class="form-group" id="localModelGroup" style="display: none;">
-            <label class="form-label" for="localModel">本地模型名称 (Ollama)</label>
-
-            <!-- Ollama 状态检测面板 -->
-            <div id="ollamaStatusPanel" class="ollama-status">
-              <div class="ollama-status-content">
-                <span class="ollama-status-dot checking" id="ollamaStatusIcon"></span>
-                <span class="ollama-status-text" id="ollamaStatusText">正在检测 Ollama 状态...</span>
-              </div>
-              <div id="ollamaStatusAction" class="ollama-status-actions" style="display: none;">
-                <button class="btn-test" id="downloadModelBtn">下载 Qwen3.5-0.8B 模型</button>
-                <button class="btn-test" id="copyPullCmdBtn">复制命令</button>
-              </div>
+          <div class="yxt-group">
+            <div class="form-group">
+              <label class="form-label" for="provider">服务商</label>
+              <select id="provider">
+                <option value="qwen">通义千问 (Qwen)</option>
+                <option value="openai">OpenAI</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="groq">Groq</option>
+                <option value="moonshot">Moonshot (月之暗面)</option>
+                <option value="siliconflow">SiliconFlow</option>
+                <option value="google">谷歌免费翻译（免 Key）</option>
+                <option value="local">本地模型 (Ollama)</option>
+                <option value="custom">自定义供应商</option>
+              </select>
             </div>
 
-            <!-- 推荐模型分档（F8） -->
-            <div id="recommendedModelsPanel" class="model-recommendations" style="margin-bottom: var(--yxt-space-4);">
-              <div class="model-recommendations-title">推荐模型分档</div>
-              <div id="modelRecommendations">
-                <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 1GB">
-                  <div class="model-card-info">
-                    <div class="model-card-name">Qwen 3.5 · 0.8B · 最快</div>
-                    <div class="model-card-meta">约 1GB · 低配 / 纯 CPU · 默认</div>
-                  </div>
-                  <div class="model-card-actions">
-                    <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
-                    <button class="btn-test model-cancel-btn" data-model="qwen3.5:0.8b" style="display: none;">取消</button>
-                    <button class="btn-test model-copy-btn" data-model="qwen3.5:0.8b">复制命令</button>
-                  </div>
-                  <div class="model-card-progress" style="display: none;">
-                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
-                    <div class="model-progress-text">0%</div>
-                  </div>
+            <div class="form-group" id="apiKeyGroup">
+              <label class="form-label" for="apiKey">API Key</label>
+              <input type="password" id="apiKey" placeholder="输入您的 API Key">
+              <p class="hint" id="apiKeyLink" style="display:none;"></p>
+            </div>
+
+            <div class="form-group" id="endpointGroup">
+              <label class="form-label" for="apiEndpoint">请求地址 (可选)</label>
+              <input type="text" id="apiEndpoint" placeholder="留空使用默认官方地址">
+            </div>
+
+            <div class="form-group" id="modelSelectGroup">
+              <label class="form-label" for="modelSelect">使用模型</label>
+              <select id="modelSelect">
+                <option value="">加载中...</option>
+              </select>
+              <div class="button-group">
+                <button class="btn-test" id="fetchModelsBtn">刷新列表</button>
+                <button class="btn-test" id="testProviderBtn">连接测试</button>
+              </div>
+              <div id="providerTestResult" class="status"></div>
+            </div>
+
+            <div class="form-group" id="localModelGroup" style="display: none;">
+              <label class="form-label" for="localModel">本地模型名称 (Ollama)</label>
+
+              <!-- Ollama 状态检测面板 -->
+              <div id="ollamaStatusPanel" class="ollama-status">
+                <div class="ollama-status-content">
+                  <span class="ollama-status-dot checking" id="ollamaStatusIcon"></span>
+                  <span class="ollama-status-text" id="ollamaStatusText">正在检测 Ollama 状态...</span>
                 </div>
-                <div class="model-card" data-model="translategemma:4b" data-size="约 3.3GB">
-                  <div class="model-card-info">
-                    <div class="model-card-name">TranslateGemma · 4B · 推荐</div>
-                    <div class="model-card-meta">约 3.3GB · 专用翻译模型 · 推荐</div>
-                  </div>
-                  <div class="model-card-actions">
-                    <button class="btn-test model-download-btn" data-model="translategemma:4b">下载</button>
-                    <button class="btn-test model-cancel-btn" data-model="translategemma:4b" style="display: none;">取消</button>
-                    <button class="btn-test model-copy-btn" data-model="translategemma:4b">复制命令</button>
-                  </div>
-                  <div class="model-card-progress" style="display: none;">
-                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
-                    <div class="model-progress-text">0%</div>
-                  </div>
-                </div>
-                <div class="model-card" data-model="translategemma:12b" data-size="约 8GB">
-                  <div class="model-card-info">
-                    <div class="model-card-name">TranslateGemma · 12B · 最佳质量</div>
-                    <div class="model-card-meta">约 8GB · 高端机 / GPU</div>
-                  </div>
-                  <div class="model-card-actions">
-                    <button class="btn-test model-download-btn" data-model="translategemma:12b">下载</button>
-                    <button class="btn-test model-cancel-btn" data-model="translategemma:12b" style="display: none;">取消</button>
-                    <button class="btn-test model-copy-btn" data-model="translategemma:12b">复制命令</button>
-                  </div>
-                  <div class="model-card-progress" style="display: none;">
-                    <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
-                    <div class="model-progress-text">0%</div>
-                  </div>
+                <div id="ollamaStatusAction" class="ollama-status-actions" style="display: none;">
+                  <button class="btn-test" id="downloadModelBtn">下载 Qwen3.5-0.8B 模型</button>
+                  <button class="btn-test" id="copyPullCmdBtn">复制命令</button>
                 </div>
               </div>
+
+              <!-- 推荐模型分档（F8） -->
+              <div id="recommendedModelsPanel" class="model-recommendations" style="margin-bottom: var(--yxt-space-4);">
+                <div class="model-recommendations-title">推荐模型分档</div>
+                <div id="modelRecommendations">
+                  <div class="model-card" data-model="qwen3.5:0.8b" data-size="约 1GB">
+                    <div class="model-card-info">
+                      <div class="model-card-name">Qwen 3.5 · 0.8B · 最快</div>
+                      <div class="model-card-meta">约 1GB · 低配 / 纯 CPU · 默认</div>
+                    </div>
+                    <div class="model-card-actions">
+                      <button class="btn-test model-download-btn" data-model="qwen3.5:0.8b">下载</button>
+                      <button class="btn-test model-cancel-btn" data-model="qwen3.5:0.8b" style="display: none;">取消</button>
+                      <button class="btn-test model-copy-btn" data-model="qwen3.5:0.8b">复制命令</button>
+                    </div>
+                    <div class="model-card-progress" style="display: none;">
+                      <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                      <div class="model-progress-text">0%</div>
+                    </div>
+                  </div>
+                  <div class="model-card" data-model="translategemma:4b" data-size="约 3.3GB">
+                    <div class="model-card-info">
+                      <div class="model-card-name">TranslateGemma · 4B · 推荐</div>
+                      <div class="model-card-meta">约 3.3GB · 专用翻译模型 · 推荐</div>
+                    </div>
+                    <div class="model-card-actions">
+                      <button class="btn-test model-download-btn" data-model="translategemma:4b">下载</button>
+                      <button class="btn-test model-cancel-btn" data-model="translategemma:4b" style="display: none;">取消</button>
+                      <button class="btn-test model-copy-btn" data-model="translategemma:4b">复制命令</button>
+                    </div>
+                    <div class="model-card-progress" style="display: none;">
+                      <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                      <div class="model-progress-text">0%</div>
+                    </div>
+                  </div>
+                  <div class="model-card" data-model="translategemma:12b" data-size="约 8GB">
+                    <div class="model-card-info">
+                      <div class="model-card-name">TranslateGemma · 12B · 最佳质量</div>
+                      <div class="model-card-meta">约 8GB · 高端机 / GPU</div>
+                    </div>
+                    <div class="model-card-actions">
+                      <button class="btn-test model-download-btn" data-model="translategemma:12b">下载</button>
+                      <button class="btn-test model-cancel-btn" data-model="translategemma:12b" style="display: none;">取消</button>
+                      <button class="btn-test model-copy-btn" data-model="translategemma:12b">复制命令</button>
+                    </div>
+                    <div class="model-card-progress" style="display: none;">
+                      <div class="model-progress-bar-bg"><div class="model-progress-bar" style="width: 0%;"></div></div>
+                      <div class="model-progress-text">0%</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <select id="localModelSelect" style="margin-bottom: var(--yxt-space-3); display: none;">
+                <option value="">点击下方刷新获取模型...</option>
+              </select>
+              <input type="text" id="localModel" placeholder="qwen3.5:0.8b">
+              <p class="hint yxt-note">推荐分档：<strong>qwen3.5:0.8b</strong>（最快，约 1GB）/ <strong>translategemma:4b</strong>（推荐，约 3.3GB）/ <strong>translategemma:12b</strong>（最佳质量，约 8GB）。Windows 可运行 <code>extension/setup-ollama.bat</code>、macOS/Linux 运行 <code>./extension/setup-ollama.sh</code> 一键配置（支持参数指定模型）。注意：国内下载可能较慢；本地模型性能受机器配置限制，若运行不畅请在「通用设置」中开启「自动切换备选」并配置云端供应商。</p>
+              <div class="button-group">
+                <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
+                <button class="btn-test" id="testLocalBtn">连接测试</button>
+              </div>
             </div>
 
-            <select id="localModelSelect" style="margin-bottom: var(--yxt-space-3); display: none;">
-              <option value="">点击下方刷新获取模型...</option>
-            </select>
-            <input type="text" id="localModel" placeholder="qwen3.5:0.8b">
-            <p class="hint yxt-note">推荐分档：<strong>qwen3.5:0.8b</strong>（最快，约 1GB）/ <strong>translategemma:4b</strong>（推荐，约 3.3GB）/ <strong>translategemma:12b</strong>（最佳质量，约 8GB）。Windows 可运行 <code>extension/setup-ollama.bat</code>、macOS/Linux 运行 <code>./extension/setup-ollama.sh</code> 一键配置（支持参数指定模型）。注意：国内下载可能较慢；本地模型性能受机器配置限制，若运行不畅请在「通用设置」中开启「自动切换备选」并配置云端供应商。</p>
-            <div class="button-group">
-              <button class="btn-test" id="fetchLocalModelsBtn">刷新列表</button>
-              <button class="btn-test" id="testLocalBtn">连接测试</button>
+            <div id="customProviderSection" style="display: none;">
+               <div class="form-group">
+                  <label class="form-label" for="customName">供应商名称</label>
+                  <input type="text" id="customName" placeholder="My Custom API">
+               </div>
+               <div class="form-group">
+                  <label class="form-label" for="customEndpoint">API 端点地址</label>
+                  <input type="text" id="customEndpoint" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
+                  <p class="hint">填入完整的 API 地址，例如 <code>/v1</code>、<code>/v1/chat/completions</code> 或 <code>/api</code>。获取模型列表时会自动尝试 <code>/models</code> 路径。</p>
+               </div>
+               <div class="input-row">
+                 <div class="form-group">
+                   <label class="form-label" for="customApiKey">API Key</label>
+                   <input type="password" id="customApiKey">
+                 </div>
+                 <div class="form-group">
+                   <label class="form-label" for="customFormat">API 格式</label>
+                   <select id="customFormat">
+                     <option value="openai">OpenAI 兼容</option>
+                     <option value="anthropic">Anthropic (Claude)</option>
+                     <option value="qwen">通义千问 (DashScope)</option>
+                   </select>
+                 </div>
+               </div>
+               <div class="input-row">
+                 <div class="form-group">
+                   <label class="form-label" for="customModelSelect">模型 ID</label>
+                   <select id="customModelSelect" style="margin-bottom: 8px;">
+                     <option value="">请先获取模型列表或手动输入</option>
+                   </select>
+                   <input type="text" id="customModelManual" placeholder="gpt-4o-mini" style="display: none;">
+                 </div>
+               </div>
+               <div class="button-group">
+                 <button class="btn-test" id="fetchCustomModelsBtn">获取模型列表</button>
+                 <button class="btn-test" id="testCustomBtn">连接测试</button>
+               </div>
+               <div id="customTestResult" style="margin-top: var(--yxt-space-3);"></div>
             </div>
-          </div>
 
-          <div id="customProviderSection" style="display: none;">
-             <div class="form-group">
-                <label class="form-label" for="customName">供应商名称</label>
-                <input type="text" id="customName" placeholder="My Custom API">
-             </div>
-             <div class="form-group">
-                <label class="form-label" for="customEndpoint">API 端点地址</label>
-                <input type="text" id="customEndpoint" placeholder="https://token-plan-cn.xiaomimimo.com/v1">
-                <p class="hint">填入完整的 API 地址，例如 <code>/v1</code>、<code>/v1/chat/completions</code> 或 <code>/api</code>。获取模型列表时会自动尝试 <code>/models</code> 路径。</p>
-             </div>
-             <div class="input-row">
-               <div class="form-group">
-                 <label class="form-label" for="customApiKey">API Key</label>
-                 <input type="password" id="customApiKey">
-               </div>
-               <div class="form-group">
-                 <label class="form-label" for="customFormat">API 格式</label>
-                 <select id="customFormat">
-                   <option value="openai">OpenAI 兼容</option>
-                   <option value="anthropic">Anthropic (Claude)</option>
-                   <option value="qwen">通义千问 (DashScope)</option>
-                 </select>
-               </div>
-             </div>
-             <div class="input-row">
-               <div class="form-group">
-                 <label class="form-label" for="customModelSelect">模型 ID</label>
-                 <select id="customModelSelect" style="margin-bottom: 8px;">
-                   <option value="">请先获取模型列表或手动输入</option>
-                 </select>
-                 <input type="text" id="customModelManual" placeholder="gpt-4o-mini" style="display: none;">
-               </div>
-             </div>
-             <div class="button-group">
-               <button class="btn-test" id="fetchCustomModelsBtn">获取模型列表</button>
-               <button class="btn-test" id="testCustomBtn">连接测试</button>
-             </div>
-             <div id="customTestResult" style="margin-top: var(--yxt-space-3);"></div>
-          </div>
-
-          <div class="button-group-right">
-            <button class="btn-primary" id="saveProviderBtn">保存并启用档案</button>
+            <div class="button-group-right">
+              <button class="btn-primary" id="saveProviderBtn">保存并启用档案</button>
+            </div>
           </div>
         </div>
 
         <!-- 档案管理 -->
-        <div class="section">
+        <div class="section" data-zone="profiles">
           <h2 class="section-title">档案管理</h2>
-          <p class="hint" style="margin-bottom: var(--yxt-space-4);">在此管理所有已保存的 Provider 档案，可自由切换当前使用的翻译服务。</p>
-          <div id="modelList">
-            <div class="model-list-empty">
-              暂无档案，请在上方配置并保存后在此管理。
+          <div class="yxt-group">
+            <p class="hint" style="margin-bottom: var(--yxt-space-4);">在此管理所有已保存的 Provider 档案，可自由切换当前使用的翻译服务。</p>
+            <div id="modelList">
+              <div class="model-list-empty">
+                暂无档案，请在上方配置并保存后在此管理。
+              </div>
             </div>
           </div>
         </div>
@@ -329,37 +330,44 @@
         <section class="pref-block" data-zone="preference">
           <h2 class="section-title">当前档案</h2>
           <div class="pref-group" id="activeConfigSection">
-            <h3 class="pref-subtitle">当前使用</h3>
-            <div class="active-config-card" id="activeConfigCard">
-              <div class="active-config-name" id="activeProfileName">--</div>
-              <div class="active-config-detail" id="activeProfileDetail">--</div>
+            <h3 class="yxt-group-label">当前使用</h3>
+            <div class="yxt-group">
+              <div class="active-config-card" id="activeConfigCard">
+                <div class="active-config-name" id="activeProfileName">--</div>
+                <div class="active-config-detail" id="activeProfileDetail">--</div>
+              </div>
             </div>
           </div>
           <div class="pref-group" id="quickStartSection" hidden>
-            <h3 class="pref-subtitle">快速开始</h3>
-            <div class="step-flow" aria-label="上手三步">
-              <div class="step-flow-item">
-                <span class="step-flow-num" aria-hidden="true">1</span>
-                <span class="step-flow-text">在「服务档案」保存并启用一个服务</span>
+            <h3 class="yxt-group-label">快速开始</h3>
+            <div class="yxt-group">
+              <div class="step-flow" aria-label="上手三步">
+                <div class="step-flow-item">
+                  <span class="step-flow-num" aria-hidden="true">1</span>
+                  <span class="step-flow-text">在「服务档案」保存并启用一个服务</span>
+                </div>
+                <div class="step-flow-item">
+                  <span class="step-flow-num" aria-hidden="true">2</span>
+                  <span class="step-flow-text">在下方选择目标语言与翻译风格</span>
+                </div>
+                <div class="step-flow-item">
+                  <span class="step-flow-num" aria-hidden="true">3</span>
+                  <span class="step-flow-text">回到网页划词，即划即译</span>
+                </div>
               </div>
-              <div class="step-flow-item">
-                <span class="step-flow-num" aria-hidden="true">2</span>
-                <span class="step-flow-text">在下方选择目标语言与翻译风格</span>
-              </div>
-              <div class="step-flow-item">
-                <span class="step-flow-num" aria-hidden="true">3</span>
-                <span class="step-flow-text">回到网页划词，即划即译</span>
-              </div>
+              <p class="hint" id="firstRunHint" hidden></p>
             </div>
-            <p class="hint" id="firstRunHint" hidden></p>
           </div>
           <div class="pref-group">
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="offlineMode">离线模式</label>
-                <p class="setting-desc">仅本地模型 + 缓存，禁止云端请求</p>
+            <h3 class="yxt-group-label">模式</h3>
+            <div class="yxt-group">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="offlineMode">离线模式</label>
+                  <p class="setting-desc">仅本地模型 + 缓存，禁止云端请求</p>
+                </div>
+                <label class="yxt-switch-label"><input type="checkbox" id="offlineMode"><span class="yxt-switch" aria-hidden="true"></span></label>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="offlineMode"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
           </div>
         </section>
@@ -367,11 +375,13 @@
         <section class="pref-block" data-zone="preference">
           <h2 class="section-title">语言与风格</h2>
           <div class="pref-group">
-            <h3 class="pref-subtitle">语言偏好</h3>
-            <div class="input-row">
-              <div class="form-group">
-                <label class="form-label" for="sourceLang">默认源语言</label>
-                <select id="sourceLang">
+            <h3 class="yxt-group-label">语言偏好</h3>
+            <div class="yxt-group">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="sourceLang">默认源语言</label>
+                </div>
+                <select id="sourceLang" class="setting-control">
                   <option value="auto">自动检测</option>
                   <option value="en">英语</option>
                   <option value="zh">中文简体</option>
@@ -383,9 +393,11 @@
                   <option value="ru">俄语</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label" for="targetLang">默认目标语言</label>
-                <select id="targetLang">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="targetLang">默认目标语言</label>
+                </div>
+                <select id="targetLang" class="setting-control">
                   <option value="zh">中文简体</option>
                   <option value="en">英语</option>
                   <option value="ja">日语</option>
@@ -399,52 +411,56 @@
             </div>
           </div>
           <div class="pref-group">
-            <h3 class="pref-subtitle">翻译风格</h3>
-            <div class="style-grid">
-              <label class="style-option">
-                <input type="radio" name="translateStyle" value="normal" checked>
-                <div class="style-info">
-                  <span class="style-name">日常模式</span>
-                  <p class="style-hint">通俗易懂，适合新闻、网页浏览与日常交流。</p>
-                </div>
-              </label>
-              <label class="style-option">
-                <input type="radio" name="translateStyle" value="academic">
-                <div class="style-info">
-                  <span class="style-name">学术模式</span>
-                  <p class="style-hint">严谨专业，适合论文阅读、研究报告与严谨文献。</p>
-                </div>
-              </label>
-              <label class="style-option">
-                <input type="radio" name="translateStyle" value="technical">
-                <div class="style-info">
-                  <span class="style-name">技术模式</span>
-                  <p class="style-hint">极客优化，保留核心术语不翻，适合代码与 API 文档。</p>
-                </div>
-              </label>
-              <label class="style-option">
-                <input type="radio" name="translateStyle" value="literary">
-                <div class="style-info">
-                  <span class="style-name">文学模式</span>
-                  <p class="style-hint">文采斐然，追求意境与表达，适合博文与小说。</p>
-                </div>
-              </label>
+            <h3 class="yxt-group-label">翻译风格</h3>
+            <div class="yxt-group">
+              <div class="style-grid">
+                <label class="style-option">
+                  <input type="radio" name="translateStyle" value="normal" checked>
+                  <div class="style-info">
+                    <span class="style-name">日常模式</span>
+                    <p class="style-hint">通俗易懂，适合新闻、网页浏览与日常交流。</p>
+                  </div>
+                </label>
+                <label class="style-option">
+                  <input type="radio" name="translateStyle" value="academic">
+                  <div class="style-info">
+                    <span class="style-name">学术模式</span>
+                    <p class="style-hint">严谨专业，适合论文阅读、研究报告与严谨文献。</p>
+                  </div>
+                </label>
+                <label class="style-option">
+                  <input type="radio" name="translateStyle" value="technical">
+                  <div class="style-info">
+                    <span class="style-name">技术模式</span>
+                    <p class="style-hint">极客优化，保留核心术语不翻，适合代码与 API 文档。</p>
+                  </div>
+                </label>
+                <label class="style-option">
+                  <input type="radio" name="translateStyle" value="literary">
+                  <div class="style-info">
+                    <span class="style-name">文学模式</span>
+                    <p class="style-hint">文采斐然，追求意境与表达，适合博文与小说。</p>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
           <div class="pref-group" id="stylePromptEditor">
-            <h3 class="pref-subtitle">风格提示词 · <span id="stylePromptStyleLabel">日常模式</span></h3>
-            <p class="hint">追加在系统翻译指令中的风格说明（英文效果通常更好）。可按当前选中风格单独编辑；保存翻译偏好时一并写入。留空表示该风格不加额外说明。</p>
-            <div class="form-group">
-              <label class="form-label" for="stylePromptText">提示词内容</label>
-              <textarea id="stylePromptText" class="style-prompt-textarea" rows="4" maxlength="2000" placeholder="例如：Use a concise, journalistic tone suitable for news headlines."></textarea>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <p class="setting-desc" id="stylePromptStatus">使用内置默认</p>
+            <h3 class="yxt-group-label">风格提示词 · <span id="stylePromptStyleLabel">日常模式</span></h3>
+            <div class="yxt-group">
+              <p class="hint">追加在系统翻译指令中的风格说明（英文效果通常更好）。可按当前选中风格单独编辑；保存翻译偏好时一并写入。留空表示该风格不加额外说明。</p>
+              <div class="form-group">
+                <label class="form-label" for="stylePromptText">提示词内容</label>
+                <textarea id="stylePromptText" class="style-prompt-textarea" rows="4" maxlength="2000" placeholder="例如：Use a concise, journalistic tone suitable for news headlines."></textarea>
               </div>
-              <div class="button-group button-group--inline">
-                <button type="button" class="btn-secondary" id="resetStylePromptBtn">恢复该风格默认</button>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <p class="setting-desc" id="stylePromptStatus">使用内置默认</p>
+                </div>
+                <div class="button-group button-group--inline">
+                  <button type="button" class="btn-secondary" id="resetStylePromptBtn">恢复该风格默认</button>
+                </div>
               </div>
             </div>
           </div>
@@ -461,64 +477,76 @@
         <section class="pref-block" data-zone="interaction">
           <h2 class="section-title">触发与输出</h2>
           <div class="pref-group">
-            <div class="setting-row">
-              <div class="setting-info">
-                <span class="form-label">触发方式</span>
+            <div class="yxt-group">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="form-label">触发方式</span>
+                </div>
+                <div class="radio-group">
+                  <label><input type="radio" name="triggerMode" value="modifier" checked> 修饰键 + 划选</label>
+                  <label><input type="radio" name="triggerMode" value="auto"> 选中后弹出</label>
+                  <label><input type="radio" name="triggerMode" value="icon"> 悬浮图标</label>
+                  <label><input type="radio" name="triggerMode" value="contextMenu"> 右键菜单</label>
+                </div>
               </div>
-              <div class="radio-group">
-                <label><input type="radio" name="triggerMode" value="modifier" checked> 修饰键 + 划选</label>
-                <label><input type="radio" name="triggerMode" value="auto"> 选中后弹出</label>
-                <label><input type="radio" name="triggerMode" value="icon"> 悬浮图标</label>
-                <label><input type="radio" name="triggerMode" value="contextMenu"> 右键菜单</label>
+              <div class="setting-row setting-row--sub" id="selectionModifierRow">
+                <div class="setting-info">
+                  <label class="form-label" for="selectionModifier">划选修饰键</label>
+                  <p class="setting-desc">按住所选键 + 鼠标划选才触发翻译。macOS 上 Ctrl+点击等效右键，建议选 Alt；Shift 会与「扩展选区」冲突</p>
+                  <p class="setting-desc" id="modifierConflictWarning" hidden>悬停修饰键与划选修饰键相同，按住划选时将不触发悬停翻译</p>
+                </div>
+                <select id="selectionModifier" class="setting-control">
+                  <option value="ctrl">Ctrl</option>
+                  <option value="alt">Alt</option>
+                  <option value="shift">Shift</option>
+                </select>
               </div>
-            </div>
-            <div class="setting-row setting-row--sub" id="selectionModifierRow">
-              <div class="setting-info">
-                <label class="form-label" for="selectionModifier">划选修饰键</label>
-                <p class="setting-desc">按住所选键 + 鼠标划选才触发翻译。macOS 上 Ctrl+点击等效右键，建议选 Alt；Shift 会与「扩展选区」冲突</p>
-                <p class="setting-desc" id="modifierConflictWarning" hidden>悬停修饰键与划选修饰键相同，按住划选时将不触发悬停翻译</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="enableStreaming">流式输出</label>
+                  <p class="setting-desc">实时显示逐字输出</p>
+                </div>
+                <label class="yxt-switch-label"><input type="checkbox" id="enableStreaming" checked><span class="yxt-switch" aria-hidden="true"></span></label>
               </div>
-              <select id="selectionModifier" class="setting-control">
-                <option value="ctrl">Ctrl</option>
-                <option value="alt">Alt</option>
-                <option value="shift">Shift</option>
-              </select>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="enableStreaming">流式输出</label>
-                <p class="setting-desc">实时显示逐字输出</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="originalStyle">整页原文呈现样式</label>
+                </div>
+                <select id="originalStyle" class="setting-control">
+                  <option value="normal">双语对照（默认）</option>
+                  <option value="fade">弱化原文</option>
+                  <option value="blur">模糊原文（悬停还原）</option>
+                </select>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="enableStreaming" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="originalStyle">整页原文呈现样式</label>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="form-label">双语呈现方式</span>
+                  <p class="setting-desc">行内注脚 = 译文紧跟句后；段落对照 = 译文整段跟随，原文排版不动</p>
+                </div>
+                <div class="radio-group">
+                  <label><input type="radio" name="bilingualStyle" value="inline" checked> 行内注脚</label>
+                  <label><input type="radio" name="bilingualStyle" value="block"> 段落对照</label>
+                </div>
               </div>
-              <select id="originalStyle" class="setting-control">
-                <option value="normal">双语对照（默认）</option>
-                <option value="fade">弱化原文</option>
-                <option value="blur">模糊原文（悬停还原）</option>
-              </select>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="hoverTranslate">悬停段落翻译</label>
-                <p class="setting-desc">按修饰键 + 鼠标悬停段落即译</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="hoverTranslate">悬停段落翻译</label>
+                  <p class="setting-desc">按修饰键 + 鼠标悬停段落即译</p>
+                </div>
+                <label class="yxt-switch-label"><input type="checkbox" id="hoverTranslate" checked><span class="yxt-switch" aria-hidden="true"></span></label>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="hoverTranslate" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="dictMode">单词词典模式</label>
-                <p class="setting-desc">划到或双击单词时弹出词典卡片</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="dictMode">单词词典模式</label>
+                  <p class="setting-desc">划到或双击单词时弹出词典卡片</p>
+                </div>
+                <label class="yxt-switch-label"><input type="checkbox" id="dictMode" checked><span class="yxt-switch" aria-hidden="true"></span></label>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="dictMode" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
             </div>
           </div>
         </section>
 
-        <details class="pref-group pref-advanced" id="interactionAdvancedSection">
+        <details class="pref-group pref-advanced yxt-group" id="interactionAdvancedSection">
           <summary class="pref-subtitle pref-summary">更多交互选项</summary>
           <div class="pref-details-body">
             <div class="setting-row">
@@ -526,7 +554,7 @@
                 <label class="form-label" for="autoCopy">自动复制</label>
                 <p class="setting-desc">翻译后自动复制结果</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="autoCopy"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="autoCopy"><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row setting-row--sub" id="hoverModifierRow">
               <div class="setting-info">
@@ -542,21 +570,21 @@
                 <label class="form-label" for="dictDblclick">双击单词直接查词典</label>
                 <p class="setting-desc">右键菜单模式下仍生效；输入框内请划选单词</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="dictDblclick" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="dictDblclick" checked><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="inputTranslate">输入框翻译</label>
                 <p class="setting-desc">允许翻译 input/textarea 选中文本并插入译文</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="inputTranslate"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="inputTranslate"><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="smartContentDetection">正文区域识别</label>
                 <p class="setting-desc">整页翻译只翻正文，跳过导航/侧栏/页脚</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="smartContentDetection"><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="smartContentDetection"><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -581,17 +609,19 @@
         <section class="pref-block" data-zone="data">
           <h2 class="section-title">术语表</h2>
           <div class="pref-group">
-            <p class="hint">导入 CSV（原文,译文）或 JSON 数组。命中术语表时跳过模型，强制使用固定译名。</p>
-            <div class="setting-row">
-              <div class="setting-info">
-                <p class="setting-desc">当前术语条数：<span id="glossaryCount" class="glossary-count">0</span> 条</p>
-              </div>
-              <div class="button-group button-group--inline">
-                <label class="btn-secondary">
-                  导入术语表
-                  <input type="file" id="importGlossaryInput" accept=".csv,.json,.txt" style="display:none">
-                </label>
-                <button class="btn-secondary" id="clearGlossaryBtn" type="button">清空术语表</button>
+            <div class="yxt-group">
+              <p class="hint">导入 CSV（原文,译文）或 JSON 数组。命中术语表时跳过模型，强制使用固定译名。</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <p class="setting-desc">当前术语条数：<span id="glossaryCount" class="glossary-count">0</span> 条</p>
+                </div>
+                <div class="button-group button-group--inline">
+                  <label class="btn-secondary">
+                    导入术语表
+                    <input type="file" id="importGlossaryInput" accept=".csv,.json,.txt" style="display:none">
+                  </label>
+                  <button class="btn-secondary" id="clearGlossaryBtn" type="button">清空术语表</button>
+                </div>
               </div>
             </div>
           </div>
@@ -600,39 +630,41 @@
         <section class="pref-block" data-zone="data">
           <h2 class="section-title">存储管理</h2>
           <div class="pref-group">
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="cacheEnabled">开启全局翻译缓存</label>
+            <div class="yxt-group">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="cacheEnabled">开启全局翻译缓存</label>
+                </div>
+                <label class="yxt-switch-label"><input type="checkbox" id="cacheEnabled" checked><span class="yxt-switch" aria-hidden="true"></span></label>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="cacheEnabled" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label class="form-label" for="maxCacheMB">存储空间限额 (MB)</label>
-                <p class="setting-desc">建议 200MB - 500MB，缓存将自动回收以保持在此限制内</p>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="form-label" for="maxCacheMB">存储空间限额 (MB)</label>
+                  <p class="setting-desc">建议 200MB - 500MB，缓存将自动回收以保持在此限制内</p>
+                </div>
+                <input type="number" id="maxCacheMB" class="setting-control setting-control--num" value="200" min="10" max="1000">
               </div>
-              <input type="number" id="maxCacheMB" class="setting-control setting-control--num" value="200" min="10" max="1000">
-            </div>
-            <p class="hint">说明：为避免短词近似命中，源文少于 12 个字符的句子默认不写入缓存；命中前还会做质量校验。</p>
-            <div class="storage-usage-container">
-              <div class="storage-usage-header">
-                <span class="stat-card-label">物理空间占用</span>
-                <span class="stat-card-label" id="storageText">0 MB / 200 MB</span>
+              <p class="hint">说明：为避免短词近似命中，源文少于 12 个字符的句子默认不写入缓存；命中前还会做质量校验。</p>
+              <div class="storage-usage-container">
+                <div class="storage-usage-header">
+                  <span class="stat-card-label">物理空间占用</span>
+                  <span class="stat-card-label" id="storageText">0 MB / 200 MB</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-bar" id="storageProgressBar" style="width: 0%;"></div>
+                </div>
               </div>
-              <div class="progress-bar-bg">
-                <div class="progress-bar" id="storageProgressBar" style="width: 0%;"></div>
+              <div class="button-group">
+                <button class="btn-secondary" id="exportConfigBtn" type="button">导出配置</button>
+                <label class="btn-secondary">
+                  导入配置<input type="file" id="importConfigInput" accept=".json" style="display:none">
+                </label>
               </div>
-            </div>
-            <div class="button-group">
-              <button class="btn-secondary" id="exportConfigBtn" type="button">导出配置</button>
-              <label class="btn-secondary">
-                导入配置<input type="file" id="importConfigInput" accept=".json" style="display:none">
-              </label>
             </div>
           </div>
         </section>
 
-        <details class="pref-group" id="advancedSiteSection">
+        <details class="pref-group yxt-group" id="advancedSiteSection">
           <summary class="pref-subtitle pref-summary">高级：网站规则与故障转移</summary>
           <div class="pref-details-body">
             <div class="setting-row">
@@ -654,33 +686,35 @@
                 <label class="form-label" for="autoDetectLang">智能检测页面语言</label>
                 <p class="setting-desc">不触发翻译同语种内容</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="autoDetectLang" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="autoDetectLang" checked><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="autoFallback">自动切换备选</label>
                 <p class="setting-desc">主供应商失败时自动切换（本地 ⟷ 云端）</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="autoFallback" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="autoFallback" checked><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="batchContextWindow">整页跨段上下文</label>
                 <p class="setting-desc">整页翻译时注入上一批末尾上下文，提升跨段指代连贯性；技术文档可关闭以节省 token</p>
               </div>
-              <label class="paper-toggle"><input type="checkbox" id="batchContextWindow" checked><span class="paper-toggle-track" aria-hidden="true"><span class="paper-toggle-thumb"></span></span></label>
+              <label class="yxt-switch-label"><input type="checkbox" id="batchContextWindow" checked><span class="yxt-switch" aria-hidden="true"></span></label>
             </div>
           </div>
         </details>
 
         <div class="pref-group danger-zone">
-          <h3 class="pref-subtitle">危险操作</h3>
-          <div class="setting-row">
-            <div class="setting-info">
-              <span class="form-label">清除本地数据</span>
-              <p class="setting-desc">清空翻译缓存与统计计数，此操作不可恢复</p>
+          <h3 class="yxt-group-label">危险操作</h3>
+          <div class="yxt-group">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="form-label">清除本地数据</span>
+                <p class="setting-desc">清空翻译缓存与统计计数，此操作不可恢复</p>
+              </div>
+              <button class="btn-danger" id="clearCacheBtn" type="button">清除本地数据</button>
             </div>
-            <button class="btn-danger" id="clearCacheBtn" type="button">清除本地数据</button>
           </div>
         </div>
 
@@ -710,7 +744,7 @@
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">性能诊断</h2>
           <p class="hint" style="margin-bottom: var(--yxt-space-4);">本地匿名埋点：不记录原文、URL 或 API Key。保留最近 7 天或最多 1000 条成功 + 200 条失败记录。</p>
 
@@ -734,26 +768,28 @@
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">供应商分布</h2>
-          <div class="table-container">
-            <table class="metrics-table" id="metricsProviderTable">
-              <thead>
-                <tr>
-                  <th>供应商</th>
-                  <th>次数</th>
-                  <th>成功</th>
-                  <th>失败</th>
-                  <th>缓存命中</th>
-                  <th>平均延迟</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="yxt-group">
+            <div class="table-container">
+              <table class="metrics-table" id="metricsProviderTable">
+                <thead>
+                  <tr>
+                    <th>供应商</th>
+                    <th>次数</th>
+                    <th>成功</th>
+                    <th>失败</th>
+                    <th>缓存命中</th>
+                    <th>平均延迟</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">SW 启动耗时</h2>
           <div class="stats-grid">
             <div class="stat-card">
@@ -767,21 +803,25 @@
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">最近失败</h2>
-          <div id="metricsRecentErrors" class="metrics-error-list">
-            <p class="hint">暂无失败记录</p>
+          <div class="yxt-group">
+            <div id="metricsRecentErrors" class="metrics-error-list">
+              <p class="hint">暂无失败记录</p>
+            </div>
           </div>
         </div>
 
-        <div class="section">
+        <div class="section" data-zone="diagnostics">
           <div class="section-title-row">
             <h2 class="section-title">最近请求日志</h2>
             <button class="btn-secondary" id="refreshRequestLogsBtn">刷新日志</button>
           </div>
           <p class="hint" style="margin-bottom: var(--yxt-space-4);">内存中保留最近 50 条请求，用于排查 prompt/response 问题。不记录 API Key。</p>
-          <div id="requestLogsContainer" class="request-logs-list">
-            <p class="hint">暂无请求日志</p>
+          <div class="yxt-group">
+            <div id="requestLogsContainer" class="request-logs-list">
+              <p class="hint">暂无请求日志</p>
+            </div>
           </div>
         </div>
 

@@ -16,7 +16,6 @@ YuxTrans 浏览器扩展 v0.5.0 支持以下翻译服务：
 | Moonshot | `moonshot` | openai | `moonshot-v1-8k` | 长文本支持 |
 | SiliconFlow | `siliconflow` | openai | `Qwen/Qwen2.5-7B-Instruct` | 多模型选择 |
 | 谷歌免费翻译 | `google` | google (translate_a/single) | `gtx` | 免 Key，开箱即用 |
-| 微软翻译 | `microsoft` | azure-translator | - | 需注册免费 Key，200 万字符/月免费额度，国内可访问 |
 | 本地 Ollama | `local` | ollama | 自定义 | 离线、隐私 |
 | 自定义 | `custom` | openai / anthropic / qwen | 自定义 | OpenAI 兼容 API |
 
@@ -56,21 +55,7 @@ extension/setup-ollama.bat translategemma:4b   # Windows
 
 `google` 供应商走谷歌免费接口（`translate.googleapis.com`），**无需 API Key**，开箱即用。适合无配置快速体验，但翻译质量与可控性低于云端 LLM，且无词典模式结构化输出能力（词典卡片会降级为纯文本）。
 
-> **国内用户注意：** 谷歌翻译在国内网络环境下可能无法连接，建议改用微软翻译。
-
-### 微软翻译 (Azure Translator)
-
-`microsoft` 供应商走 Azure Cognitive Services Translator API，**需注册免费 Azure 账号获取 API Key**，每月 200 万字符免费额度，国内可正常访问。
-
-配置步骤：
-1. 访问 [Azure 免费翻译注册页](https://learn.microsoft.com/zh-cn/azure/ai-services/translator/)，注册/登录 Azure 账号
-2. 创建 Translator 资源，选择区域（如 `eastus`）
-3. 在「密钥和终结点」页复制 API Key 和终结点地址
-4. 在扩展设置页选择「微软翻译」，粘贴 Key 和端点
-
-端点格式：`https://api.cognitive.microsofttranslator.com/translate`（或区域端点 `https://<region>.api.cognitive.microsofttranslator.com/translate`）
-
-> 微软翻译质量优于谷歌免费接口，且支持词典模式，但需要注册步骤。
+> **国内用户注意：** 谷歌翻译在国内网络环境下可能无法连接，建议改用其他云端供应商。
 
 ### 自定义供应商
 
@@ -150,7 +135,6 @@ https://api.example.com/v1/chat/completions
 | Groq | https://console.groq.com/keys |
 | Moonshot | https://platform.moonshot.cn/console/api-keys |
 | SiliconFlow | https://cloud.siliconflow.cn/account/ak |
-| 微软 Azure | https://learn.microsoft.com/zh-cn/azure/ai-services/translator/ |
 
 ---
 

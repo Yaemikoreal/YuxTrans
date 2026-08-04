@@ -5,6 +5,21 @@
 
 ---
 
+## 0. v2.1 修订速览（2026-08-04，优先于下文冲突条款）
+
+**一句话：书房衬纸的皮，Apple 的骨。** 色板、字体、暮瞳微光全部不变；组件骨架借鉴 Apple HIG。以下条款覆盖下文对应章节：
+
+1. **三级文字层级**（覆盖 §3 与 §2.1 批注色职责）：主文本墨韵（13:1）／译文 `--yxt-translation #4A453F`（8.6:1，AAA）／标签 `--yxt-label #6B655C`（5.1:1，AA）；批注灰 `#9E968A` 降级为纯装饰（占位/分隔/禁用），不再承载需要阅读的文字。深色对应 `#BDB6AA` / `#A39B8F`。
+2. **主按钮实心墨**（覆盖 §5.4 / §6.1）：主动作 = 墨韵底 + 书页字，hover 仅加深阴影（禁 translateY 浮起）；次按钮保持书页底描边。一屏唯一实心主动作。
+3. **iOS 胶囊开关**（覆盖 §5.3 开关组件 / §6.4 / §11「禁止 iOS 开关」）：`.yxt-switch`，42×26 胶囊、墨韵轨道 + 纸色滑点；**胶囊形态仅允许开关组件**。
+4. **圆角新尺度**（覆盖 §4.3）：分组卡片/浮窗 8px、窗口级容器 10px、按钮/分段控件/输入 6px、标签/徽标 2-4px；仍禁止 >12px。
+5. **分组卡片骨架**（覆盖 §5.3「不使用卡片」）：Popup 与 Options 采用 Apple 分组列表——底深卡浅（paper-warm 底 + paper-open 卡）、0.5px 行分隔、「标签左 / 控件右」；Options 导航用分区色线性 SVG 图标（1.5px stroke）。
+6. **Popup 锁定浅色方案**（覆盖 §2.3 对 popup 的适用）：深色 media query 在 popup.css 中被重声明为浅色值。
+7. **段落对照双语模式**（新增，§10.2 预留转正）：`bilingualStyle: inline | block`。block 模式译文以块级元素整段跟随原文段落（0.88em、`--yxt-translation`、左 2px 暮瞳竖线、缩进 14px），原文排版零改动；hover 译文段暮瞳微光铺满。行内注脚模式竖线统一为 2px。
+8. **Shadow DOM 已实现**（§9.3 已同步）：悬浮 UI 全部经 `createShadowHost` 隔离；与文本流交织的行内元素（双语 span、block-tr）例外留全局。
+
+---
+
 ## 1. 设计哲学
 
 ### 1.1 一句话原则
@@ -410,7 +425,8 @@
 
 ### 9.3 网页内容注入
 
-- 所有注入 DOM 元素必须使用 Shadow DOM 隔离样式（当前已实现），但视觉上必须「长在该网页里」。
+- 悬浮 UI 必须使用 Shadow DOM 隔离样式（Stage F 已实现）：划词浮窗、浮动操作条、整页控制条、侧缘挂耳、悬停译文块、悬停引导层统一经 `content.js` 的 `createShadowHost` 创建，页面级定位由 host 类（`.yuxtrans-host-*`）承载，shadow 内共享 `design-tokens.css` 与 `content.css`（manifest `web_accessible_resources`）。与页面文本流交织的行内元素（双语 span、段落对照 block-tr、流式 span）例外，留在全局 DOM 由 manifest 注入的 content.css 提供样式。视觉上必须「长在该网页里」。
+- 事件穿透注意：document 级监听器中 shadow 内事件的 target 会被重定向为 host，判断「点击自有 UI」必须走 `e.composedPath()`（统一封装在 `_eventClosest`）。
 - `z-index` 严格控制在合理范围，不遮挡原生弹窗、视频控件。
 - 深色网页自动切换为黄昏模式。
 

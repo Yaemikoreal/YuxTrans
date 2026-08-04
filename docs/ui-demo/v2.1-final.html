@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YuxTrans UI v2.1 定稿 · 书房衬纸的皮，Apple 的骨</title>
+<style>
+/* ============================================================
+   v2.1 定稿令牌
+   皮：书房衬纸色板 / 衬线阅读字体 / 暮瞳微光 / 铅字隐喻
+   骨：Apple 分组列表 / 标签左值右 / 0.5px 分隔 / 唯一主动作
+   ============================================================ */
+:root {
+  --yxt-ink: #2C2825;
+  --yxt-ink-80: rgba(44, 40, 37, 0.8);
+  --yxt-ink-60: rgba(44, 40, 37, 0.6);
+  --yxt-ink-40: rgba(44, 40, 37, 0.4);
+  --yxt-ink-25: rgba(44, 40, 37, 0.25);
+  --yxt-ink-15: rgba(44, 40, 37, 0.15);
+  --yxt-ink-08: rgba(44, 40, 37, 0.08);
+  --yxt-ink-06: rgba(44, 40, 37, 0.06);
+  --yxt-ink-04: rgba(44, 40, 37, 0.04);
+
+  --yxt-paper: #F5F1EA;
+  --yxt-paper-95: rgba(245, 241, 234, 0.95);
+  --yxt-paper-warm: #EDE8DF;
+  --yxt-paper-open: #FAF8F3;
+
+  --yxt-annotation: #9E968A;   /* v2.1：仅装饰（占位/分隔/禁用） */
+  --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+
+  /* v2.1 三级文字层级（定稿：译文色 B 档） */
+  --yxt-translation: #4A453F;  /* 8.6:1 AAA */
+  --yxt-label: #6B655C;        /* 5.1:1 AA */
+
+  --yxt-dusk: #B8A5C4;
+  --yxt-dusk-40: rgba(184, 165, 196, 0.4);
+  --yxt-dusk-25: rgba(184, 165, 196, 0.25);
+  --yxt-dusk-12: rgba(184, 165, 196, 0.12);
+  --yxt-dusk-08: rgba(184, 165, 196, 0.08);
+
+  --yxt-success: #7A9E8A;
+
+  /* Apple 式柔和投影（墨韵调温） */
+  --shadow-sm: 0 1px 3px rgba(44, 40, 37, 0.08), 0 1px 2px rgba(44, 40, 37, 0.04);
+  --shadow-md: 0 4px 16px rgba(44, 40, 37, 0.10), 0 1px 4px rgba(44, 40, 37, 0.05);
+  --shadow-lg: 0 12px 40px rgba(44, 40, 37, 0.14), 0 4px 12px rgba(44, 40, 37, 0.06);
+
+  /* v2.1 圆角新尺度：卡片/浮窗 8-10、按钮/分段 6、标签 2-4；胶囊仅开关 */
+  --r-card: 8px;
+  --r-window: 10px;
+  --r-btn: 6px;
+  --r-tag: 3px;
+
+  --yxt-font-serif: 'Source Serif 4', 'Literata', 'Merriweather',
+    'Source Han Serif SC', 'Noto Serif SC', 'FangSong', 'STSong', 'SimSun', serif;
+  --yxt-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --yxt-font-cjk: 'Source Han Serif SC', 'FZShuSong-Z01S', 'LXGW WenKai',
+    'STKaiti', 'KaiTi', 'FangSong', serif;
+
+  --ease: cubic-bezier(0.28, 0.11, 0.32, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--yxt-paper-warm);
+  font-family: var(--yxt-font-serif);
+  color: var(--yxt-ink);
+  line-height: 1.75;
+  padding: 48px 24px 96px;
+}
+.demo-wrap { max-width: 1160px; margin: 0 auto; }
+.demo-title { font-family: var(--yxt-font-cjk); font-size: 28px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 8px; }
+.demo-subtitle { font-family: var(--yxt-font-ui); font-size: 13px; color: var(--yxt-label); margin-bottom: 48px; max-width: 760px; }
+.demo-section { margin-bottom: 72px; }
+.demo-section-title { font-size: 17px; font-weight: 500; padding-left: 10px; border-left: 2px solid var(--yxt-dusk); margin-bottom: 6px; }
+.demo-section-note { font-family: var(--yxt-font-ui); font-size: 12px; color: var(--yxt-label); margin-bottom: 24px; max-width: 780px; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 24px; align-items: start; }
+.panel-tag { display: inline-block; font-family: var(--yxt-font-ui); font-size: 10px; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 2px; margin-bottom: 16px; background: var(--yxt-dusk-12); color: #7A6A8A; }
+
+/* ===== 通用：分组列表（Apple 骨） ===== */
+.ios-group {
+  background: var(--yxt-paper-open);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ios-row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; font-size: 14px; letter-spacing: -0.01em; font-family: var(--yxt-font-ui); }
+.ios-row + .ios-row { border-top: 0.5px solid var(--yxt-ink-08); }
+.ios-row .row-main { flex: 1; }
+.ios-row .row-sub { font-size: 11px; color: var(--yxt-label); margin-top: 1px; }
+.ios-row .row-trail { color: var(--yxt-label); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.chevron { color: var(--yxt-annotation); font-size: 12px; }
+
+/* ===== 通用：iOS 胶囊开关（定稿：纸墨调温版） ===== */
+.ios-switch {
+  width: 42px; height: 26px; border-radius: 13px; border: none;
+  background: var(--yxt-ink); position: relative; cursor: pointer; flex-shrink: 0;
+  transition: background 200ms var(--ease);
+}
+.ios-switch::after {
+  content: ''; position: absolute; top: 2px; left: 18px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--yxt-paper-open);
+  box-shadow: 0 2px 4px rgba(44,40,37,0.25);
+  transition: left 200ms var(--ease);
+}
+.ios-switch.off { background: var(--yxt-ink-25); }
+.ios-switch.off::after { left: 2px; }
+
+/* ===== 通用：分段控件 ===== */
+.ios-seg { display: flex; background: var(--yxt-ink-06); border-radius: var(--r-btn); padding: 2px; position: relative; }
+.ios-seg span { font-size: 12px; padding: 5px 0; flex: 1; text-align: center; color: var(--yxt-label); cursor: pointer; position: relative; z-index: 1; letter-spacing: -0.01em; font-family: var(--yxt-font-ui); }
+.ios-seg span.active { color: var(--yxt-ink); font-weight: 500; }
+.ios-seg .seg-ind { position: absolute; top: 2px; bottom: 2px; left: 50%; width: calc(50% - 2px); background: var(--yxt-paper-open); border-radius: 4px; box-shadow: var(--shadow-sm); }
+
+/* ===== Popup 定稿 ===== */
+.popup-final {
+  width: 320px; font-family: var(--yxt-font-ui);
+  background: var(--yxt-paper-warm);
+  border-radius: var(--r-window);
+  padding: 18px 14px 14px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--yxt-ink-06);
+}
+.popup-final .p-header { display: flex; align-items: center; gap: 10px; padding: 0 6px; margin-bottom: 14px; }
+.popup-final .p-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--yxt-ink); color: var(--yxt-paper); display: flex; align-items: center; justify-content: center; font-family: var(--yxt-font-cjk); font-size: 14px; }
+.popup-final .p-header h1 { font-family: var(--yxt-font-ui); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; flex: 1; }
+.popup-final .p-gear { width: 30px; height: 30px; border: none; border-radius: 50%; background: var(--yxt-ink-06); color: var(--yxt-ink-60); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 180ms var(--ease); }
+.popup-final .p-gear:hover { background: var(--yxt-ink-15); }
+.main-btn {
+  width: 100%; padding: 12px; border: none; border-radius: var(--r-btn);
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  font-family: var(--yxt-font-ui); font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  cursor: pointer; box-shadow: var(--shadow-md);
+  transition: box-shadow 200ms var(--ease), background 200ms var(--ease);
+  margin-bottom: 14px;
+}
+.main-btn:hover { background: var(--yxt-ink-80); box-shadow: var(--shadow-lg); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yxt-success); flex-shrink: 0; }
+
+/* ===== Popup 深色（黄昏书房验证） ===== */
+.popup-dark {
+  --yxt-ink: #D4CFC7;
+  --yxt-ink-80: rgba(212,207,199,0.8);
+  --yxt-ink-60: rgba(212,207,199,0.6);
+  --yxt-ink-25: rgba(212,207,199,0.3);
+  --yxt-ink-15: rgba(212,207,199,0.15);
+  --yxt-ink-08: rgba(212,207,199,0.08);
+  --yxt-ink-06: rgba(212,207,199,0.06);
+  --yxt-paper: #1A1816;
+  --yxt-paper-warm: #141210;
+  --yxt-paper-open: #22201C;
+  --yxt-label: #A39B8F;
+  --yxt-dusk-12: rgba(184,165,196,0.2);
+  background: var(--yxt-paper-warm);
+  border-color: var(--yxt-ink-08);
+  color: var(--yxt-ink);   /* body 的 color 在 :root 已解析，需在容器上重启继承链 */
+}
+.popup-dark .main-btn { background: #D4CFC7; color: #1A1816; }
+.popup-dark .main-btn:hover { background: rgba(212,207,199,0.85); }
+.popup-dark .p-logo { background: #D4CFC7; color: #1A1816; }
+
+/* ===== 划词浮窗定稿 ===== */
+.selection-scene { background: var(--yxt-paper-open); border: 1px solid var(--yxt-ink-08); border-radius: var(--r-window); padding: 44px 36px 68px; position: relative; }
+.selection-scene p { font-size: 15px; max-width: 540px; }
+.selected-text { background: var(--yxt-dusk-25); border-radius: 3px; }
+.tag-btn {
+  position: absolute; height: 34px; padding: 0 14px;
+  background: var(--yxt-paper-95); backdrop-filter: blur(12px);
+  border: 1px solid var(--yxt-ink-08); border-radius: var(--r-btn);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--yxt-font-ui); font-size: 12px; color: var(--yxt-ink);
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  transition: box-shadow 200ms var(--ease);
+}
+.tag-btn:hover { box-shadow: var(--shadow-md); }
+.tag-btn svg { color: var(--yxt-ink-60); }
+
+.popover-final {
+  position: absolute; width: 300px;
+  background: var(--yxt-paper-95); backdrop-filter: blur(12px);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lg);
+  border: 0.5px solid var(--yxt-ink-08);
+  border-left: 2px solid var(--yxt-dusk-40);   /* 暮瞳批注竖线保留 */
+  overflow: hidden;
+}
+.popover-final .pv-content { padding: 14px 16px 12px; }
+.popover-final .pv-source { font-size: 13px; color: var(--yxt-label); font-style: italic; font-family: var(--yxt-font-serif); margin-bottom: 5px; }
+.popover-final .pv-target { font-size: 16px; font-weight: 500; letter-spacing: -0.01em; color: var(--yxt-ink); line-height: 1.6; }
+.popover-final .pv-meta { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; background: var(--yxt-ink-04); border-top: 0.5px solid var(--yxt-ink-06); font-family: var(--yxt-font-ui); }
+.popover-final .pv-badge { font-size: 10px; color: var(--yxt-label); display: flex; align-items: center; gap: 5px; }
+.popover-final .pv-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--yxt-ink); font-style: normal; }
+.popover-final .pv-actions { display: flex; gap: 2px; }
+.pv-action { width: 28px; height: 28px; border: none; border-radius: var(--r-btn); background: transparent; color: var(--yxt-ink-60); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 180ms var(--ease); }
+.pv-action:hover { background: var(--yxt-dusk-12); color: var(--yxt-ink); }
+
+/* ===== Options 定稿 ===== */
+.options-final { display: grid; grid-template-columns: 210px 1fr; background: var(--yxt-paper-warm); border: 1px solid var(--yxt-ink-06); border-radius: var(--r-window); overflow: hidden; min-height: 430px; font-family: var(--yxt-font-ui); }
+.of-sidebar { background: var(--yxt-paper); border-right: 0.5px solid var(--yxt-ink-08); padding: 20px 10px; }
+.of-brand { font-family: var(--yxt-font-cjk); font-size: 16px; font-weight: 500; padding: 0 10px; margin-bottom: 2px; }
+.of-brand-sub { font-size: 11px; color: var(--yxt-label); padding: 0 10px; margin-bottom: 18px; }
+.of-nav-item { display: flex; align-items: center; gap: 9px; font-size: 13px; letter-spacing: -0.01em; color: var(--yxt-ink-60); padding: 6px 8px; border-radius: var(--r-btn); cursor: pointer; margin-bottom: 1px; }
+.of-nav-item .nav-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--yxt-paper); font-size: 11px; flex-shrink: 0; font-family: var(--yxt-font-cjk); }
+.of-nav-item.active { background: var(--yxt-dusk-12); color: var(--yxt-ink); font-weight: 500; }
+.of-main { padding: 26px 30px; }
+.of-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 18px; }
+.of-group-label { font-size: 11px; color: var(--yxt-label); margin: 0 4px 6px; }
+.of-row-input { flex: 1; border: none; background: transparent; outline: none; font-family: var(--yxt-font-ui); font-size: 14px; color: var(--yxt-ink); letter-spacing: -0.01em; text-align: right; max-width: 190px; border-bottom: 1px solid transparent; transition: border-color 200ms var(--ease); }
+.of-row-input:focus { border-bottom-color: var(--yxt-dusk); }
+.of-row-input::placeholder { color: var(--yxt-annotation); }
+.of-btn-primary { padding: 7px 16px; border: none; border-radius: var(--r-btn); background: var(--yxt-ink); color: var(--yxt-paper); font-family: var(--yxt-font-ui); font-size: 13px; font-weight: 500; cursor: pointer; box-shadow: var(--shadow-sm); }
+.of-btn-plain { padding: 7px 16px; border: none; border-radius: var(--r-btn); background: var(--yxt-ink-08); color: var(--yxt-ink); font-family: var(--yxt-font-ui); font-size: 13px; font-weight: 500; cursor: pointer; }
+
+/* ===== 双语段落对照（定稿译文色 #4A453F） ===== */
+.mock-page { background: var(--yxt-paper-open); border: 1px solid var(--yxt-ink-08); border-radius: var(--r-window); padding: 32px 36px; }
+.mock-page h2 { font-size: 20px; font-weight: 500; margin-bottom: 16px; }
+.mock-page p { font-size: 15px; margin-bottom: 1em; }
+.block-tr { display: block; color: var(--yxt-translation); font-size: 0.88em; line-height: 1.7; margin: 0.35em 0 1.2em; padding-left: 14px; border-left: 2px solid var(--yxt-dusk-40); border-radius: 0 6px 6px 0; transition: background 300ms var(--ease); }
+.block-tr:hover { background: var(--yxt-dusk-08); }
+.inline-tr { color: var(--yxt-translation); font-size: 0.9em; margin-left: 0.35em; padding-left: 0.45em; border-left: 2px solid var(--yxt-dusk-40); }
+</style>
+</head>
+<body>
+<div class="demo-wrap">
+
+  <div class="demo-title">YuxTrans UI v2.1 定稿</div>
+  <div class="demo-subtitle">书房衬纸的皮，Apple 的骨 · 译文色 #4A453F（8.6:1）· iOS 胶囊开关（纸墨调温）· 中文字导航图标 · 圆角尺度 8/6/4</div>
+
+  <!-- 一、Popup（浅色 + 深色） -->
+  <section class="demo-section">
+    <div class="demo-section-title">一、Popup 定稿（浅色 / 黄昏书房深色对照）</div>
+    <div class="demo-section-note">结构：header → 唯一实心墨主按钮 → 分组1（状态+模型）→ 分组2（模式+流式+用量）。深色模式验证「底深卡浅」在黄昏书房下同样成立——卡片比底色浅一度，纸张叠压关系不变。</div>
+    <div class="compare-grid">
+      <div class="popup-final">
+        <div class="p-header">
+          <div class="p-logo">译</div>
+          <h1>YuxTrans</h1>
+          <button class="p-gear" title="设置"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
+        </div>
+        <button class="main-btn">翻译整页</button>
+        <div class="ios-group">
+          <div class="ios-row"><span class="status-dot"></span><div class="row-main">服务状态</div><div class="row-trail">已连接</div></div>
+          <div class="ios-row"><div class="row-main">模型</div><div class="row-trail">deepseek-v4-flash <span class="chevron">›</span></div></div>
+        </div>
+        <div class="ios-group">
+          <div class="ios-row"><div class="row-main">翻译模式<div class="row-sub">整页显示方式</div></div><div class="ios-seg" style="width:124px;"><div class="seg-ind"></div><span>仅译文</span><span class="active">双语</span></div></div>
+          <div class="ios-row"><div class="row-main">流式翻译<div class="row-sub">逐字输出译文</div></div><button class="ios-switch"></button></div>
+          <div class="ios-row"><div class="row-main">用量与缓存</div><div class="row-trail">16 条缓存 <span class="chevron">›</span></div></div>
+        </div>
+      </div>
+      <div class="popup-final popup-dark">
+        <div class="p-header">
+          <div class="p-logo">译</div>
+          <h1>YuxTrans</h1>
+          <button class="p-gear" title="设置"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
+        </div>
+        <button class="main-btn">翻译整页</button>
+        <div class="ios-group">
+          <div class="ios-row"><span class="status-dot"></span><div class="row-main">服务状态</div><div class="row-trail">已连接</div></div>
+          <div class="ios-row"><div class="row-main">模型</div><div class="row-trail">deepseek-v4-flash <span class="chevron">›</span></div></div>
+        </div>
+        <div class="ios-group">
+          <div class="ios-row"><div class="row-main">翻译模式<div class="row-sub">整页显示方式</div></div><div class="ios-seg" style="width:124px;"><div class="seg-ind"></div><span>仅译文</span><span class="active">双语</span></div></div>
+          <div class="ios-row"><div class="row-main">流式翻译<div class="row-sub">逐字输出译文</div></div><button class="ios-switch"></button></div>
+          <div class="ios-row"><div class="row-main">用量与缓存</div><div class="row-trail">16 条缓存 <span class="chevron">›</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 二、划词浮窗 -->
+  <section class="demo-section">
+    <div class="demo-section-title">二、划词浮窗与操作条定稿</div>
+    <div class="demo-section-note">操作条保留浅色毛玻璃标签纸（不借深色 FAB），只借 hover 阴影加深；浮窗 = Apple 底部工具条 + 书房暮瞳批注竖线 + 500 字重译文，圆角 8px，毛玻璃回到 blur(12px)。</div>
+    <div class="selection-scene">
+      <p>The framework provides <span class="selected-text">fine-grained control</span> over both the flow and state of your agent applications, with built-in persistence and human-in-the-loop support.</p>
+      <button class="tag-btn" style="top:118px; right:56px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        翻译
+      </button>
+      <div class="popover-final" style="bottom:-16px; left:36px;">
+        <div class="pv-content">
+          <div class="pv-source">fine-grained control</div>
+          <div class="pv-target">细粒度控制</div>
+        </div>
+        <div class="pv-meta">
+          <span class="pv-badge"><i></i>DeepSeek · 0.6s</span>
+          <div class="pv-actions">
+            <button class="pv-action" title="钉住"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg></button>
+            <button class="pv-action" title="插入原文旁"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="pv-action" title="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 三、Options -->
+  <section class="demo-section">
+    <div class="demo-section-title">三、Options 定稿（macOS 系统设置骨架 + 汉字图标）</div>
+    <div class="demo-section-note">中文字导航图标（档/译/互/存/诊）承接五个分区色；设置行「标签左/值右」、输入框无边框右对齐、focus 时底部出暮瞳线；砍掉搜索框，不为像 Apple 而像。</div>
+    <div class="options-final">
+      <div class="of-sidebar">
+        <div class="of-brand">YuxTrans</div>
+        <div class="of-brand-sub">设置</div>
+        <div class="of-nav-item active"><span class="nav-icon" style="background:#A89880;">档</span>服务档案</div>
+        <div class="of-nav-item"><span class="nav-icon" style="background:#B89A6E;">译</span>翻译偏好</div>
+        <div class="of-nav-item"><span class="nav-icon" style="background:#B8A5C4;">互</span>交互与显示</div>
+        <div class="of-nav-item"><span class="nav-icon" style="background:#8A9E9A;">存</span>数据与存储</div>
+        <div class="of-nav-item"><span class="nav-icon" style="background:#B88878;">诊</span>诊断排障</div>
+      </div>
+      <div class="of-main">
+        <div class="of-title">服务档案</div>
+        <div class="of-group-label">服务商配置</div>
+        <div class="ios-group">
+          <div class="ios-row"><div class="row-main">服务商</div><div class="row-trail">DeepSeek <span class="chevron">›</span></div></div>
+          <div class="ios-row"><div class="row-main">API Key</div><input class="of-row-input" type="password" value="sk-xxxxxxxxxxxx"></div>
+          <div class="ios-row"><div class="row-main">使用模型</div><div class="row-trail">deepseek-v4-flash <span class="chevron">›</span></div></div>
+          <div class="ios-row"><div class="row-main">请求地址</div><input class="of-row-input" placeholder="留空使用默认官方地址"></div>
+        </div>
+        <div class="of-group-label">档案管理</div>
+        <div class="ios-group">
+          <div class="ios-row"><div class="row-main">云端 deepseek（首次引导）<div class="row-sub">DeepSeek · deepseek-v4-flash</div></div><div class="row-trail"><button class="of-btn-plain" style="padding:4px 12px;">启用</button></div></div>
+          <div class="ios-row"><div class="row-main">本地 Ollama<div class="row-sub">qwen2.5:7b · 未连接</div></div><div class="row-trail"><button class="of-btn-plain" style="padding:4px 12px;">启用</button></div></div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+          <button class="of-btn-plain">连接测试</button>
+          <button class="of-btn-primary">保存并启用档案</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 四、双语对照 -->
+  <section class="demo-section">
+    <div class="demo-section-title">四、整页双语定稿（段落对照 + 行内注脚，译文色 #4A453F）</div>
+    <div class="demo-section-note">左：段落对照模式（译文整段跟随，hover 出暮瞳微光）；右：行内注脚精修版（2px 竖线 + 新译文色）。两种模式并存，用户按场景切换。</div>
+    <div class="compare-grid">
+      <div class="mock-page">
+        <span class="panel-tag">段落对照</span>
+        <h2>LangGraph overview</h2>
+        <p>Trusted by companies shaping the future of agents—including Klarna, Uber, and J.P. Morgan—LangGraph is a low-level orchestration framework.
+          <span class="block-tr">受到 Klarna、Uber、摩根大通等塑造智能体未来的公司信赖，LangGraph 是一个底层编排框架。</span></p>
+        <p>It provides fine-grained control over both the flow and state of your application, with built-in persistence for long-running workflows.
+          <span class="block-tr">它对应用的流程与状态提供细粒度控制，并内置持久化能力以支撑长时间运行的工作流。</span></p>
+      </div>
+      <div class="mock-page">
+        <span class="panel-tag">行内注脚（精修）</span>
+        <h2>LangGraph overview</h2>
+        <p>Trusted by companies shaping the future of agents—including Klarna, Uber, and J.P. Morgan—LangGraph is a low-level orchestration framework.<span class="inline-tr">受到 Klarna、Uber、摩根大通等塑造智能体未来的公司信赖，LangGraph 是一个底层编排框架。</span></p>
+        <p>It provides fine-grained control over both the flow and state of your application, with built-in persistence for long-running workflows.<span class="inline-tr">它对应用的流程与状态提供细粒度控制，并内置持久化能力以支撑长时间运行的工作流。</span></p>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -33,93 +33,106 @@ It is not built for feature density. It answers a single question: in long-form 
 
 Current stable release: **v0.6.0**.
 
-## Design intent
+## Design intent (UI v2.1)
 
-The visual language follows a “study paper” principle: ink as the bone, warm paper as the ground, dusk as a faint glow. The interface is never the subject—it is a thin sheet of paper laid at the edge of the page. Translations are marked with a thin vertical line on the left, like a margin note; the loading state is an unfinished ellipsis, not a spinning ring.
+In one sentence: **the skin of study paper, the bones of Apple.**
 
-Saturation is deliberately low: no pure black or white, no high-saturation tech colors, no capsule buttons or skeleton screens. The rule is a single sentence: let the reader forget they are using a tool.
+- **The skin is paper and ink.** Ink as the bone, warm paper as the ground, dusk as a faint glow. No pure black or white, no high-saturation tech colors, no bouncing animations; the loading state is an unfinished ellipsis, not a spinning ring.
+- **The bones are order.** A component skeleton borrowed from the Apple HIG—grouped cards as information hierarchy, a "label left / value right" scanning path, 0.5px separators, and exactly one solid primary action per screen. The popup and settings page gain a clear anchor instead of a uniform gray.
+- **A three-tier type ramp, calibrated for the eyes.** Primary text in ink (13:1), translations in `#4A453F` (8.6:1, AAA), labels in `#6B655C` (5.1:1, AA); the annotation gray is retired to placeholders and decoration. Long reads stay comfortable; hierarchy survives.
+- **Lives in the page without touching it.** Every floating UI element (selection popup, action tag, page control bar) runs inside a Shadow DOM, strictly isolated from the host page's styles.
+
+## Three ways to read bilingually
+
+Deep reading and quick scanning are both legitimate needs. YuxTrans does not choose between them—it offers three modes:
+
+- **Paragraph mirror** (new): the translation follows its source paragraph as a block, leaving the original layout untouched. Read the original paragraph through, then the translation—your eyes never jump. Hovering a translated paragraph washes it in a dusk glow.
+- **Inline footnote**: the translation follows each sentence, marked with a dusk vertical rule, for line-by-line comparison.
+- **Translation only**: the whole page is replaced with the translation, for pure efficiency, with one-click restore.
+
+Choose in Settings → Interaction & Display → Bilingual style, and switch bilingual / translation-only anytime from the on-page control bar.
 
 ---
 
-## Preview
+## Interface
 
-Screenshots below use the LangGraph documentation site and follow a real usage path (assets under `logo/`).
+Screenshots follow a real usage path (assets in `logo/`).
 
-### 1. Settings · Service profiles
+### 1. Settings · Profiles
 
-Five sidebar modules: Service profiles · Translation preferences · Interaction & display · Data & storage · Diagnostics. In **Service profiles**, configure provider, API key, and model; save multiple profiles and activate with one click. Credentials stay in the local browser only.
+A macOS System Settings skeleton: five sidebar modules (Profiles, Preferences, Interaction & Display, Data & Storage, Diagnostics), each with a zone-colored line icon; settings live inside grouped cards, labels on the left, controls on the right. Credentials never leave the local browser.
 
-![Settings — service profiles](logo/使用样例-设置.png)
+![Settings — Profiles](logo/使用样例-设置.png)
 
-### 2. Settings · Translation preferences
+### 2. Settings · Preferences
 
-Active profile summary, offline mode, language direction, and four styles (everyday / academic / technical / literary). Each style can have a custom **style prompt**, saved with preferences.
+Active profile at a glance, offline mode, language direction, and four styles (Daily / Academic / Technical / Literary); each style's prompt can be edited and is saved together with the preferences.
 
-![Settings — translation preferences](logo/使用样例-设置-2.png)
+![Settings — Preferences](logo/使用样例-设置-2.png)
 
 ### 3. Popup control panel
 
-The toolbar icon opens a small booklet: profile switcher, connection status, **Translate page**, translation-only / bilingual, streaming toggle, and a collapsible usage & cache panel.
+The toolbar icon opens a small booklet: a single solid primary action "Translate page", grouped cards for connection status, profile switching, a mono/bilingual segmented control, a streaming switch, and a collapsible usage & cache board. Light paper scheme.
 
 ![Popup control panel](logo/使用样例-弹窗板.png)
 
 ### 4. Selection translation
 
-Select page text to open a light floating panel: source and translation, copy or mark a bad hit; pin multiple panels for comparison without blocking reading.
+Select text on any page and a light floating card appears: italic source above, translation below, with a bottom toolbar of line-icon actions (pin / insert / copy). Pinned windows stay for side-by-side comparison without breaking the reading rhythm.
 
 ![Selection translation popup](logo/使用样例-划词翻译.png)
 
 ### 5. Hover paragraph translation (Alt)
 
-Hold a modifier (default **Alt**, or Ctrl in Settings) and hover a paragraph; the translation appears as a margin sticky note after the paragraph and can be dismissed without selecting text.
+Hold the modifier key (**Alt** by default, configurable to Ctrl) and hover over a paragraph; the translation appears as a margin note after the paragraph, closable individually, no selection needed.
 
 ![Alt hover paragraph translation](logo/使用样例-Alt快捷键翻译.png)
 
 ### 6. Full-page translation: original → bilingual → translation-only
 
-**Before**, the page is plain English:
+**Before translation**, the page is plain English:
 
-![Untranslated English original](logo/使用样例-未翻译的原文.png)
+![Untranslated original](logo/使用样例-未翻译的原文.png)
 
-**Bilingual mode** appends each translation inline after its source as light italic, preserving layout and rhythm; the control bar records progress and cache / API hits:
+**Bilingual mode** (inline footnote): each sentence is followed by its translation marked with a dusk rule, preserving the original layout and rhythm; the bottom control bar tracks progress and cache / API hits:
 
 ![Bilingual result](logo/使用样例-双语结果.png)
 
-**Translation-only mode** replaces the whole page with the translation; restore the original with one click:
+**Translation-only mode**: the whole page is replaced with the translation, restorable in one click:
 
 ![Translation-only result](logo/使用样例-仅译文结果.png)
 
 ---
 
-## Install
+## Installation
 
-1. Download the latest `YuxTrans-extension-v*.zip` from [Releases](https://github.com/Yaemikoreal/YuxTrans/releases) and unzip; or clone this repository.
+1. Download the latest `YuxTrans-extension-v*.zip` from [Releases](https://github.com/Yaemikoreal/YuxTrans/releases) and unzip it, or clone this repository.
 2. Open Chrome / Edge and visit `chrome://extensions/` or `edge://extensions/`.
-3. Enable **Developer mode** (top-right).
-4. Click **Load unpacked** and select the **`extension/`** folder (must contain `manifest.json`).
-5. The toolbar icon appears once loaded.
+3. Enable "Developer mode" in the top-right corner.
+4. Click "Load unpacked" and select the **`extension/`** directory (it must contain `manifest.json`).
+5. The toolbar icon appears and the extension is ready.
 
 ---
 
-## Configure
+## Configuration
 
-Click the extension icon → **Settings**:
+Click the extension icon → Settings:
 
-| Module | Purpose |
+| Module | What it does |
 | :--- | :--- |
-| **Service profiles** | Local Ollama / cloud providers / custom OpenAI-compatible endpoints; save and activate a profile. |
-| **Translation preferences** | Language direction, style, style prompts, offline mode. |
-| **Interaction & display** | Selection trigger, streaming, hover / dictionary, original-text style, etc. |
-| **Data & storage** | Glossary, cache quota, import/export, site rules. |
+| **Profiles** | Local Ollama / cloud providers / custom OpenAI-compatible endpoints; save and activate profiles. |
+| **Preferences** | Language direction, translation style, style prompts, offline mode. |
+| **Interaction & Display** | Selection trigger, streaming, bilingual style (inline footnote / paragraph mirror), hover & dictionary, original-text styling. |
+| **Data & Storage** | Glossary, cache quota, import/export, site rules. |
 | **Diagnostics** | Usage and request logs (read-only). |
 
-| Type | Action |
+| Type | How |
 | :--- | :--- |
-| Local Ollama | Provider `local`, model name (e.g. `qwen3.5:0.8b`); ensure Ollama is running. |
-| Cloud provider | Choose `qwen` / `openai` / `deepseek` / `anthropic` / `groq` / `moonshot` / `siliconflow` / `google` (no key), etc.; enter API key and model. |
-| Custom provider | Choose `custom`; enter endpoint, API key, format, and model. |
+| Local Ollama | Set provider to `local`, enter a model name (e.g. `qwen3.5:0.8b`), make sure Ollama is running. |
+| Cloud provider | Choose `qwen` / `openai` / `deepseek` / `anthropic` / `groq` / `moonshot` / `siliconflow` / `google` (key-free), then enter API key and model. |
+| Custom provider | Choose `custom`, enter endpoint, API key, API format, and model. |
 
-Each writable module has its own **Save** button—save only what you changed. API keys and config stay in the browser only.
+Each module has its own Save button. API keys and configuration are stored only in the local browser.
 
 ---
 
@@ -127,26 +140,26 @@ Each writable module has its own **Save** button—save only what you changed. A
 
 ### Selection translation
 
-- Default is **modifier + select**: hold **Ctrl** (changeable to Alt/Shift in Settings), select text and release to translate; to translate on plain selection, switch to "popup on select" in Interaction & display.
-- Shortcut `Alt + T` (macOS `Alt + T`).
-- Right-click selection → **Translate selection**.
+- Default "modifier + select": hold **Ctrl** (configurable to Alt/Shift), select text, release to translate. For translate-on-select, switch to "Popup after selection" in Interaction & Display.
+- Shortcut `Alt + T` (same on macOS).
+- Right-click selected text → "Translate selection".
 
 ### Hover paragraph translation
 
-- Enable **Hover paragraph translation** under Interaction & display.
-- Hold **Alt** (or your chosen modifier) and hover a paragraph ~300ms; a translation sticky appears after the block.
+- Enable "Hover paragraph translation" in Interaction & Display.
+- Hold **Alt** (or your configured modifier) and hover over a paragraph for about 300 ms; a translation note appears after the paragraph.
 
 ### Word dictionary
 
-- With **Word dictionary mode** on, select or double-click a word for a definition card (phonetic, senses, examples).
+- With "Word dictionary mode" enabled, selecting or double-clicking a word pops up a dictionary card (phonetics, senses, examples).
 
 ### Full-page translation
 
-- Popup primary button **Translate page**.
-- Shortcut `Alt + P` (macOS `Alt + P`).
-- Right-click empty page area → **Translate page**.
+- The popup's primary button "Translate page".
+- Shortcut `Alt + P` (same on macOS).
+- Right-click on an empty area of the page → "Translate page".
 
-Viewport-first batching; optional streaming (token-by-token) and cancel; switch bilingual / translation-only or restore original from the control bar.
+Viewport-first, streaming display with cancel support; bilingual style can be "inline footnote" or "paragraph mirror" (Settings → Interaction & Display), and the control bar switches bilingual / translation-only or restores the original.
 
 ### Shortcuts
 
@@ -154,21 +167,27 @@ Viewport-first batching; optional streaming (token-by-token) and cancel; switch 
 | :--- | :--- |
 | `Alt + T` | Translate selection |
 | `Alt + P` | Translate page |
-| `Ctrl` (configurable) + select | Selection translation (default trigger mode) |
-| `Alt` (configurable) + hover | Paragraph translation (must be enabled in Settings) |
+| `Ctrl` (configurable) + select | Selection translation (default trigger) |
+| `Alt` (configurable) + hover | Paragraph translation (enable in Settings) |
 
-> **Tip**: If a shortcut doesn't work (occupied by the browser or another extension), customize it at `chrome://extensions/shortcuts`.
+> **Tip**: If a shortcut does not work (captured by the browser or another extension), customize it at `chrome://extensions/shortcuts`.
 
 ---
 
-## Development & tests
+## Development & testing
 
 ```bash
-# Extension unit tests (Node built-in runner, no extra deps)
+# Unit tests (Node built-in test runner, no extra dependencies)
 npm test
+
+# ESLint
+npm run lint
+
+# Playwright smoke test: real Chromium loads the extension, simulates selection, asserts the popup
+npm run test:e2e
 ```
 
-Load via **Install** above; after changing `background.js` / `content.js` / `options.js`, reload the extension. See [AGENTS.md](AGENTS.md) for maintainers and [CHANGELOG.md](CHANGELOG.md) for history.
+See "Installation" above for loading; after changing `background.js` / `content.js` / `options.js`, reload the extension from the extensions page. Maintenance notes live in [AGENTS.md](AGENTS.md), the changelog in [CHANGELOG.md](CHANGELOG.md), and the visual spec in [docs/UI_DESIGN_SYSTEM.md](docs/UI_DESIGN_SYSTEM.md).
 
 ---
 
@@ -177,5 +196,5 @@ Load via **Install** above; after changing `background.js` / `content.js` / `opt
 Released under the [MIT License](LICENSE).
 
 <p align="center">
-  <em>YuxTrans — Translation recedes to the margin; reading stays at the center.</em>
+  <em>YuxTrans — translation recedes to the margin; reading stays at the center.</em>
 </p>

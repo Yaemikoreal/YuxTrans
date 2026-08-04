@@ -81,6 +81,7 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 - **自适应速率限制**：根据连续成功/失败次数动态调整并发（1~10）与请求延迟（0~2000ms），429 触发 30s 冷却。
 - **批量翻译降级**：先筛缓存命中，未命中批量请求 JSON 数组；解析失败则单句并发补全，最多 3 次重试。
 - **整页翻译**：DOM 文本节点分批处理，双语 `<span>` 跟在原文后，可视区域优先，动态内容增量翻译，可恢复原文。
+- **悬浮 UI Shadow DOM 隔离（Stage F）**：划词浮窗/浮动操作条/整页控制条/侧缘挂耳/悬停译文块/引导层统一经 `content.js` 的 `createShadowHost(hostClass)` 创建——host 承载页面级定位（`.yuxtrans-host-*`，见 content.css），shadow root 内 `<link>` 共享 design-tokens.css 与 content.css（manifest `web_accessible_resources`）；行内双语 span、段落对照 block-tr、流式 span 等与文本流交织的元素例外，留在全局 DOM。document 级事件监听判断自有 UI 必须走 `_eventClosest`（内部用 `e.composedPath()`，target 会被重定向为 host）；悬浮元素引用保存在实例上（`this.popup`/`this.pageControl`/`this.sideTab`/`_hoverBlocks` 等），移除统一走 `_removeFloatingUI`（连同 host），不要 document 直查类名。
 
 ## 5. 构建、安装与运行命令
 
@@ -130,7 +131,7 @@ npm run test:e2e                  # Playwright 冒烟：真实 Chromium 加载�
 
 - 云端供应商（qwen / openai / deepseek / anthropic / groq / moonshot / siliconflow / google / custom）+ 本地 Ollama（google 为免 Key 免费接口）
 - 源语言 / 目标语言 / 翻译风格（普通 / 学术 / 技术 / 文学）
-- 缓存限额（默认 200MB）、触发模式（默认「修饰键+划选」modifier，可选 auto/icon/contextMenu；划选修饰键 ctrl/alt/shift 默认 ctrl）、双语模式、站点黑白名单等
+- 缓存限额（默认 200MB）、触发模式（默认「修饰键+划选」modifier，可选 auto/icon/contextMenu；划选修饰键 ctrl/alt/shift 默认 ctrl）、双语模式、双语呈现方式（bilingualStyle：行内注脚 inline / 段落对照 block，默认 inline；block 时整页译文聚合为块尾 div.yuxtrans-block-tr）、站点黑白名单等
 - F1-F8 行为开关：悬停翻译、单词词典、原文显示样式、浮窗钉住、双档案对照、输入框翻译、正文区域识别
 
 默认云端供应商：`qwen`，模型 `qwen-turbo`；默认本地模型通过 `http://localhost:11434/api/chat` 访问 Ollama。

@@ -9,8 +9,61 @@
 /* 设计令牌（色值 / 字体 / 间距）统一来自 design-tokens.css：manifest 已将其排在 content.css 之前注入，
    本文件不再重复维护 :root 色值，避免双份漂移。 */
 
-/* 注入宿主页面的行内代码样式 */
-code {
+/* ===== Shadow Host 页面级定位（Stage F） =====
+   悬浮 UI 统一经 content.js createShadowHost 创建并进 shadow DOM（docs/UI_DESIGN_SYSTEM.md §9.3）。
+   页面级坐标 / z-index 由 host 类承载；shadow 内同名类元素只保留视觉样式，不再自带定位。 */
+.yuxtrans-shadow-host {
+  margin: 0;
+  padding: 0;
+}
+
+.yuxtrans-host-popup {
+  position: fixed;
+  z-index: 2147483647;
+}
+
+.yuxtrans-host-float-btn {
+  position: fixed;
+  z-index: 2147483646;
+}
+
+.yuxtrans-host-page-control {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2147483646;
+}
+
+.yuxtrans-host-side-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2147483646;
+  transition: transform var(--yxt-transition-fast);
+}
+
+/* hover 微移：向左探出 2px（原挂耳自身 transform 已上移至 host） */
+.yuxtrans-host-side-tab:hover {
+  transform: translateY(-50%) translateX(-2px);
+}
+
+.yuxtrans-host-hover-guide {
+  position: fixed;
+  right: 24px;
+  bottom: 72px; /* 避让同在右下角的页控条（bottom:24px + 自身高度） */
+  z-index: 2147483644;
+}
+
+/* 悬停译文块为 in-flow 宿主（跟随段落后插入），仅保证块级占位 */
+.yuxtrans-host-hover-translation {
+  display: block;
+}
+
+/* 行内代码样式：限定在 YuxTrans 容器内（浮窗 / 词典面板），
+   不得用全局 code 选择器，避免污染宿主页面所有 <code> 元素 */
+.yuxtrans-popup code,
+.yuxtrans-dict code {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
   font-size: 0.92em;
   background: var(--yxt-paper-warm);
@@ -20,15 +73,14 @@ code {
   padding: 1px 4px;
 }
 
-/* ===== 划词翻译结果面板（阅读伴侣 / 衬纸层） ===== */
+/* ===== 划词翻译结果面板（阅读伴侣 / 衬纸层） =====
+   Stage F：元素位于 shadow root 内，页面级定位由 .yuxtrans-host-popup 承载 */
 .yuxtrans-popup {
-  position: fixed;
-  z-index: 2147483647;
   background: var(--yxt-paper-95);
   border: 1px solid var(--yxt-border);
   border-left: 2px solid var(--yxt-dusk-40);
-  border-radius: var(--yxt-radius-lg);
-  border-top-left-radius: var(--yxt-radius-sm);
+  border-radius: var(--yxt-radius-card);
+  border-top-left-radius: var(--yxt-radius-sm); /* 便签撕角保留 2px */
   box-shadow: var(--yxt-shadow-lg);
   font-family: var(--yxt-font);
   font-size: 15px;
@@ -73,12 +125,11 @@ code {
   cursor: grabbing;
 }
 
-/* 图钉图标：跟随按钮当前文字色，hover 高亮 */
+/* 线性图标：stroke=currentColor 写在 SVG 属性上，跟随按钮当前文字色 */
 .yuxtrans-pin-btn .yuxtrans-pin-icon,
 .yuxtrans-action-icon {
   display: inline-block;
   vertical-align: middle;
-  fill: currentColor;
 }
 
 .yuxtrans-popup-title {
@@ -117,7 +168,8 @@ code {
 }
 
 .yuxtrans-source {
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
+  font-style: italic;
   font-size: 13px;
   line-height: 1.6;
   margin-bottom: var(--yxt-space-3);
@@ -129,21 +181,23 @@ code {
   color: var(--yxt-text);
   line-height: 1.75;
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 500; /* v2.1：浮窗内译文是主角 */
   min-height: 1.75em;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
+/* v2.1：Apple 底部工具条（参照 docs/ui-demo/v2.1-final.html .pv-meta） */
 .yuxtrans-popup-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--yxt-space-2);
-  padding: var(--yxt-space-3) var(--yxt-space-4);
-  border-top: 1px solid var(--yxt-divider);
+  padding: 7px 12px;
+  background: var(--yxt-ink-04);
+  border-top: 0.5px solid var(--yxt-ink-06);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
 }
 
 .yuxtrans-popup-actions {
@@ -151,6 +205,34 @@ code {
   align-items: center;
   gap: var(--yxt-space-1);
   flex-shrink: 0;
+}
+
+/* 工具条操作按钮：28×28 方形图标位，hover 暮瞳微光 */
+.yuxtrans-popup-actions .yuxtrans-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--yxt-radius-btn);
+  background: transparent;
+  color: var(--yxt-ink-60);
+}
+
+.yuxtrans-popup-actions .yuxtrans-btn:hover {
+  background: var(--yxt-dusk-12);
+  color: var(--yxt-text);
+}
+
+/* 差译按钮视觉弱化：默认 ink-40，仅 hover 显露破坏性 error 色 */
+.yuxtrans-popup-actions .yuxtrans-bad-btn {
+  color: var(--yxt-ink-40);
+}
+
+.yuxtrans-popup-actions .yuxtrans-bad-btn:hover {
+  color: var(--yxt-error);
 }
 
 .yuxtrans-target.is-error {
@@ -173,7 +255,7 @@ code {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
   font-weight: 400;
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   letter-spacing: 0.02em;
 }
 
@@ -253,10 +335,8 @@ code {
   50% { opacity: 0.9; }
 }
 
-/* ===== 划词浮动操作条（轻薄标签纸） ===== */
+/* ===== 划词浮动操作条（轻薄标签纸；定位由 .yuxtrans-host-float-btn 承载） ===== */
 .yuxtrans-float-btn {
-  position: fixed;
-  z-index: 2147483646;
   background: var(--yxt-paper-95);
   color: var(--yxt-ink);
   border: 1px solid var(--yxt-border);
@@ -278,8 +358,7 @@ code {
 
 .yuxtrans-float-btn:hover {
   background: var(--yxt-paper-warm);
-  box-shadow: 0 4px 12px var(--yxt-ink-08);
-  transform: translateY(-1px);
+  box-shadow: var(--yxt-shadow-lg); /* v2.1：hover 加深阴影，不再上浮 */
 }
 
 .yuxtrans-float-btn:active {
@@ -295,20 +374,20 @@ code {
 /* ===== 整页翻译：双语、流式、失败标记 ===== */
 .yuxtrans-bilingual-text {
   display: inline;
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-translation);
   font-size: 0.9em;
   line-height: inherit;
   vertical-align: baseline;
   margin-left: 0.35em;
   padding-left: 0.45em;
-  border-left: 1.5px solid var(--yxt-dusk-40);
+  border-left: 2px solid var(--yxt-dusk-40);
   white-space: normal;
   word-break: break-word;
 }
 
 .yuxtrans-streaming-text {
   display: inline;
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-translation);
   font-size: 0.96em;
   margin-left: 0.25em;
   /* 文字稳定不呼吸；在末尾用暮瞳色细光标表达"正在书写"，与省略号加载、批注竖线同一套笔尖意象 */
@@ -320,6 +399,24 @@ code {
   color: var(--yxt-dusk);
   font-size: 0.8em;
   animation: yuxtrans-blink 1.1s steps(2, start) infinite;
+}
+
+/* v2.1 段落对照：译文整段跟随原文块尾，原文排版不动（定稿见 docs/ui-demo/v2.1-final.html 第四节） */
+.yuxtrans-block-tr {
+  display: block;
+  color: var(--yxt-translation);
+  font-size: 0.88em; line-height: 1.7;
+  margin: 0.35em 0 1.2em; padding-left: 14px;
+  border-left: 2px solid var(--yxt-dusk-40);
+  border-radius: 0 6px 6px 0;
+  transition: background 300ms var(--yxt-ease-paper);
+}
+.yuxtrans-block-tr:hover { background: var(--yxt-dusk-08); }
+
+/* 段落对照 pair-hover：hover 译文块联动高亮原文块（与行内同一逻辑） */
+.yuxtrans-translated-block.yuxtrans-pair-hover {
+  background: var(--yxt-dusk-08);
+  border-radius: var(--yxt-radius-sm);
 }
 
 .yuxtrans-failed {
@@ -338,12 +435,8 @@ code {
   transition: background-color var(--yxt-transition-slow);
 }
 
-/* ===== 整页翻译控制条 ===== */
+/* ===== 整页翻译控制条（Stage F：定位由 .yuxtrans-host-page-control 承载） ===== */
 .yuxtrans-page-control {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 2147483646;
   display: flex;
   align-items: center;
   gap: var(--yxt-space-2);
@@ -475,13 +568,9 @@ code {
   width: 100%;
 }
 
-/* ===== 整页控制条挂耳（#54）：关闭后收起为贴右缘的竖向 Tab，点击重新展开 ===== */
+/* ===== 整页控制条挂耳（#54）：关闭后收起为贴右缘的竖向 Tab，点击重新展开。
+   Stage F：右缘定位与垂直居中 transform 由 .yuxtrans-host-side-tab 承载 ===== */
 .yuxtrans-side-tab {
-  position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2147483646;
   writing-mode: vertical-rl;
   padding: var(--yxt-space-3) var(--yxt-space-1);
   background: var(--yxt-paper-95);
@@ -498,9 +587,8 @@ code {
   -webkit-backdrop-filter: blur(12px);
 }
 
-/* hover 微移：向左探出 2px，暮瞳描边提示可点击 */
+/* hover 反馈：暮瞳描边提示可点击（位移微移在 host 上，见 .yuxtrans-host-side-tab:hover） */
 .yuxtrans-side-tab:hover {
-  transform: translateY(-50%) translateX(-2px);
   color: var(--yxt-text);
   border-color: var(--yxt-border-dusk);
 }
@@ -570,12 +658,8 @@ code {
   opacity: 0;
 }
 
-/* ===== F1 悬停翻译新手引导 ===== */
+/* ===== F1 悬停翻译新手引导（Stage F：定位由 .yuxtrans-host-hover-guide 承载） ===== */
 .yuxtrans-hover-guide {
-  position: fixed;
-  right: 24px;
-  bottom: 72px; /* 避让同在右下角的页控条（bottom:24px + 自身高度） */
-  z-index: 2147483644;
   max-width: 280px;
   padding: var(--yxt-space-3) var(--yxt-space-4);
   background: var(--yxt-paper-98);
@@ -720,8 +804,8 @@ code {
   padding: 1px 6px;
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
-  color: var(--yxt-ink-60);
-  background: var(--yxt-ink-06);
+  color: var(--yxt-label);
+  background: color-mix(in srgb, var(--yxt-label) 10%, transparent);
   border-radius: var(--yxt-radius-sm);
 }
 
@@ -733,7 +817,7 @@ code {
   display: block;
   margin-top: var(--yxt-space-1);
   padding-left: var(--yxt-space-3);
-  border-left: 1.5px solid var(--yxt-dusk-25);
+  border-left: 2px solid var(--yxt-dusk-25);
   font-size: var(--yxt-text-xs);
   color: var(--yxt-text-secondary);
 }
@@ -820,11 +904,6 @@ code {
   border-radius: var(--yxt-radius-sm);
 }
 
-/* 差译：默认与复制同权重，仅 hover 时显露破坏性 error 色 */
-.yuxtrans-bad-btn:hover {
-  color: var(--yxt-error);
-}
-
 /* 双语对照：hover 译文联动高亮所在原文块（配对见 content.js originalTexts） */
 .yuxtrans-translated-bilingual.yuxtrans-pair-hover {
   background: var(--yxt-dusk-08);
@@ -838,8 +917,10 @@ code {
 
 /* ===== 宿主页暗色探测：系统为亮色、但宿主页面强制暗色时，
    注入的暖纸浮窗与灰墨译文会"隐身"。由 content.js 探测后给
-   documentElement 打 data-yxt-host-dark，此处覆盖令牌为黄昏书房暗色 ===== */
-[data-yxt-host-dark="1"] {
+   documentElement 打 data-yxt-host-dark，此处覆盖令牌为黄昏书房暗色。
+   Stage F：shadow host 同步打同一属性，:host 变体让 shadow 内悬浮 UI 同样生效 ===== */
+[data-yxt-host-dark="1"],
+:host([data-yxt-host-dark="1"]) {
   --yxt-ink: #D4CFC7;
   --yxt-ink-80: rgba(212, 207, 199, 0.8);
   --yxt-ink-60: rgba(212, 207, 199, 0.6);
@@ -870,6 +951,10 @@ code {
   --yxt-text-secondary: var(--yxt-annotation);
   --yxt-text-tertiary: var(--yxt-annotation-70);
 
+  /* v2.1：宿主页暗色下的译文与标签文字 */
+  --yxt-translation: #BDB6AA;
+  --yxt-label: #A39B8F;
+
   --yxt-border: var(--yxt-ink-08);
   --yxt-border-strong: var(--yxt-ink-15);
   --yxt-divider: var(--yxt-ink-06);
@@ -885,6 +970,7 @@ code {
 
 /* ===== 无障碍：尊重用户减少动效偏好（限定 .yuxtrans-* 前缀，不影响宿主网站自身动画） ===== */
 @media (prefers-reduced-motion: reduce) {
+  .yuxtrans-shadow-host,
   .yuxtrans-popup,
   .yuxtrans-page-control,
   .yuxtrans-side-tab,

@@ -15,9 +15,11 @@
       const profileId = this.config.compareProfileId;
       if (!profileId) return;
       // 先记录主浮窗位置（pinPopup 内部会置 this.popup = null，须提前取值）
+      // Stage F：页面级坐标在 shadow host 上
       const mainPopup = this.popup;
-      const mainLeft = mainPopup ? parseFloat(mainPopup.style.left) : NaN;
-      const mainTop = mainPopup ? parseFloat(mainPopup.style.top) : NaN;
+      const mainHost = mainPopup ? mainPopup._yxtHost : null;
+      const mainLeft = mainHost ? parseFloat(mainHost.style.left) : NaN;
+      const mainTop = mainHost ? parseFloat(mainHost.style.top) : NaN;
       // 主浮窗钉住（保留主译文），再开对照浮窗
       if (mainPopup && mainPopup.dataset.pinned !== '1') {
         // #5 对照模式替换语义：自动 pin 新主浮窗前，移除上一次对照自动 pin 的主浮窗
@@ -176,6 +178,8 @@
     showFloatButton(x, y, text) {
       this.hideFloatButton();
 
+      // Stage F：浮钮挂进 shadow host，页面级定位由 host 承载
+      const { host, root } = this.createShadowHost('yuxtrans-host-float-btn');
       const btn = document.createElement('button');
       btn.className = 'yuxtrans-float-btn';
       btn.textContent = '翻译';
@@ -186,8 +190,8 @@
       const padding = 8;
       const left = Math.min(Math.max(padding, x + 10), window.innerWidth - btnWidth - padding);
       const top = Math.min(Math.max(padding, y + 10), window.innerHeight - btnHeight - padding);
-      btn.style.left = `${left}px`;
-      btn.style.top = `${top}px`;
+      host.style.left = `${left}px`;
+      host.style.top = `${top}px`;
 
       btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -196,13 +200,15 @@
         this.hideFloatButton();
       });
 
-      document.body.appendChild(btn);
+      btn._yxtHost = host;
+      root.appendChild(btn);
+      document.body.appendChild(host);
       this.floatBtn = btn;
     },
 
     hideFloatButton() {
       if (this.floatBtn) {
-        this.floatBtn.remove();
+        this._removeFloatingUI(this.floatBtn);
         this.floatBtn = null;
       }
     },
@@ -351,30 +357,34 @@
         <div class="yuxtrans-popup-footer">
           <span class="yuxtrans-status"><span class="yuxtrans-status-badge">准备</span></span>
           <div class="yuxtrans-popup-actions">
-            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-pin-btn" title="钉住浮窗，不被新划词覆盖" aria-label="钉住浮窗"><svg class="yuxtrans-pin-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.042l-3.043 3.043-.022.531a2 2 0 0 1-.586 1.379l-1.414 1.414a.5.5 0 0 1-.707 0l-2.829-2.828-2.828 2.828a.5.5 0 1 1-.707-.707l2.828-2.829-2.828-2.828a.5.5 0 0 1 0-.707l1.414-1.414a2 2 0 0 1 1.379-.586l.531-.022 3.043-3.043a2.02 2.02 0 0 1-.042-.46c0-.431.107-1.023.588-1.503a.5.5 0 0 1 .353-.146z"/></svg></button>
-            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-insert-btn" hidden title="将译文插入输入框" aria-label="插入译文"><svg class="yuxtrans-action-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 7.293V1.5A.5.5 0 0 1 8 1zM2 13.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/></svg></button>
-            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn" title="复制译文" aria-label="复制译文"><svg class="yuxtrans-action-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 3.5a.5.5 0 0 1 .5.5v9a2 2 0 0 0 2 2h7a.5.5 0 0 1 0 1h-7a3 3 0 0 1-3-3V4a.5.5 0 0 1 .5-.5z"/></svg></button>
-            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" title="标记差译并清除缓存" aria-label="标记差译"><svg class="yuxtrans-action-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8.086 2.207a2 2 0 0 1 2.828 0L13.5 4.793a2 2 0 0 1 0 2.828l-7.475 7.475a.5.5 0 0 1-.353.146H3.5a.5.5 0 0 1-.5-.5v-2.172a.5.5 0 0 1 .146-.353L8.086 2.207zM9.793 3L3 9.793V12h2.207L12 5.207 9.793 3zm-.5-.5L10.5 3.707 12.793 6l1.207-1.207a1 1 0 0 0 0-1.414l-2.586-2.586a1 1 0 0 0-1.414 0L11.293 2 9.293 2.5z"/></svg></button>
+            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-pin-btn" title="钉住浮窗，不被新划词覆盖" aria-label="钉住浮窗"><svg class="yuxtrans-pin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg></button>
+            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-insert-btn" hidden title="将译文插入输入框" aria-label="插入译文"><svg class="yuxtrans-action-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-copy-btn" title="复制译文" aria-label="复制译文"><svg class="yuxtrans-action-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></button>
+            <button type="button" class="yuxtrans-btn yuxtrans-btn-secondary yuxtrans-bad-btn" title="标记差译并清除缓存" aria-label="标记差译"><svg class="yuxtrans-action-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg></button>
           </div>
         </div>
       `;
 
-      document.body.appendChild(popup);
+      // Stage F：浮窗挂进 shadow host，页面级定位（left/top/z-index）由 host 承载
+      const { host, root } = this.createShadowHost('yuxtrans-host-popup');
+      popup._yxtHost = host;
+      root.appendChild(popup);
+      document.body.appendChild(host);
       this.popup = popup;
       this.popup.dataset.sourceText = sourceText;
 
       // header 换真实信息：语言对 + 供应商（替换品牌噪音 YuxTrans）
       this._updatePopupTitle();
 
-      // 实际尺寸出来后，再定位并限制在可视区域
+      // 实际尺寸出来后，再定位并限制在可视区域（坐标写在 host 上）
       requestAnimationFrame(() => {
         if (!this.popup) return;
         const rect = this.popup.getBoundingClientRect();
         const padding = 16;
         const maxX = window.innerWidth - rect.width - padding;
         const maxY = window.innerHeight - rect.height - padding;
-        popup.style.left = `${Math.min(Math.max(padding, x), maxX)}px`;
-        popup.style.top = `${Math.min(Math.max(padding, y), maxY)}px`;
+        host.style.left = `${Math.min(Math.max(padding, x), maxX)}px`;
+        host.style.top = `${Math.min(Math.max(padding, y), maxY)}px`;
       });
 
       // F4：关闭时区分当前浮窗与已 pin 浮窗
@@ -470,10 +480,10 @@
         this.hidePopup();
         return;
       }
-      // 已 pin 的浮窗：从列表移除并销毁
+      // 已 pin 的浮窗：从列表移除并销毁（连同 shadow host）
       const idx = this.pinnedPopups.indexOf(popup);
       if (idx >= 0) this.pinnedPopups.splice(idx, 1);
-      if (popup.parentNode) popup.remove();
+      this._removeFloatingUI(popup);
     },
 
     /**
@@ -506,19 +516,21 @@
       if (!popup) return;
       e.preventDefault(); // 避免拖拽时选中文本
 
+      // Stage F：拖拽移动的是 shadow host（页面级坐标所在），内部浮窗保持静态占满 host
+      const host = popup._yxtHost || popup;
       const rect = popup.getBoundingClientRect();
       const offsetX = e.clientX - rect.left;
       const offsetY = e.clientY - rect.top;
-      // 切换为 fixed 定位以保证拖拽后位置稳定（showPopup 初始用 rAF 设 left/top）
-      popup.style.position = 'fixed';
+      // 切换为 fixed 定位以保证拖拽后位置稳定（host 默认已由 yuxtrans-host-popup 置为 fixed）
+      host.style.position = 'fixed';
 
       const onMove = (ev) => {
         const w = rect.width;
         const h = rect.height;
         const left = Math.max(0, Math.min(ev.clientX - offsetX, window.innerWidth - w));
         const top = Math.max(0, Math.min(ev.clientY - offsetY, window.innerHeight - h));
-        popup.style.left = `${left}px`;
-        popup.style.top = `${top}px`;
+        host.style.left = `${left}px`;
+        host.style.top = `${top}px`;
       };
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
@@ -653,7 +665,7 @@
 
     hidePopup() {
       if (this.popup) {
-        this.popup.remove();
+        this._removeFloatingUI(this.popup);
         this.popup = null;
       }
       // #4：浮窗销毁后清理其在途请求映射，迟到响应将被丢弃

@@ -44,12 +44,16 @@ class YuxTransContent {
     this._streamReqSeq = 0; // 整页流式段落 requestId 自增序号（streamChunk 按此路由到对应 tempSpan）
     this._viewportObserver = null; // belowFold 视口感知：入视口才提交翻译
     this._viewportCleanup = null; // belowFold 取消回调（放弃未提交项）
+    // v2.1 段落对照（bilingualStyle=block）：块容器元素 -> { el: div.yuxtrans-block-tr, nodes: Set<node> }
+    this._blockTrMap = new Map();
     // F1 悬停段落翻译状态
     this._hoverTarget = null; // 当前悬停描边的段落元素
     this._hoverTimer = null; // 300ms 延迟翻译定时器
     this._hoverThrottleTimer = null; // mousemove 节流定时器
     this._lastInputElement = null; // F5：触发翻译的输入框元素（供"插入译文"使用）
     this.pinnedPopups = []; // F4：已 pin 的浮窗列表（不被新划词覆盖，用于结果对照）
+    // Stage F：悬停译文块的 shadow host 集合（restoreOriginalTexts 据此清理，不再 document 直查）
+    this._hoverBlocks = new Set();
     this.pageControl = null;
     this.sideTab = null; // #54：整页控制条收起后的右缘挂耳
     this.config = {
@@ -65,6 +69,7 @@ class YuxTransContent {
       selectionModifier: 'ctrl', // 'ctrl' | 'alt' | 'shift'
       enableStreaming: true,
       bilingualMode: true,
+      bilingualStyle: 'inline', // v2.1：双语呈现方式 inline(行内注脚) | block(段落对照)
       offlineMode: false,
       siteModePrefs: {},
       // F1 悬停段落翻译：按修饰键 + 鼠标悬停段落触发
@@ -161,6 +166,8 @@ class YuxTransContent {
         } else if (response.bilingualMode !== undefined) {
           this.config.bilingualMode = response.bilingualMode;
         }
+        // v2.1：双语呈现方式（双语模式下的子选项，默认行内注脚）
+        this.config.bilingualStyle = response.bilingualStyle === 'block' ? 'block' : 'inline';
         if (response.batchConfig) {
           this.config.maxBatchChars = response.batchConfig.maxBatchChars;
           this.config.batchSize = response.batchConfig.batchSize;
@@ -278,12 +285,69 @@ class YuxTransContent {
   }
 
   /**
+   * Stage F：Shadow Host 工厂——所有悬浮 UI（划词浮窗/浮钮/页控条/挂耳/悬停译文/引导层）
+   * 统一经此创建，样式与宿主页面隔离（docs/UI_DESIGN_SYSTEM.md §9.3）。
+   * @param {string} [hostClass] - host 语义类名（如 yuxtrans-host-popup），页面级定位由该类承载
+   * @returns {{ host: Element, root: ShadowRoot|Element }}
+   *   host 承载页面级坐标（position/left/top/z-index），UI 元素挂进 root；
+   *   无 attachShadow 能力的环境（Node 单测）退化为 root === host（不隔离，仅保结构）。
+   */
+  createShadowHost(hostClass) {
+    const host = document.createElement('div');
+    host.className = 'yuxtrans-shadow-host' + (hostClass ? ' ' + hostClass : '');
+    // 宿主页暗色探测结果同步进 shadow：content.css 以 :host([data-yxt-host-dark="1"]) 覆盖令牌
+    if (document.documentElement && document.documentElement.dataset &&
+        document.documentElement.dataset.yxtHostDark === '1') {
+      host.dataset.yxtHostDark = '1';
+    }
+    if (typeof host.attachShadow !== 'function' || !chrome?.runtime?.getURL) {
+      return { host, root: host }; // 退化路径：Node 单测等无 shadow/getURL 能力环境
+    }
+    const root = host.attachShadow({ mode: 'open' });
+    // shadow 内共享样式：设计令牌 + content.css（页面内嵌样式仍由 manifest 全局注入提供）
+    for (const file of ['design-tokens.css', 'content.css']) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = chrome.runtime.getURL(file);
+      root.appendChild(link);
+    }
+    return { host, root };
+  }
+
+  /**
+   * Stage F：移除悬浮 UI——连同其 shadow host 一并移除（无 host 引用时退化为自身 remove）
+   * @param {Element|null} el - shadow 内的 UI 元素（创建时挂有 _yxtHost 回引）
+   */
+  _removeFloatingUI(el) {
+    if (!el) return;
+    const host = el._yxtHost;
+    if (host) {
+      if (host.parentNode) host.remove();
+    } else if (el.parentNode) {
+      el.remove();
+    }
+  }
+
+  /**
    * 安全从事件 target 做 closest（文本节点 / 无 closest 宿主不抛错）
+   * Stage F：优先沿 e.composedPath() 逐层 matches——shadow 内事件在 document 监听器中
+   * target 会被重定向为 host，直接 closest 会漏掉 shadow 内的自有 UI（浮窗/浮钮等）。
    * @param {Event} e
    * @param {string} selector
    * @returns {Element|null}
    */
   _eventClosest(e, selector) {
+    if (e && typeof e.composedPath === 'function') {
+      const path = e.composedPath();
+      for (const node of path) {
+        if (node && node.nodeType === 1 && typeof node.matches === 'function') {
+          try {
+            if (node.matches(selector)) return node;
+          } catch (err) { /* 选择器非法时静默，走兜底 */ }
+        }
+      }
+      return null;
+    }
     const target = e && e.target;
     if (this.helpers.eventTargetClosest) {
       return this.helpers.eventTargetClosest(target, selector);

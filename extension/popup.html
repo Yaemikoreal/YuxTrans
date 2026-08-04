@@ -8,71 +8,79 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <!-- Header：logo + 品牌名 + 圆形设置按钮 -->
   <div class="header">
-    <div class="brand">
-      <img class="brand-logo" src="icons/icon48.png" width="28" height="28" alt="" aria-hidden="true">
-      <h1>YuxTrans</h1>
-    </div>
-    <button class="icon-btn" id="settingsBtn" type="button">设置</button>
+    <img class="brand-logo" src="icons/icon48.png" width="30" height="30" alt="" aria-hidden="true">
+    <h1>YuxTrans</h1>
+    <button class="gear-btn" id="settingsBtn" type="button" title="设置" aria-label="设置">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+    </button>
   </div>
 
-  <div class="control-row">
-    <span class="status-pill checking" id="connectionStatus">
-      <span class="status-dot"></span>
-      <span id="connectionText">检测中</span>
-    </span>
-    <select class="model-select" id="modelSelect" aria-label="当前翻译服务">
-      <option value="">加载中...</option>
-    </select>
-  </div>
-
+  <!-- 唯一主动作 -->
   <button class="action-btn" id="translatePageBtn" type="button">翻译整页</button>
 
-  <div class="mode-row">
-    <div>
-      <div class="mode-label">翻译模式</div>
-      <div class="mode-hint">整页显示方式</div>
+  <!-- 分组卡片 1：服务状态 + 模型 -->
+  <div class="yxt-group">
+    <div class="yxt-row">
+      <span class="status-dot checking" id="connectionStatus" aria-hidden="true"></span>
+      <div class="row-main">服务状态</div>
+      <div class="row-trail" id="connectionText">检测中</div>
     </div>
-    <div class="mode-toggle" id="modeToggle" role="group" aria-label="翻译模式">
-      <button class="mode-toggle-btn" data-mode="mono" id="modeMonoBtn" type="button" aria-pressed="true">仅译文</button>
-      <button class="mode-toggle-btn" data-mode="bilingual" id="modeBilingualBtn" type="button" aria-pressed="false">双语</button>
-      <span class="mode-toggle-indicator"></span>
+    <div class="yxt-row">
+      <label class="row-main" for="modelSelect">模型</label>
+      <select class="model-select" id="modelSelect" aria-label="当前翻译服务">
+        <option value="">加载中...</option>
+      </select>
     </div>
   </div>
 
-  <div class="toggle-row">
-    <div>
-      <div class="toggle-label">流式翻译</div>
-      <div class="toggle-hint">逐字输出译文</div>
+  <!-- 分组卡片 2：翻译模式 + 流式翻译 + 用量与缓存 -->
+  <div class="yxt-group">
+    <div class="yxt-row">
+      <div class="row-main">翻译模式
+        <div class="row-sub">整页显示方式</div>
+      </div>
+      <div class="mode-toggle" id="modeToggle" role="group" aria-label="翻译模式">
+        <button class="mode-toggle-btn" data-mode="mono" id="modeMonoBtn" type="button" aria-pressed="true">仅译文</button>
+        <button class="mode-toggle-btn" data-mode="bilingual" id="modeBilingualBtn" type="button" aria-pressed="false">双语</button>
+        <span class="mode-toggle-indicator"></span>
+      </div>
     </div>
-    <label class="paper-toggle" title="流式翻译">
-      <input type="checkbox" id="streamToggle">
-      <span class="paper-toggle-track" aria-hidden="true">
-        <span class="paper-toggle-thumb"></span>
-      </span>
-    </label>
+    <div class="yxt-row">
+      <div class="row-main">流式翻译
+        <div class="row-sub">逐字输出译文</div>
+      </div>
+      <!-- label 变体的 .yxt-switch：保留 checkbox 以兼容现有 change 事件逻辑 -->
+      <label class="yxt-switch" title="流式翻译">
+        <input type="checkbox" id="streamToggle">
+        <span class="yxt-switch-thumb" aria-hidden="true"></span>
+      </label>
+    </div>
+    <details class="stats-details" id="statsDetails">
+      <summary class="yxt-row stats-summary">
+        <div class="row-main">用量与缓存</div>
+        <div class="row-trail">
+          <span id="statsSummaryMeta">—</span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </div>
+      </summary>
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-value" id="tokenStat">-- / --</div>
+          <div class="stat-label">会话 / 累计 Tokens</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="cacheHitStat">--</div>
+          <div class="stat-label">缓存命中</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="cacheEntryStat">--</div>
+          <div class="stat-label">缓存条目</div>
+        </div>
+      </div>
+    </details>
   </div>
-
-  <details class="stats-details" id="statsDetails">
-    <summary class="stats-summary">
-      <span>用量与缓存</span>
-      <span class="stats-summary-meta" id="statsSummaryMeta">—</span>
-    </summary>
-    <div class="stats-row">
-      <div class="stat-item">
-        <div class="stat-value" id="tokenStat">-- / --</div>
-        <div class="stat-label">会话 / 累计 Tokens</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="cacheHitStat">--</div>
-        <div class="stat-label">缓存命中</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value" id="cacheEntryStat">--</div>
-        <div class="stat-label">缓存条目</div>
-      </div>
-    </div>
-  </details>
 
   <div class="popup-footer-meta">
     <span class="version" id="versionBadge"></span>

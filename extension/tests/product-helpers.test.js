@@ -328,6 +328,7 @@ test('pickModuleConfig 按模块切片且不串字段', () => {
     selectionModifier: 'ctrl',
     enableStreaming: false,
     originalStyle: 'fade',
+    bilingualStyle: 'block',
     hoverTranslate: true,
     dictMode: false,
     autoCopy: true,
@@ -356,6 +357,7 @@ test('pickModuleConfig 按模块切片且不串字段', () => {
   const inter = H.pickModuleConfig('interaction', values);
   assert.strictEqual(inter.triggerMode, 'icon');
   assert.strictEqual(inter.compareProfileId, 'p2');
+  assert.strictEqual(inter.bilingualStyle, 'block');
   assert.ok(!('sourceLang' in inter));
   assert.ok(!('maxCacheMB' in inter));
   assert.strictEqual(Object.keys(inter).length, H.OPTIONS_MODULE_KEYS.interaction.length);

@@ -7,7 +7,8 @@
  * 色彩从 Logo 墨韵色延伸，拒绝纯黑纯白与高饱和科技色。
  */
 
-:root {
+/* Stage F：:host 让同一文件在 shadow root 内（悬浮 UI）也能把令牌挂到宿主元素上 */
+:root, :host {
   /* ===== 品牌色：从 Logo 延伸的纸墨体系 ===== */
 
   /* 墨韵：温润炭黑 —— 主文本、图标、关键边框 */
@@ -31,7 +32,8 @@
   --yxt-paper-stack: #E8E3DA;
   --yxt-paper-open: #FAF8F3;
 
-  /* 批注：温和灰褐 —— 次要文本、禁用态、分割线、占位符 */
+  /* 批注：温和灰褐 —— v2.1 降级为纯装饰色（占位符/分割线/禁用态），
+     不再承载需要阅读的文字（阅读性文字改用 --yxt-translation / --yxt-label） */
   --yxt-annotation: #9E968A;
   --yxt-annotation-70: rgba(158, 150, 138, 0.7);
   --yxt-annotation-50: rgba(158, 150, 138, 0.5);
@@ -79,6 +81,10 @@
   --yxt-text-tertiary: var(--yxt-annotation-70);
   --yxt-text-on-accent: var(--yxt-paper);
 
+  /* v2.1：译文/次主文本（对比度 8.6:1）与标签/元信息/说明文字（5.1:1） */
+  --yxt-translation: #4A453F;
+  --yxt-label: #6B655C;
+
   /* ===== 强调色：以暮瞳为微光，墨韵为主体 ===== */
   --yxt-accent: var(--yxt-ink);
   --yxt-accent-hover: var(--yxt-ink-80);
@@ -93,10 +99,10 @@
   --yxt-border-dusk: var(--yxt-dusk-40);
   --yxt-border-annotation: var(--yxt-annotation-30);
 
-  /* ===== 阴影：墨韵色低透明度，模拟纸张叠压 ===== */
-  --yxt-shadow-sm: 0 1px 2px var(--yxt-ink-04);
-  --yxt-shadow-md: 0 2px 8px var(--yxt-ink-06);
-  --yxt-shadow-lg: 0 12px 32px var(--yxt-ink-08), 0 2px 8px var(--yxt-ink-04);
+  /* ===== 阴影：Apple 式柔和投影（v2.1 更新，墨韵暖黑低透明度双层叠压） ===== */
+  --yxt-shadow-sm: 0 1px 3px rgba(44, 40, 37, 0.08), 0 1px 2px rgba(44, 40, 37, 0.04);
+  --yxt-shadow-md: 0 4px 16px rgba(44, 40, 37, 0.10), 0 1px 4px rgba(44, 40, 37, 0.05);
+  --yxt-shadow-lg: 0 12px 40px rgba(44, 40, 37, 0.14), 0 4px 12px rgba(44, 40, 37, 0.06);
   --yxt-shadow-xl: 0 20px 40px var(--yxt-ink-08), 0 8px 16px var(--yxt-ink-06);
   --yxt-shadow-glow: 0 0 0 2px var(--yxt-dusk-25);
 
@@ -167,6 +173,10 @@
   --yxt-radius-md: 4px;
   --yxt-radius-lg: 6px;
   --yxt-radius-xl: 8px;
+  /* v2.1 Apple 分组骨架新尺度：卡片 / 浮窗 / 按钮 */
+  --yxt-radius-card: 8px;
+  --yxt-radius-window: 10px;
+  --yxt-radius-btn: 6px;
   /* 仅用于状态点等极小圆形；禁止用于按钮/面板胶囊 */
   --yxt-radius-pill: 8px;
 
@@ -185,7 +195,7 @@
 
 /* ===== 深色模式：黄昏书房 ===== */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root, :host {
     /* 黄昏书房底色 */
     --yxt-ink: #D4CFC7;
     --yxt-ink-80: rgba(212, 207, 199, 0.8);
@@ -233,6 +243,10 @@
     --yxt-text-secondary: var(--yxt-annotation);
     --yxt-text-tertiary: var(--yxt-annotation-70);
     --yxt-text-on-accent: var(--yxt-paper);
+
+    /* v2.1：黄昏书房下的译文与标签文字 */
+    --yxt-translation: #BDB6AA;
+    --yxt-label: #A39B8F;
 
     /* 强调色 */
     --yxt-accent: var(--yxt-ink);
@@ -317,3 +331,48 @@
 /* 无障碍：prefers-reduced-motion 规则下放到各端样式文件 --
    popup/options 用全局 *（扩展自有页面，无副作用），
    content 注入宿主页须限定 .yuxtrans-* 前缀，避免关闭宿主网站自身动画。 */
+
+/* ===== v2.1 iOS 胶囊开关（纸墨调温版，与 .paper-toggle 并存） =====
+   禁忌清单修订：胶囊形态仅允许开关组件使用。
+   用 aria-checked 表达状态（按钮语义），深色模式下凭令牌自动适配。 */
+.yxt-switch {
+  border: none;
+  padding: 0;
+  width: 42px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--yxt-ink-25);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--yxt-transition-normal);
+}
+
+.yxt-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yxt-paper-open);
+  box-shadow: 0 2px 4px rgba(44, 40, 37, 0.25);
+  transition: left var(--yxt-transition-normal);
+}
+
+.yxt-switch[aria-checked="true"] {
+  background: var(--yxt-ink);
+}
+
+.yxt-switch[aria-checked="true"]::after {
+  left: 18px;
+}
+
+.yxt-switch:focus-visible {
+  box-shadow: var(--yxt-shadow-glow);
+}
+
+.yxt-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

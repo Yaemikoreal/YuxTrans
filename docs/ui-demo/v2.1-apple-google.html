@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YuxTrans UI v2.1 提案 Demo · 融合 Apple / Google 组件语言</title>
+<style>
+/* ============================================================
+   美术思想不变：书房衬纸色板 + 衬线阅读字体
+   组件语言借鉴：Apple HIG（分组列表/分段控件/系统设置）
+                Google Material（卡片层级/主动作按钮）
+   ============================================================ */
+:root {
+  --yxt-ink: #2C2825;
+  --yxt-ink-80: rgba(44, 40, 37, 0.8);
+  --yxt-ink-60: rgba(44, 40, 37, 0.6);
+  --yxt-ink-40: rgba(44, 40, 37, 0.4);
+  --yxt-ink-25: rgba(44, 40, 37, 0.25);
+  --yxt-ink-15: rgba(44, 40, 37, 0.15);
+  --yxt-ink-08: rgba(44, 40, 37, 0.08);
+  --yxt-ink-06: rgba(44, 40, 37, 0.06);
+  --yxt-ink-04: rgba(44, 40, 37, 0.04);
+
+  --yxt-paper: #F5F1EA;
+  --yxt-paper-98: rgba(245, 241, 234, 0.98);
+  --yxt-paper-95: rgba(245, 241, 234, 0.95);
+  --yxt-paper-warm: #EDE8DF;
+  --yxt-paper-stack: #E8E3DA;
+  --yxt-paper-open: #FAF8F3;
+
+  --yxt-annotation: #9E968A;
+  --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+  --yxt-annotation-30: rgba(158, 150, 138, 0.3);
+
+  /* 三级文字层级（沿用提案 A） */
+  --yxt-translation: #5C564E;
+  --yxt-label: #6B655C;
+
+  --yxt-dusk: #B8A5C4;
+  --yxt-dusk-40: rgba(184, 165, 196, 0.4);
+  --yxt-dusk-25: rgba(184, 165, 196, 0.25);
+  --yxt-dusk-12: rgba(184, 165, 196, 0.12);
+  --yxt-dusk-08: rgba(184, 165, 196, 0.08);
+
+  --yxt-success: #7A9E8A;
+  --yxt-error: #B87878;
+
+  /* Apple 式柔和投影（用墨韵色调温） */
+  --shadow-apple-sm: 0 1px 3px rgba(44, 40, 37, 0.08), 0 1px 2px rgba(44, 40, 37, 0.04);
+  --shadow-apple-md: 0 4px 16px rgba(44, 40, 37, 0.10), 0 1px 4px rgba(44, 40, 37, 0.05);
+  --shadow-apple-lg: 0 12px 40px rgba(44, 40, 37, 0.14), 0 4px 12px rgba(44, 40, 37, 0.06);
+
+  --yxt-font-serif: 'Source Serif 4', 'Literata', 'Merriweather',
+    'Source Han Serif SC', 'Noto Serif SC', 'FangSong', 'STSong', 'SimSun', serif;
+  /* UI 铬面借鉴 Apple：系统无衬线 + 负字距 */
+  --yxt-font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --yxt-font-cjk: 'Source Han Serif SC', 'FZShuSong-Z01S', 'LXGW WenKai',
+    'STKaiti', 'KaiTi', 'FangSong', serif;
+
+  --ease-apple: cubic-bezier(0.28, 0.11, 0.32, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--yxt-paper-warm);
+  font-family: var(--yxt-font-serif);
+  color: var(--yxt-ink);
+  line-height: 1.75;
+  padding: 48px 24px 96px;
+}
+.demo-wrap { max-width: 1160px; margin: 0 auto; }
+
+.demo-title { font-family: var(--yxt-font-cjk); font-size: 28px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 8px; }
+.demo-subtitle { font-family: var(--yxt-font-ui); font-size: 13px; color: var(--yxt-label); margin-bottom: 10px; max-width: 760px; }
+.demo-legend { font-family: var(--yxt-font-ui); font-size: 12px; color: var(--yxt-label); margin-bottom: 48px; display: flex; gap: 18px; flex-wrap: wrap; }
+.legend-chip { display: inline-flex; align-items: center; gap: 6px; }
+.legend-chip i { width: 8px; height: 8px; border-radius: 50%; font-style: normal; }
+.legend-chip .borrow { background: #7A9E8A; }
+.legend-chip .conflict { background: var(--yxt-error); }
+
+.demo-section { margin-bottom: 72px; }
+.demo-section-title { font-size: 17px; font-weight: 500; padding-left: 10px; border-left: 2px solid var(--yxt-dusk); margin-bottom: 6px; }
+.demo-section-note { font-family: var(--yxt-font-ui); font-size: 12px; color: var(--yxt-label); margin-bottom: 24px; max-width: 780px; }
+.note-line { display: flex; gap: 8px; margin-bottom: 3px; align-items: baseline; }
+.note-line i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; font-style: normal; transform: translateY(-1px); }
+.note-line .borrow { background: #7A9E8A; }
+.note-line .conflict { background: var(--yxt-error); }
+
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; align-items: start; }
+.panel-tag {
+  display: inline-block; font-family: var(--yxt-font-ui); font-size: 10px;
+  letter-spacing: 0.06em; padding: 2px 8px; border-radius: 2px; margin-bottom: 16px;
+}
+.panel-tag.proposal { background: var(--yxt-dusk-12); color: #7A6A8A; }
+
+/* ============================================================
+   一、Popup · Apple 分组列表 + Material 主动作
+   ============================================================ */
+.popup-apple {
+  width: 320px;
+  font-family: var(--yxt-font-ui);
+  background: var(--yxt-paper-warm);   /* Apple: 分组列表底比卡片深一号 */
+  border-radius: 14px;                  /* 借鉴：连续圆角（冲突：>12px） */
+  padding: 18px 14px 14px;
+  box-shadow: var(--shadow-apple-lg);
+  border: 1px solid var(--yxt-ink-06);
+}
+.popup-apple .p-header { display: flex; align-items: center; gap: 10px; padding: 0 6px; margin-bottom: 14px; }
+.popup-apple .p-logo {
+  width: 30px; height: 30px; border-radius: 8px;  /* Apple 图标圆角矩形 */
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--yxt-font-cjk); font-size: 14px;
+}
+.popup-apple .p-header h1 { font-family: var(--yxt-font-ui); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; flex: 1; }
+.popup-apple .p-gear {
+  width: 30px; height: 30px; border: none; border-radius: 50%;
+  background: var(--yxt-ink-06); color: var(--yxt-ink-60); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 180ms var(--ease-apple);
+}
+.popup-apple .p-gear:hover { background: var(--yxt-ink-15); }
+
+/* Apple 分组卡片 */
+.ios-group {
+  background: var(--yxt-paper-open);
+  border-radius: 12px;
+  box-shadow: var(--shadow-apple-sm);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ios-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; font-size: 14px; letter-spacing: -0.01em;
+}
+.ios-row + .ios-row { border-top: 0.5px solid var(--yxt-ink-08); }  /* Apple 0.5px 分隔线 */
+.ios-row .row-main { flex: 1; }
+.ios-row .row-sub { font-size: 11px; color: var(--yxt-label); margin-top: 1px; }
+.ios-row .row-trail { color: var(--yxt-label); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yxt-success); }
+.chevron { color: var(--yxt-annotation); font-size: 12px; }
+
+/* iOS 分段控件（冲突：胶囊感；已用纸色压平） */
+.ios-seg {
+  display: flex; background: var(--yxt-ink-06); border-radius: 8px; padding: 2px;
+  position: relative;
+}
+.ios-seg span {
+  font-size: 12px; padding: 5px 0; flex: 1; text-align: center;
+  color: var(--yxt-label); cursor: pointer; position: relative; z-index: 1;
+  letter-spacing: -0.01em;
+}
+.ios-seg span.active { color: var(--yxt-ink); font-weight: 500; }
+.ios-seg .seg-ind {
+  position: absolute; top: 2px; bottom: 2px; left: 50%; width: calc(50% - 2px);
+  background: var(--yxt-paper-open); border-radius: 6px;
+  box-shadow: var(--shadow-apple-sm);
+}
+
+/* iOS 开关（冲突项：禁忌清单明确禁止；展示供决策） */
+.ios-switch {
+  width: 42px; height: 26px; border-radius: 13px; border: none;
+  background: var(--yxt-ink); position: relative; cursor: pointer; flex-shrink: 0;
+  transition: background 200ms var(--ease-apple);
+}
+.ios-switch::after {
+  content: ''; position: absolute; top: 2px; left: 18px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--yxt-paper-open);
+  box-shadow: 0 2px 4px rgba(44,40,37,0.25);
+}
+.ios-switch.off { background: var(--yxt-ink-25); }
+.ios-switch.off::after { left: 2px; }
+
+/* Material 式主动作（冲突：10px 大圆角） */
+.mat-fab-btn {
+  width: 100%; padding: 13px; border: none; border-radius: 10px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  font-family: var(--yxt-font-ui); font-size: 15px; font-weight: 600;
+  letter-spacing: -0.01em; cursor: pointer;
+  box-shadow: var(--shadow-apple-md);
+  transition: transform 150ms var(--ease-apple), box-shadow 200ms var(--ease-apple);
+  margin-bottom: 14px;
+}
+.mat-fab-btn:hover { box-shadow: var(--shadow-apple-lg); transform: translateY(-1px); }
+.mat-fab-btn:active { transform: translateY(0); box-shadow: var(--shadow-apple-sm); }
+
+/* ============================================================
+   二、划词浮窗 · Apple 翻译 Popover 风
+   ============================================================ */
+.selection-scene {
+  background: var(--yxt-paper-open);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 12px;
+  padding: 44px 36px 64px;
+  position: relative;
+}
+.selection-scene p { font-size: 15px; max-width: 540px; }
+.selected-text { background: var(--yxt-dusk-25); border-radius: 3px; }
+
+.apple-popover {
+  position: absolute; width: 300px;
+  background: var(--yxt-paper-95);
+  backdrop-filter: blur(20px) saturate(1.4);   /* Apple 重毛玻璃（冲突：过度模糊禁忌的边缘） */
+  border-radius: 14px;
+  box-shadow: var(--shadow-apple-lg);
+  border: 0.5px solid var(--yxt-ink-08);
+  overflow: hidden;
+  font-family: var(--yxt-font-ui);
+}
+.apple-popover .ap-content { padding: 16px 18px 14px; }
+.apple-popover .ap-source {
+  font-size: 13px; color: var(--yxt-label); font-style: italic;
+  font-family: var(--yxt-font-serif); margin-bottom: 6px;
+}
+.apple-popover .ap-target {
+  font-size: 16px; font-weight: 500; letter-spacing: -0.01em;
+  font-family: var(--yxt-font-serif); color: var(--yxt-ink); line-height: 1.6;
+}
+.apple-popover .ap-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; background: var(--yxt-ink-04);
+  border-top: 0.5px solid var(--yxt-ink-06);
+}
+.apple-popover .ap-badge { font-size: 10px; color: var(--yxt-label); display: flex; align-items: center; gap: 5px; }
+.apple-popover .ap-badge i { width: 5px; height: 5px; border-radius: 50%; background: var(--yxt-ink); font-style: normal; }
+.apple-popover .ap-actions { display: flex; gap: 4px; }
+.ap-action {
+  width: 30px; height: 30px; border: none; border-radius: 8px;
+  background: transparent; color: var(--yxt-ink-60); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 180ms var(--ease-apple);
+}
+.ap-action:hover { background: var(--yxt-ink-08); color: var(--yxt-ink); }
+
+/* Material 式浮动操作条（小 FAB） */
+.mat-float-btn {
+  position: absolute;
+  height: 36px; padding: 0 16px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  border: none; border-radius: 10px;
+  box-shadow: var(--shadow-apple-md);
+  font-family: var(--yxt-font-ui); font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  transition: box-shadow 200ms var(--ease-apple), transform 150ms var(--ease-apple);
+}
+.mat-float-btn:hover { box-shadow: var(--shadow-apple-lg); transform: translateY(-1px); }
+
+/* ============================================================
+   三、Options · macOS 系统设置风
+   ============================================================ */
+.options-apple {
+  display: grid; grid-template-columns: 210px 1fr;
+  background: var(--yxt-paper-warm);
+  border: 1px solid var(--yxt-ink-06);
+  border-radius: 14px; overflow: hidden; min-height: 420px;
+  font-family: var(--yxt-font-ui);
+}
+.oa-sidebar {
+  background: var(--yxt-paper);  /* macOS: 侧边栏半透明 material */
+  border-right: 0.5px solid var(--yxt-ink-08);
+  padding: 18px 10px;
+}
+.oa-search {
+  margin: 0 6px 14px; padding: 6px 10px;
+  background: var(--yxt-ink-06); border-radius: 8px;
+  font-size: 12px; color: var(--yxt-annotation);
+  display: flex; align-items: center; gap: 6px;
+}
+.oa-nav-item {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 13px; letter-spacing: -0.01em; color: var(--yxt-ink-80);
+  padding: 6px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 1px;
+}
+.oa-nav-item .nav-icon {
+  width: 22px; height: 22px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--yxt-paper); font-size: 11px; flex-shrink: 0;
+}
+.oa-nav-item.active { background: var(--yxt-dusk-12); color: var(--yxt-ink); font-weight: 500; }
+.oa-main { padding: 26px 30px; background: var(--yxt-paper-warm); }
+.oa-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 18px; font-family: var(--yxt-font-ui); }
+.oa-group-label { font-size: 11px; color: var(--yxt-label); margin: 0 4px 6px; letter-spacing: 0; }
+.oa-group { margin-bottom: 22px; }
+.oa-row-input {
+  flex: 1; border: none; background: transparent; outline: none;
+  font-family: var(--yxt-font-ui); font-size: 14px; color: var(--yxt-ink);
+  letter-spacing: -0.01em; text-align: right;   /* Apple 设置页：值右对齐 */
+}
+.oa-row-input::placeholder { color: var(--yxt-annotation); }
+.oa-btn-primary {
+  padding: 7px 16px; border: none; border-radius: 6px;
+  background: var(--yxt-ink); color: var(--yxt-paper);
+  font-family: var(--yxt-font-ui); font-size: 13px; font-weight: 500; cursor: pointer;
+  box-shadow: var(--shadow-apple-sm);
+}
+.oa-btn-plain {
+  padding: 7px 16px; border: none; border-radius: 6px;
+  background: var(--yxt-ink-08); color: var(--yxt-ink);
+  font-family: var(--yxt-font-ui); font-size: 13px; font-weight: 500; cursor: pointer;
+}
+
+/* ============================================================
+   四、段落对照 · Apple Books 边注风
+   ============================================================ */
+.mock-page {
+  background: var(--yxt-paper-open);
+  border: 1px solid var(--yxt-ink-08);
+  border-radius: 12px;
+  padding: 32px 36px;
+}
+.mock-page h2 { font-size: 20px; font-weight: 500; margin-bottom: 16px; }
+.mock-page p { font-size: 15px; margin-bottom: 1em; }
+.block-tr {
+  display: block;
+  color: var(--yxt-translation);
+  font-size: 0.88em; line-height: 1.7;
+  margin: 0.35em 0 1.2em; padding-left: 14px;
+  border-left: 2px solid var(--yxt-dusk-40);
+  border-radius: 0 6px 6px 0;
+  transition: background 300ms var(--ease-apple);
+}
+.block-tr:hover { background: var(--yxt-dusk-08); }   /* Apple Books 式 hover 微光 */
+</style>
+</head>
+<body>
+<div class="demo-wrap">
+
+  <div class="demo-title">YuxTrans UI · Apple / Google 组件语言融合版</div>
+  <div class="demo-subtitle">美术思想不变：书房衬纸色板、衬线阅读字体、暮瞳微光全部保留；仅组件形态与布局语言借鉴 Apple HIG 与 Google Material。</div>
+  <div class="demo-legend">
+    <span class="legend-chip"><i class="borrow"></i>绿点 = 可吸收进书房衬纸的借鉴点</span>
+    <span class="legend-chip"><i class="conflict"></i>红点 = 与现有禁忌清单冲突，需你拍板</span>
+  </div>
+
+  <!-- ================= Popup ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">一、Popup · Apple 分组列表 + Material 主动作</div>
+    <div class="demo-section-note">
+      <div class="note-line"><i class="borrow"></i>分组列表（0.5px 分隔线、卡片浮于深一号底色）——信息分组天然清晰，解决 popup「灰蒙蒙无层级」</div>
+      <div class="note-line"><i class="borrow"></i>值右对齐的行内布局（状态行、模型行）——扫读动线对齐 Apple 设置</div>
+      <div class="note-line"><i class="conflict"></i>14px 连续圆角、iOS 分段控件、iOS 开关、10px 圆角主按钮——均触碰禁忌清单（大圆角/胶囊/iOS 开关）</div>
+    </div>
+    <div class="compare-grid">
+      <div class="popup-apple">
+        <div class="p-header">
+          <div class="p-logo">译</div>
+          <h1>YuxTrans</h1>
+          <button class="p-gear" title="设置">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+          </button>
+        </div>
+        <button class="mat-fab-btn">翻译整页</button>
+        <div class="ios-group">
+          <div class="ios-row">
+            <span class="status-dot"></span>
+            <div class="row-main">服务状态</div>
+            <div class="row-trail">已连接</div>
+          </div>
+          <div class="ios-row">
+            <div class="row-main">模型</div>
+            <div class="row-trail">deepseek-v4-flash <span class="chevron">›</span></div>
+          </div>
+        </div>
+        <div class="ios-group">
+          <div class="ios-row">
+            <div class="row-main">翻译模式<div class="row-sub">整页显示方式</div></div>
+            <div class="ios-seg" style="width:130px;"><div class="seg-ind"></div><span>仅译文</span><span class="active">双语</span></div>
+          </div>
+          <div class="ios-row">
+            <div class="row-main">流式翻译<div class="row-sub">逐字输出译文</div></div>
+            <button class="ios-switch"></button>
+          </div>
+          <div class="ios-row">
+            <div class="row-main">用量与缓存</div>
+            <div class="row-trail">16 条缓存 <span class="chevron">›</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family: var(--yxt-font-ui); font-size: 13px; color: var(--yxt-label); padding: 8px 4px;">
+        <p style="margin-bottom: 14px; color: var(--yxt-ink); font-weight: 500;">设计解读</p>
+        <p style="margin-bottom: 10px;">Apple 语言的精髓不是圆角，而是<strong style="color: var(--yxt-ink);">「分组即层级」</strong>：不需要标题和说明文字，卡片边界本身完成信息归类。这对 320px 的 popup 是刚需。</p>
+        <p style="margin-bottom: 10px;">深色底 + 浮起卡片的「底深卡浅」关系，恰好对应书房衬纸的「纸张叠压」隐喻——色板完全不用改。</p>
+        <p>iOS 开关和分段控件是冲突最大的部分。可以只借「分组列表」骨架，开关保留铅字拨杆——气质损失很小，禁忌不破。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 划词浮窗 ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">二、划词浮窗 · Apple 翻译 Popover 风</div>
+    <div class="demo-section-note">
+      <div class="note-line"><i class="borrow"></i>操作区沉入底部工具条（灰底分区）——图标不再挤在内容边缘，浮窗内部「内容 / 操作」分区明确</div>
+      <div class="note-line"><i class="borrow"></i>译文加粗为 16px 500 字重——Apple 翻译的做法：浮窗里译文是主角，原文是上下文</div>
+      <div class="note-line"><i class="conflict"></i>14px 圆角 + blur(20px) 重毛玻璃 + saturate(1.4)——触碰「过度毛玻璃」禁忌；操作条改深色 FAB 触碰「功能按钮气质」</div>
+    </div>
+    <div class="selection-scene">
+      <p>The framework provides <span class="selected-text">fine-grained control</span> over both the flow and state of your agent applications, with built-in persistence and human-in-the-loop support.</p>
+      <button class="mat-float-btn" style="top:118px; right:56px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        翻译
+      </button>
+      <div class="apple-popover" style="bottom:-16px; left:36px;">
+        <div class="ap-content">
+          <div class="ap-source">fine-grained control</div>
+          <div class="ap-target">细粒度控制</div>
+        </div>
+        <div class="ap-meta">
+          <span class="ap-badge"><i></i>DeepSeek · 0.6s</span>
+          <div class="ap-actions">
+            <button class="ap-action" title="钉住"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg></button>
+            <button class="ap-action" title="朗读"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg></button>
+            <button class="ap-action" title="复制"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Options ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">三、Options · macOS 系统设置风</div>
+    <div class="demo-section-note">
+      <div class="note-line"><i class="borrow"></i>彩色圆角导航图标——五个分区的识别从「读文字」变「认图形」，分区色 E1 恰好有处安放</div>
+      <div class="note-line"><i class="borrow"></i>设置行「标签左 / 值右」+ 0.5px 分隔线——扫读效率远高于下划线表单的长纵向排列，密度问题解决</div>
+      <div class="note-line"><i class="conflict"></i>设置项进圆角分组卡片——与文档「设置页不使用卡片」冲突；但 macOS 设置证明克制的小圆角分组不破坏安静感</div>
+    </div>
+    <div class="options-apple">
+      <div class="oa-sidebar">
+        <div class="oa-search">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          搜索设置
+        </div>
+        <div class="oa-nav-item active">
+          <span class="nav-icon" style="background:#A89880;">档</span>服务档案
+        </div>
+        <div class="oa-nav-item">
+          <span class="nav-icon" style="background:#B89A6E;">译</span>翻译偏好
+        </div>
+        <div class="oa-nav-item">
+          <span class="nav-icon" style="background:#B8A5C4;">互</span>交互与显示
+        </div>
+        <div class="oa-nav-item">
+          <span class="nav-icon" style="background:#8A9E9A;">存</span>数据与存储
+        </div>
+        <div class="oa-nav-item">
+          <span class="nav-icon" style="background:#B88878;">诊</span>诊断排障
+        </div>
+      </div>
+      <div class="oa-main">
+        <div class="oa-title">服务档案</div>
+        <div class="oa-group-label">服务商配置</div>
+        <div class="ios-group" style="box-shadow: var(--shadow-apple-sm);">
+          <div class="ios-row">
+            <div class="row-main">服务商</div>
+            <div class="row-trail">DeepSeek <span class="chevron">›</span></div>
+          </div>
+          <div class="ios-row">
+            <div class="row-main">API Key</div>
+            <input class="oa-row-input" type="password" value="sk-xxxxxxxxxxxx" style="max-width:180px;">
+          </div>
+          <div class="ios-row">
+            <div class="row-main">使用模型</div>
+            <div class="row-trail">deepseek-v4-flash <span class="chevron">›</span></div>
+          </div>
+          <div class="ios-row">
+            <div class="row-main">请求地址</div>
+            <input class="oa-row-input" placeholder="留空使用默认官方地址" style="max-width:180px;">
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button class="oa-btn-plain">连接测试</button>
+          <button class="oa-btn-primary">保存并启用档案</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 段落对照 hover ================= -->
+  <section class="demo-section">
+    <div class="demo-section-title">四、段落对照 · Apple Books 边注微交互</div>
+    <div class="demo-section-note">
+      <div class="note-line"><i class="borrow"></i>hover 译文段时暮瞳微光铺满整段（鼠标移到下面译文段试试）——零成本增强段落级 pair-hover 的可发现性</div>
+    </div>
+    <div class="mock-page">
+      <h2>LangGraph overview</h2>
+      <p>Trusted by companies shaping the future of agents—including Klarna, Uber, and J.P. Morgan—LangGraph is a low-level orchestration framework.
+        <span class="block-tr">受到 Klarna、Uber、摩根大通等塑造智能体未来的公司信赖，LangGraph 是一个底层编排框架。</span></p>
+      <p>It provides fine-grained control over both the flow and state of your application, with built-in persistence for long-running workflows.
+        <span class="block-tr">它对应用的流程与状态提供细粒度控制，并内置持久化能力以支撑长时间运行的工作流。</span></p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

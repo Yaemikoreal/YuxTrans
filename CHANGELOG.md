@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> UI v2.1（2026-08-04）：视觉系统整体转骨——「书房衬纸的皮，Apple 的骨」。新增段落对照双语模式，全部悬浮 UI 迁入 Shadow DOM，文字层级按 WCAG 重新校准。单测 **173 项全绿**，e2e 冒烟通过。
+
+### Added（UI v2.1）
+
+- **段落对照双语模式** — 新增 `bilingualStyle` 配置（行内注脚 / 段落对照）：段落对照下译文以块级元素整段跟随原文段落，原文排版零改动，hover 译文段出暮瞳微光；`page.js` 段落聚合渲染 + 三态（仅译文/行内/段落）纯 DOM 重渲染互切，恢复原文无残留。
+- **悬浮 UI Shadow DOM 隔离** — 划词浮窗、操作条、整页控制条、侧缘挂耳、悬停翻译、引导层全部经统一 `createShadowHost` 辅助迁入 Shadow DOM；`composedPath` 修复事件重定向；design-tokens `:root, :host` 双挂载；兑现设计文档 §9.3。
+- **三级文字层级令牌** — 新增 `--yxt-translation: #4A453F`（译文 8.6:1 AAA）与 `--yxt-label: #6B655C`（标签 5.1:1 AA）；批注灰 `#9E968A` 降级为纯装饰色（占位/分隔/禁用），深色模式对应提亮。
+- **iOS 胶囊开关组件** — `.yxt-switch`（纸墨调温：墨韵轨道 + 纸色滑点），popup / options 全面替换铅字拨杆；禁忌清单修订：胶囊形态仅允许开关。
+- **v2.1 圆角尺度** — `--yxt-radius-card(8px) / --yxt-radius-window(10px) / --yxt-radius-btn(6px)`；Apple 式双层柔和阴影令牌。
+
+### Changed（UI v2.1）
+
+- **Popup 重构** — Apple 分组卡片骨架（底深卡浅 + 0.5px 分隔线）、唯一实心墨主动作、分段控件、圆形设置图标钮、用量行 chevron 折叠；**锁定浅色方案**。
+- **Options 重构** — macOS 系统设置式骨架：分区色线性 SVG 导航图标、设置项「标签左 / 控件右」分组卡片、说明文字升级 label 色；保留五分区色、氛围层与深色模式。
+- **划词浮窗精修** — footer 改 Apple 底部工具条（灰底分区），pin/insert/copy/bad 四图标 fill 换 1.5px 线性，译文 500 字重，原文斜体 label 色，bad 反馈视觉弱化。
+- **主按钮形态追认** — 实心墨为规范（设计文档 §6.1 同步修订），hover 仅加深阴影不浮起。
+
+### Fixed（UI v2.1）
+
+- **content.css 全局 `code` 选择器污染宿主页面** — 限定至 `.yuxtrans-popup code, .yuxtrans-dict code`。
+- **pair-hover 监听器遗漏** — 初始双语翻译路径（`applyTranslation`）未绑定联动高亮，抽 `_bindPairHover` 辅助两处统一。
+- **options 诊断区高饱和硬编码色** — 3 处红绿 + 首次引导 `#8b6914` 全部换低饱和令牌。
+- **双语行内译文可读性** — 译文色 2.6:1 → 8.6:1，竖线 1.5px → 2px。
+
 > 依据 `docs/PROJECT_EVALUATION.md`（2026-07-27 评判报告）执行的阶段一「固本」：清零 P0 安全与 P1 功能正确性问题，补齐核心测试，建立最小 CI。单测 91 → **142 项全绿**。
 
 ### Security

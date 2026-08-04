@@ -1,8 +1,9 @@
 /**
  * YuxTrans Popup Styles
- * 书房衬纸版 —— 扩展弹窗视觉系统 v2.0
+ * UI v2.1 —— 书房衬纸的皮，Apple 的骨
  *
- * 像从书桌上拿起的一本独立小册子。
+ * 结构：header → 唯一实心墨主按钮 → 分组1（状态+模型）→ 分组2（模式+流式+用量）
+ * 视觉定稿参照 docs/ui-demo/v2.1-final.html 第一屏 Popup（浅色）。
  */
 
 * {
@@ -12,212 +13,366 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ===== Popup 锁定浅色方案（产品决策：弹窗不做深色） =====
+   design-tokens.css 的 dark media query 会覆盖 :root 令牌，
+   这里把 popup 用到的核心令牌重新声明为浅色值。
+   popup.css 加载于 design-tokens.css 之后，同优先级下后声明生效。 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 墨韵 */
+    --yxt-ink: #2C2825;
+    --yxt-ink-80: rgba(44, 40, 37, 0.8);
+    --yxt-ink-60: rgba(44, 40, 37, 0.6);
+    --yxt-ink-40: rgba(44, 40, 37, 0.4);
+    --yxt-ink-25: rgba(44, 40, 37, 0.25);
+    --yxt-ink-15: rgba(44, 40, 37, 0.15);
+    --yxt-ink-08: rgba(44, 40, 37, 0.08);
+    --yxt-ink-06: rgba(44, 40, 37, 0.06);
+    --yxt-ink-04: rgba(44, 40, 37, 0.04);
+
+    /* 书页 */
+    --yxt-paper: #F5F1EA;
+    --yxt-paper-98: rgba(245, 241, 234, 0.98);
+    --yxt-paper-95: rgba(245, 241, 234, 0.95);
+    --yxt-paper-92: rgba(245, 241, 234, 0.92);
+    --yxt-paper-50: rgba(245, 241, 234, 0.5);
+    --yxt-paper-warm: #EDE8DF;
+    --yxt-paper-stack: #E8E3DA;
+    --yxt-paper-open: #FAF8F3;
+
+    /* 批注（深浅两版数值本就一致，此处显式声明以文档化锁定意图） */
+    --yxt-annotation: #9E968A;
+    --yxt-annotation-70: rgba(158, 150, 138, 0.7);
+    --yxt-annotation-50: rgba(158, 150, 138, 0.5);
+    --yxt-annotation-30: rgba(158, 150, 138, 0.3);
+
+    /* 暮瞳 */
+    --yxt-dusk: #B8A5C4;
+    --yxt-dusk-40: rgba(184, 165, 196, 0.4);
+    --yxt-dusk-25: rgba(184, 165, 196, 0.25);
+    --yxt-dusk-20: rgba(184, 165, 196, 0.2);
+    --yxt-dusk-12: rgba(184, 165, 196, 0.12);
+    --yxt-dusk-08: rgba(184, 165, 196, 0.08);
+
+    /* v2.1 文字层级 */
+    --yxt-translation: #4A453F;
+    --yxt-label: #6B655C;
+
+    /* 状态色 */
+    --yxt-success: #7A9E8A;
+    --yxt-success-soft: rgba(122, 158, 138, 0.12);
+    --yxt-warning: #B89A6E;
+    --yxt-warning-soft: rgba(184, 154, 110, 0.12);
+    --yxt-error: #B87878;
+    --yxt-error-soft: rgba(184, 120, 120, 0.12);
+
+    /* 阴影：Apple 式柔和投影（浅色版） */
+    --yxt-shadow-sm: 0 1px 3px rgba(44, 40, 37, 0.08), 0 1px 2px rgba(44, 40, 37, 0.04);
+    --yxt-shadow-md: 0 4px 16px rgba(44, 40, 37, 0.10), 0 1px 4px rgba(44, 40, 37, 0.05);
+    --yxt-shadow-lg: 0 12px 40px rgba(44, 40, 37, 0.14), 0 4px 12px rgba(44, 40, 37, 0.06);
+    --yxt-shadow-xl: 0 20px 40px var(--yxt-ink-08), 0 8px 16px var(--yxt-ink-06);
+
+    /* 背景/文字/强调语义变量均派生自上述基础令牌，随引用自动回到浅色 */
+  }
+}
+
 /* Chrome popup 窗口本身不透明：html 若 transparent，圆角外会露出默认白角。
-   让 html 与 body 同纸底，四角与卡片融为一体，圆角描边自然浮现。 */
+   让 html 与 body 同纸底，四角与窗口融为一体。 */
 html {
-  background: var(--yxt-bg-elevated);
+  background: var(--yxt-paper-warm);
 }
 
 body {
-  font-family: var(--yxt-font);
+  font-family: var(--yxt-font-sans);
   width: 320px;
-  background: var(--yxt-bg-elevated);
-  color: var(--yxt-text);
-  padding: var(--yxt-space-5);
-  border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius-xl);
+  background: var(--yxt-paper-warm);
+  color: var(--yxt-ink);
+  padding: 18px 14px 14px;
+  border: 1px solid var(--yxt-ink-06);
+  border-radius: var(--yxt-radius-window);
   overflow: hidden;
-}
-
-code {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.92em;
-  background: var(--yxt-bg-tertiary);
-  color: var(--yxt-text);
-  border: 1px solid var(--yxt-border);
-  border-radius: var(--yxt-radius-sm);
-  padding: 1px 4px;
 }
 
 /* ===== Header ===== */
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--yxt-space-4);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: var(--yxt-space-2);
+  gap: 10px;
+  padding: 0 6px;
+  margin-bottom: 14px;
 }
 
 .brand-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--yxt-radius-md);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--yxt-radius-card);
   object-fit: cover;
   flex-shrink: 0;
-  border: 1px solid var(--yxt-border);
-  box-shadow: var(--yxt-shadow-sm);
 }
 
-.brand h1 {
-  font-family: var(--yxt-font-cjk);
-  font-size: var(--yxt-text-2xl);
-  font-weight: var(--yxt-font-medium);
-  letter-spacing: -0.01em;
-  color: var(--yxt-text);
+.header h1 {
+  flex: 1;
+  font-family: var(--yxt-font-sans);
+  font-size: 17px;
+  font-weight: var(--yxt-font-semibold);
+  letter-spacing: -0.02em;
+  color: var(--yxt-ink);
   line-height: 1.1;
 }
 
-.version {
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-2xs);
-  font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text-tertiary);
-  letter-spacing: 0.02em;
-}
-
-.popup-footer-meta {
-  margin-top: var(--yxt-space-3);
-  text-align: right;
-}
-
-.icon-btn {
-  background: transparent;
+/* 圆形设置按钮：墨 6% 底，hover 加深 */
+.gear-btn {
+  width: 30px;
+  height: 30px;
   border: none;
-  border-radius: var(--yxt-radius-md);
-  padding: var(--yxt-space-1) var(--yxt-space-2);
-  color: var(--yxt-text-secondary);
+  border-radius: 50%;
+  background: var(--yxt-ink-06);
+  color: var(--yxt-ink-60);
   cursor: pointer;
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-xs);
-  font-weight: var(--yxt-font-normal);
-  transition: all var(--yxt-transition-fast);
-}
-
-.icon-btn:hover {
-  color: var(--yxt-text);
-  background: var(--yxt-bg-hover);
-}
-
-/* ===== Status + Model row ===== */
-.control-row {
   display: flex;
   align-items: center;
-  gap: var(--yxt-space-3);
-  margin-bottom: var(--yxt-space-4);
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--yxt-space-1);
-  padding: var(--yxt-space-1) var(--yxt-space-2);
-  border-radius: var(--yxt-radius-sm);
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-xs);
-  font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text-secondary);
-  background: var(--yxt-bg-secondary);
-  white-space: nowrap;
+  justify-content: center;
   flex-shrink: 0;
+  transition: background var(--yxt-transition-normal), color var(--yxt-transition-normal);
 }
 
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
+.gear-btn:hover {
+  background: var(--yxt-ink-15);
+  color: var(--yxt-ink);
 }
 
-.status-pill.ok { color: var(--yxt-success); background: var(--yxt-success-soft); }
-.status-pill.error { color: var(--yxt-error); background: var(--yxt-error-soft); }
-.status-pill.warn { color: var(--yxt-warning); background: var(--yxt-warning-soft); }
-.status-pill.checking { color: var(--yxt-text-tertiary); background: var(--yxt-bg-tertiary); }
-
-.model-select {
-  flex: 1;
-  padding: var(--yxt-space-2) var(--yxt-space-1);
-  border: none;
-  border-bottom: 1px solid var(--yxt-annotation-50);
-  border-radius: 0;
-  background: transparent;
-  color: var(--yxt-text);
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-sm);
-  font-weight: var(--yxt-font-normal);
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 4px center;
-  padding-right: 22px;
-  transition: border-color var(--yxt-transition-fast);
-}
-
-.model-select:focus {
-  border-bottom-color: var(--yxt-dusk);
-  box-shadow: none;
-}
-
-.model-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  color: var(--yxt-text-tertiary);
-}
-
-/* ===== Main action（墨实心主按钮：暗色下 ink/paper 自动反转，一行媒体查询都不用加） ===== */
+/* ===== 唯一主动作：实心墨底纸字，hover 只加深阴影与底色，禁止浮起 ===== */
 .action-btn {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px;
   background: var(--yxt-ink);
   color: var(--yxt-paper);
   border: none;
-  border-radius: var(--yxt-radius-md);
+  border-radius: var(--yxt-radius-btn);
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-base);
-  font-weight: var(--yxt-font-medium);
+  font-weight: var(--yxt-font-semibold);
+  letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background var(--yxt-transition-fast);
-  margin-bottom: var(--yxt-space-4);
+  box-shadow: var(--yxt-shadow-md);
+  transition: background var(--yxt-transition-normal), box-shadow var(--yxt-transition-normal);
+  margin-bottom: 14px;
 }
 
 .action-btn:hover {
   background: var(--yxt-ink-80);
+  box-shadow: var(--yxt-shadow-lg);
 }
 
 .action-btn:active {
   background: var(--yxt-ink-60);
 }
 
-.action-btn:focus-visible {
+/* ===== 分组卡片（.yxt-group：paper-open 浮于 paper-warm 之上，「底深卡浅」） ===== */
+.yxt-group {
+  background: var(--yxt-paper-open);
+  border-radius: var(--yxt-radius-card);
+  box-shadow: var(--yxt-shadow-sm);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.yxt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  font-size: var(--yxt-text-base);
+  letter-spacing: -0.01em;
+}
+
+/* 0.5px 行分隔线 */
+.yxt-row + .yxt-row,
+.yxt-group > .stats-details {
+  border-top: 0.5px solid var(--yxt-ink-08);
+}
+
+.row-main {
+  flex: 1;
+  color: var(--yxt-ink);
+}
+
+.row-sub {
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-label);
+  letter-spacing: 0;
+  margin-top: 1px;
+}
+
+.row-trail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--yxt-text-md);
+  color: var(--yxt-label);
+}
+
+.chevron {
+  color: var(--yxt-annotation);
+  font-size: var(--yxt-text-sm);
+  display: inline-block;
+  transition: transform var(--yxt-transition-fast);
+}
+
+/* ===== 服务状态：状态点 + 右侧状态文字（四态 ok/error/warn/checking） ===== */
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--yxt-annotation);
+  flex-shrink: 0;
+}
+
+.status-dot.ok { background: var(--yxt-success); }
+.status-dot.error { background: var(--yxt-error); }
+.status-dot.warn { background: var(--yxt-warning); }
+.status-dot.checking { background: var(--yxt-annotation); }
+
+/* 状态文字随状态点着色（兄弟选择器，JS 只改状态点的 class） */
+.status-dot.ok ~ .row-trail { color: var(--yxt-success); }
+.status-dot.error ~ .row-trail { color: var(--yxt-error); }
+.status-dot.warn ~ .row-trail { color: var(--yxt-warning); }
+
+/* ===== 模型选择：无边框右对齐值样式 + 小 chevron ===== */
+.model-select {
+  flex: 1;
+  max-width: 190px;
+  border: none;
+  background: transparent;
+  color: var(--yxt-label);
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-md);
+  letter-spacing: -0.01em;
+  text-align: right;
   outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239E968A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right center;
+  padding-right: 16px;
+  border-radius: var(--yxt-radius-btn);
+  transition: color var(--yxt-transition-fast);
+}
+
+.model-select:hover {
+  color: var(--yxt-ink);
+}
+
+.model-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: var(--yxt-annotation);
+}
+
+/* ===== 翻译模式：iOS 分段控件（墨 6% 轨道 + paper-open 指示块） ===== */
+.mode-toggle {
+  position: relative;
+  display: flex;
+  width: 124px;
+  flex-shrink: 0;
+  background: var(--yxt-ink-06);
+  border-radius: var(--yxt-radius-btn);
+  padding: 2px;
+}
+
+.mode-toggle-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--yxt-label);
+  cursor: pointer;
+  padding: 5px 0;
+  text-align: center;
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-sm);
+  letter-spacing: -0.01em;
+  transition: color var(--yxt-transition-fast);
+}
+
+.mode-toggle-btn:hover {
+  color: var(--yxt-ink);
+}
+
+.mode-toggle-btn.active {
+  color: var(--yxt-ink);
+  font-weight: var(--yxt-font-medium);
+}
+
+.mode-toggle-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  background: var(--yxt-paper-open);
+  border-radius: var(--yxt-radius-md);
+  box-shadow: var(--yxt-shadow-sm);
+  transition: transform var(--yxt-transition-normal);
+  pointer-events: none;
+}
+
+.mode-toggle[data-active="bilingual"] .mode-toggle-indicator {
+  transform: translateX(100%);
+}
+
+/* ===== 流式翻译：.yxt-switch 的 label 变体 =====
+   tokens 层的 .yxt-switch 是按钮式（aria-checked + ::after 滑块）；
+   popup 为兼容现有 checkbox change 事件，保留 <input type="checkbox">，
+   这里隐藏按钮式 ::after，改用真实子元素 .yxt-switch-thumb 做滑块。 */
+label.yxt-switch {
+  display: inline-block;
+}
+
+label.yxt-switch::after {
+  content: none;
+}
+
+label.yxt-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.yxt-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yxt-paper-open);
+  box-shadow: 0 2px 4px rgba(44, 40, 37, 0.25);
+  transition: left var(--yxt-transition-normal);
+}
+
+label.yxt-switch:has(input:checked) {
+  background: var(--yxt-ink);
+}
+
+label.yxt-switch:has(input:checked) .yxt-switch-thumb {
+  left: 18px;
+}
+
+label.yxt-switch:has(input:focus-visible) {
   box-shadow: var(--yxt-shadow-glow);
 }
 
-/* ===== Stats：默认折叠，降低仪表盘感 ===== */
-.stats-details {
-  margin-top: var(--yxt-space-4);
-  border-top: 1px solid var(--yxt-divider);
-  padding-top: var(--yxt-space-2);
-}
-
+/* ===== 用量与缓存：chevron 展开统计区 ===== */
 .stats-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--yxt-space-2);
   cursor: pointer;
   list-style: none;
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-xs);
-  color: var(--yxt-text-secondary);
-  padding: var(--yxt-space-1) 0;
   user-select: none;
 }
 
@@ -225,31 +380,21 @@ code {
   display: none;
 }
 
-.stats-summary::before {
-  content: '▸';
-  color: var(--yxt-text-tertiary);
-  font-size: 10px;
-  margin-right: 2px;
-  display: inline-block;
-  transition: transform var(--yxt-transition-fast);
-}
-
-/* 用同一个字形旋转，避免 ▸/▾ 两个字符宽度不同导致抖动 */
-.stats-details[open] .stats-summary::before {
-  content: '▸';
-  transform: rotate(90deg);
-}
-
-.stats-summary-meta {
-  color: var(--yxt-text-tertiary);
+.stats-summary .row-trail {
+  font-size: var(--yxt-text-sm);
   font-variant-numeric: tabular-nums;
-  font-size: var(--yxt-text-2xs);
+}
+
+/* 同一字形旋转向下，避免两个字符宽度不同导致抖动 */
+.stats-details[open] .chevron {
+  transform: rotate(90deg);
 }
 
 .stats-row {
   display: flex;
   justify-content: space-around;
-  padding: var(--yxt-space-3) 0 var(--yxt-space-1);
+  padding: var(--yxt-space-2) var(--yxt-space-3) var(--yxt-space-3);
+  border-top: 0.5px solid var(--yxt-ink-08);
 }
 
 .stat-item {
@@ -261,7 +406,7 @@ code {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-md);
   font-weight: var(--yxt-font-medium);
-  color: var(--yxt-text-secondary);
+  color: var(--yxt-translation);
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
@@ -270,105 +415,25 @@ code {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-2xs);
   font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text-tertiary);
+  color: var(--yxt-label);
   margin-top: var(--yxt-space-1);
   letter-spacing: 0.02em;
 }
 
-/* ===== Toggle row ===== */
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0;
+/* ===== 底部版本号 ===== */
+.popup-footer-meta {
+  margin-top: 2px;
+  padding: 0 6px;
+  text-align: right;
 }
 
-.toggle-label {
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-sm);
-  font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text);
-}
-
-.toggle-hint {
+.version {
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-2xs);
-  color: var(--yxt-text-tertiary);
-  margin-top: 1px;
-}
-
-/* ===== Mode toggle ===== */
-.mode-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--yxt-space-4);
-}
-
-.mode-label {
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-sm);
   font-weight: var(--yxt-font-normal);
-  color: var(--yxt-text);
+  color: var(--yxt-label);
+  letter-spacing: 0.02em;
 }
-
-.mode-hint {
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-2xs);
-  color: var(--yxt-text-tertiary);
-  margin-top: 1px;
-}
-
-.mode-toggle {
-  position: relative;
-  display: inline-flex;
-  background: var(--yxt-bg-tertiary);
-  border: 1px solid var(--yxt-border-strong);
-  border-radius: var(--yxt-radius-md);
-  padding: 2px;
-}
-
-.mode-toggle-btn {
-  position: relative;
-  z-index: 1;
-  border: none;
-  background: transparent;
-  color: var(--yxt-text-secondary);
-  cursor: pointer;
-  padding: var(--yxt-space-1) var(--yxt-space-3);
-  font-family: var(--yxt-font-sans);
-  font-size: var(--yxt-text-xs);
-  font-weight: var(--yxt-font-normal);
-  transition: color var(--yxt-transition-fast);
-}
-
-.mode-toggle-btn:hover {
-  color: var(--yxt-text);
-}
-
-.mode-toggle-btn.active {
-  color: var(--yxt-text);
-  font-weight: var(--yxt-font-medium);
-}
-
-.mode-toggle-indicator {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: calc(50% - 2px);
-  background: var(--yxt-paper);
-  border-radius: var(--yxt-radius-sm);
-  box-shadow: var(--yxt-shadow-sm);
-  transition: transform var(--yxt-transition-normal);
-  pointer-events: none;
-}
-
-.mode-toggle[data-active="bilingual"] .mode-toggle-indicator {
-  transform: translateX(100%);
-}
-
-/* 铅字嵌入式开关 .paper-toggle 已移至 design-tokens.css，三端（popup / options）共享同一拨杆 */
 
 /* ===== Toast ===== */
 .toast {
@@ -377,10 +442,10 @@ code {
   left: 50%;
   transform: translateX(-50%) translateY(40px);
   background: var(--yxt-bg-glass);
-  color: var(--yxt-text);
+  color: var(--yxt-label);
   border: 1px solid var(--yxt-border);
   padding: var(--yxt-space-2) var(--yxt-space-4);
-  border-radius: var(--yxt-radius-lg);
+  border-radius: var(--yxt-radius-btn);
   font-family: var(--yxt-font-sans);
   font-size: var(--yxt-text-xs);
   font-weight: var(--yxt-font-normal);
@@ -389,8 +454,8 @@ code {
   opacity: 0;
   white-space: nowrap;
   pointer-events: none;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: var(--yxt-backdrop);
+  -webkit-backdrop-filter: var(--yxt-backdrop);
 }
 
 .toast.show {
@@ -404,11 +469,12 @@ code {
   background: var(--yxt-error-soft);
 }
 
-/* ===== 无障碍：键盘焦点环（options / popup 全局按钮统一） ===== */
+/* ===== 无障碍：键盘焦点环 ===== */
 button:focus-visible,
-.icon-btn:focus-visible,
+.gear-btn:focus-visible,
 .mode-toggle-btn:focus-visible,
-.model-select:focus-visible {
+.model-select:focus-visible,
+.stats-summary:focus-visible {
   outline: none;
   box-shadow: var(--yxt-shadow-glow);
 }

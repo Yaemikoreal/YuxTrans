@@ -33,14 +33,18 @@
         <div class="yuxtrans-hover-guide-text">按住 <kbd>${mod}</kbd> 键悬停任意段落，停留片刻即显示译文。可在设置中关闭此功能。</div>
         <button type="button" class="yuxtrans-hover-guide-btn">知道了</button>
       `;
-      document.body.appendChild(guide);
+      // Stage F：引导层挂进 shadow host，页面级定位由 host 承载
+      const { host, root } = this.createShadowHost('yuxtrans-host-hover-guide');
+      guide._yxtHost = host;
+      root.appendChild(guide);
+      document.body.appendChild(host);
       this._hoverGuideEl = guide;
       guide.querySelector('.yuxtrans-hover-guide-btn').addEventListener('click', () => this._dismissHoverGuide());
     },
 
     _dismissHoverGuide() {
       if (this._hoverGuideEl) {
-        this._hoverGuideEl.remove();
+        this._removeFloatingUI(this._hoverGuideEl);
         this._hoverGuideEl = null;
       }
       try { chrome.storage.local.set({ hoverGuideShown: true }); } catch (e) { /* ignore */ }
@@ -107,11 +111,14 @@
       const inExcluded = !!(el.closest(
         'pre, code, input, textarea, [contenteditable="true"], ' +
         '.yuxtrans-popup, .yuxtrans-float-btn, .yuxtrans-page-control, ' +
+        '.yuxtrans-shadow-host, ' + // Stage F：悬浮 UI 的 shadow host（事件重定向后 target 为 host）
         '.yuxtrans-hover-translation, .yuxtrans-dict'
       ));
       const alreadyDone = el.dataset.yxtHoverDone === '1' ||
         el.classList.contains('yuxtrans-translated') ||
-        el.classList.contains('yuxtrans-translated-bilingual');
+        el.classList.contains('yuxtrans-translated-bilingual') ||
+        // v2.1：段落对照已聚合译文的块容器不再触发悬停翻译
+        el.classList.contains('yuxtrans-translated-block');
       const text = (el.textContent || '').trim();
       const isCandidate = this.helpers.isHoverParagraphCandidate({
         tagName: el.tagName, textLen: text.length, inExcluded, alreadyDone
@@ -157,11 +164,20 @@
       closeBtn.type = 'button';
       closeBtn.setAttribute('aria-label', '关闭译文');
       closeBtn.innerHTML = '&times;';
-      closeBtn.addEventListener('click', () => block.remove());
       block.appendChild(closeBtn);
 
-      if (el.nextSibling) el.parentNode.insertBefore(block, el.nextSibling);
-      else el.parentNode.appendChild(block);
+      // Stage F：悬停译文块挂进 shadow host（in-flow，跟随段落后插入）；
+      // host 记入 _hoverBlocks，restoreOriginalTexts 据此清理，不再 document 直查类名
+      const { host, root } = this.createShadowHost('yuxtrans-host-hover-translation');
+      block._yxtHost = host;
+      root.appendChild(block);
+      if (el.nextSibling) el.parentNode.insertBefore(host, el.nextSibling);
+      else el.parentNode.appendChild(host);
+      this._hoverBlocks.add(host);
+      closeBtn.addEventListener('click', () => {
+        this._hoverBlocks.delete(host);
+        this._removeFloatingUI(block);
+      });
 
       const sourceLang = this.config.sourceLang || 'auto';
       const targetLang = this.config.targetLang || 'zh';

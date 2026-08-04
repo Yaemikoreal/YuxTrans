@@ -1760,9 +1760,9 @@ function getEndpoint(providerOverride = null) {
     : (p.apiEndpoint || API_ENDPOINTS[p.provider]);
 
   // 自动补全路径：若用户只填了基础 URL，追加 /chat/completions
-  // google/microsoft 走专门请求路径，不追加 OpenAI 风格后缀
+  // google 走专门请求路径，不追加 OpenAI 风格后缀
   if (ep && p.provider !== 'anthropic' && p.provider !== 'local' &&
-      p.provider !== 'google' && p.provider !== 'microsoft' &&
+      p.provider !== 'google' &&
       !ep.endsWith('/chat/completions') && !ep.endsWith('/v1/messages')) {
     ep = ep.replace(/\/+$/, '') + '/chat/completions';
   }
@@ -2082,11 +2082,6 @@ async function translateWithCloud(text, sourceLang = 'auto', targetLang = 'zh', 
       return googleTranslate(text, sourceLang, targetLang, p);
     }
 
-    // 微软 Azure Translator（需 Key，与 OpenAI 格式不同，走专门请求路径）
-    if (p.provider === 'microsoft') {
-      return microsoftTranslate(text, sourceLang, targetLang, p);
-    }
-
     // F2：词典模式支持自定义 prompt + jsonMode（复用同一 fetch/限流/超时路径）
     const prompt = options.promptOverride || buildTranslationPrompt(text, sourceLang, targetLang, context);
     // 方案 4：温度按场景分流--词典 0.0 / 划词 0.2 / 默认 0.3
@@ -2223,105 +2218,9 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
 }
 
 /**
- * 微软 Azure Translator 翻译（需 API Key，200 万字符/月免费额度）
- * 与 OpenAI 格式不同，走专门请求路径：POST + JSON 数组响应
- * 端点格式：https://api.cognitive.microsofttranslator.com/translate?api-version=2026-06-06&to=<lang>
- * 认证：Ocp-Apim-Subscription-Key 头 + 可选 Ocp-Apim-Subscription-Region
- * @param {string} text - 待翻译文本
- * @param {string} sourceLang - 源语言（auto 时 Azure 不传 from 参数，自动检测）
- * @param {string} targetLang - 目标语言
- * @param {object} providerOverride - 供应商档案覆盖
- * @returns {Promise<string>} 译文
+ * 流式翻译请求（SSE）
+ * 通过 chrome.tabs.sendMessage 逐字推送到 content script
  */
-async function microsoftTranslate(text, sourceLang, targetLang, providerOverride = null) {
-  const p = resolveProviderConfig(providerOverride);
-  const apiKey = getApiKey(p);
-  if (!apiKey) throw new Error('请先配置微软 Azure Translator API Key');
-
-  // 端点支持用户自定义 region（如 https://eastus.api.cognitive.microsofttranslator.com）
-  let endpoint = p.apiEndpoint || API_ENDPOINTS.microsoft;
-  // 兼容用户只填基础 URL 的情况
-  if (!endpoint.includes('/translate')) {
-    endpoint = endpoint.replace(/\/+$/, '') + '/translate';
-  }
-
-  // 构建查询参数
-  const params = new URLSearchParams({ 'api-version': '2026-06-06', to: targetLang });
-  if (sourceLang && sourceLang !== 'auto') {
-    params.set('from', sourceLang);
-  }
-  const url = `${endpoint}?${params.toString()}`;
-
-  // region 从端点 URL 中提取（如 eastus.api.cognitive... -> eastus）
-  let region = '';
-  try {
-    const host = new URL(endpoint).hostname;
-    const match = host.match(/^([a-z]+)\.api\.cognitive\.microsofttranslator\.com$/);
-    if (match) region = match[1];
-  } catch (e) { /* 忽略 URL 解析异常 */ }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const logStart = performance.now();
-
-  try {
-    const headers = {
-      'Content-Type': 'application/json; charset=UTF-8',
-      'Ocp-Apim-Subscription-Key': apiKey
-    };
-    if (region) headers['Ocp-Apim-Subscription-Region'] = region;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify([{ text }]),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const isRateLimit = response.status === 429;
-      updateRateLimitState(false, isRateLimit);
-      throw new Error(
-        isRateLimit
-          ? (ERROR_MESSAGES.RATE_LIMITED || '请求过于频繁，请稍后再试')
-          : formatError(response.status, await response.text())
-      );
-    }
-
-    const data = await response.json();
-    // 响应格式：[{ "translations": [{ "text": "译文", "to": "zh-Hans" }] }]
-    const translated = (Array.isArray(data) && data[0]?.translations?.[0]?.text) || '';
-    updateRateLimitState(true);
-    logRequest({
-      action: 'translate',
-      provider: 'microsoft',
-      model: 'azure-translator',
-      sourceLang,
-      targetLang,
-      prompt: truncateForLog(text),
-      response: truncateForLog(translated),
-      latencyMs: Math.round(performance.now() - logStart),
-      success: true
-    });
-    return translated.trim();
-  } catch (error) {
-    clearTimeout(timeoutId);
-    const finalError = error.name === 'AbortError' ? new Error('请求超时（30秒），请检查网络') : error;
-    logRequest({
-      action: 'translate',
-      provider: 'microsoft',
-      model: 'azure-translator',
-      sourceLang,
-      targetLang,
-      prompt: truncateForLog(text),
-      error: truncateForLog(finalError.message),
-      latencyMs: Math.round(performance.now() - logStart),
-      success: false
-    });
-    throw finalError;
-  }
-}
 async function translateWithStream(text, sourceLang, targetLang, tabId, options = {}) {
   const { context = null, providerOverride = null, requestId = null, sessionId = null, priority = SW.SCHEDULER_PRIORITY.NORMAL } = options;
   const p = resolveProviderConfig(providerOverride);
@@ -2361,17 +2260,6 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
     // F7：google 免费接口无 SSE，降级为一次性翻译并以单 chunk 推送（保持流式调用契约）
     if (p.provider === 'google') {
       const translated = await googleTranslate(text, sourceLang, targetLang, p);
-      if (tabId) {
-        chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
-      } else {
-        chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* popup 可能未打开 */ });
-      }
-      return translated;
-    }
-
-    // 微软 Azure Translator 无 SSE，降级为一次性翻译并以单 chunk 推送
-    if (p.provider === 'microsoft') {
-      const translated = await microsoftTranslate(text, sourceLang, targetLang, p);
       if (tabId) {
         chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
       } else {
@@ -3207,51 +3095,6 @@ async function testProviderConnection(testConfig) {
       // 响应体为数组，第一层第 0 项是翻译结果数组
       if (!Array.isArray(data) || !Array.isArray(data[0]) || !data[0][0]) {
         return { success: false, error: '谷歌接口返回格式异常' };
-      }
-      return { success: true };
-    } catch (error) {
-      if (error.name === 'AbortError') return { success: false, error: '连接超时' };
-      return { success: false, error: error.message };
-    }
-  }
-
-  // 微软 Azure Translator 探测（需 Key，POST + JSON 数组响应）
-  if (provider === 'microsoft') {
-    try {
-      let msEndpoint = endpoint;
-      if (!msEndpoint.includes('/translate')) {
-        msEndpoint = msEndpoint.replace(/\/+$/, '') + '/translate';
-      }
-      const params = new URLSearchParams({ 'api-version': '2026-06-06', to: 'zh' });
-      const url = `${msEndpoint}?${params.toString()}`;
-
-      let region = '';
-      try {
-        const host = new URL(msEndpoint).hostname;
-        const match = host.match(/^([a-z]+)\.api\.cognitive\.microsofttranslator\.com$/);
-        if (match) region = match[1];
-      } catch (e) { /* 忽略 */ }
-
-      const headers = {
-        'Content-Type': 'application/json; charset=UTF-8',
-        'Ocp-Apim-Subscription-Key': apiKey
-      };
-      if (region) headers['Ocp-Apim-Subscription-Region'] = region;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS);
-      const response = await fetch(url, {
-        method: 'POST', headers,
-        body: JSON.stringify([{ text: 'Hello' }]),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        return { success: false, error: formatError(response.status, await response.text()) };
-      }
-      const data = await response.json();
-      if (!Array.isArray(data) || !data[0]?.translations?.[0]?.text) {
-        return { success: false, error: 'Azure Translator 返回格式异常' };
       }
       return { success: true };
     } catch (error) {
@@ -4176,7 +4019,6 @@ if (typeof module !== 'undefined' && module.exports) {
     lookupWord,
     parseDictionaryResult,
     googleTranslate,
-    microsoftTranslate,
     resolveProviderConfig,
     getActiveProfile,
     addOrUpdateProfile,

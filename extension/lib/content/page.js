@@ -6,11 +6,21 @@
   const Ctor = (typeof YuxTransContent !== 'undefined' ? YuxTransContent : null)
     || (typeof globalThis !== 'undefined' ? globalThis.YuxTransContent : null);
   if (!Ctor) return;
+
+  // v2.1 段落对照：译文聚合的块级容器保守选择器（找不到匹配祖先则回退行内注脚）
+  const BLOCK_TR_CONTAINER_SELECTOR =
+    'p, li, blockquote, h1, h2, h3, h4, h5, h6, td, th, dd, dt, figcaption, summary';
+  // compareDocumentPosition 掩码常量（Node 全局在测试 mock 中可能缺常量定义）
+  const POS_FOLLOWING = 4;
+  const POS_PRECEDING = 2;
+
   Object.assign(Ctor.prototype, {
     /**
      * 流式翻译单个段落（整页流式路径的最小单元，逐段渲染）
      * 过程：插入临时 span → SW 经 streamChunk 消息按 requestId 推送 fullText 实时刷新 →
      * 最终响应到达后移除临时 span，由 applyTranslation 落为双语/仅译文节点。
+     * v2.1 段落对照（bilingualStyle=block）时临时 span 挂在所在块的 block-tr 内，
+     * 找不到块容器则退回行内流式。
      * 缓存写入由 SW 侧 translateStream 处理器负责（术语表 → 缓存 → setToCache，
      * 与划词流式同一约定），内容脚本不重复写缓存。
      * @param {object} nodeInfo - { text, node, isInViewport }
@@ -34,7 +44,12 @@
       tempSpan.className = 'yuxtrans-streaming-text';
       tempSpan.textContent = '';
 
-      if (node.nextSibling) {
+      // v2.1：段落对照模式下流式译文直接流入所在块的 block-tr（找不到块退回行内流式）
+      const streamBlockEl = this._useBlockStyle() ? this._findBlockContainer(node) : null;
+      if (streamBlockEl) {
+        const entry = this._ensureBlockTr(streamBlockEl);
+        entry.el.appendChild(tempSpan);
+      } else if (node.nextSibling) {
         parent.insertBefore(tempSpan, node.nextSibling);
       } else {
         parent.appendChild(tempSpan);
@@ -51,6 +66,8 @@
         const timeout = setTimeout(() => {
           this.pageTranslationState.streamingNodes.delete(requestId);
           if (tempSpan.parentNode) tempSpan.remove();
+          // v2.1：流式超时未落地译文时，清理可能残留的空 block-tr
+          if (streamBlockEl) this._pruneBlockTr(streamBlockEl);
           resolve({ success: false, error: '流式翻译超时' });
         }, YuxContentConsts.STREAM_TIMEOUT_MS);
 
@@ -77,9 +94,14 @@
                 (!this.pageTranslationState.isTranslating && !this._dynamicTranslating);
               if (!cancelled) {
                 this.applyTranslation(nodeInfo, response.text);
+              } else if (streamBlockEl) {
+                // v2.1：取消后译文不落地，清理可能残留的空 block-tr
+                this._pruneBlockTr(streamBlockEl);
               }
               resolve({ success: !cancelled, text: response.text, cached: response.cached });
             } else {
+              // v2.1：流式失败未落地译文时，清理可能残留的空 block-tr
+              if (streamBlockEl) this._pruneBlockTr(streamBlockEl);
               resolve({ success: false, error: response?.error || '流式翻译失败' });
             }
           }
@@ -125,6 +147,7 @@
               '.yuxtrans-side-tab', '.yuxtrans-float-btn', '.yuxtrans-site-rule-toast',
               '.yuxtrans-translated', '.yuxtrans-translated-bilingual',
               '.yuxtrans-bilingual-text', '.yuxtrans-streaming-text',
+              '.yuxtrans-block-tr', // v2.1：段落对照译文块不被再次收集翻译
               '.yuxtrans-hover-translation', '.yuxtrans-dict',
               '.yuxtrans-hover-guide', '.yuxtrans-page-toast' // #8A：自身 UI 不被整页翻译
             ].join(', ');
@@ -470,6 +493,122 @@
     },
 
     /**
+     * hover 译文联动高亮所在原文块（配对：originalTexts node <-> bilingualNode）
+     * 初始创建（applyTranslation）与模式切换重渲染（applyBilingualRender）两处共用
+     */
+    _bindPairHover(bilingualSpan, parent) {
+      bilingualSpan.addEventListener('mouseenter', () => parent.classList.add('yuxtrans-pair-hover'));
+      bilingualSpan.addEventListener('mouseleave', () => parent.classList.remove('yuxtrans-pair-hover'));
+    },
+
+    /**
+     * v2.1：当前是否按「段落对照」呈现（双语开 + bilingualStyle=block）
+     */
+    _useBlockStyle() {
+      return this.config.bilingualMode !== false && this.config.bilingualStyle === 'block';
+    },
+
+    /**
+     * v2.1：为文本节点找最近的块级容器（保守选择器）；找不到返回 null → 调用方回退行内模式
+     */
+    _findBlockContainer(node) {
+      const parent = node && node.parentElement;
+      if (!parent || typeof parent.closest !== 'function') return null;
+      return parent.closest(BLOCK_TR_CONTAINER_SELECTOR);
+    },
+
+    /**
+     * v2.1：取（或创建）块容器末尾的 div.yuxtrans-block-tr。
+     * 结构：div.yuxtrans-block-tr > span.yuxtrans-block-tr-body（聚合译文）；
+     * 流式期间临时 span.yuxtrans-streaming-text 亦挂在此 div 内，body 刷新不触碰流式节点。
+     */
+    _ensureBlockTr(blockEl) {
+      let entry = this._blockTrMap.get(blockEl);
+      if (entry && entry.el.parentNode) return entry;
+      const div = document.createElement('div');
+      div.className = 'yuxtrans-block-tr';
+      const body = document.createElement('span');
+      body.className = 'yuxtrans-block-tr-body';
+      div.appendChild(body);
+      blockEl.appendChild(div);
+      entry = { el: div, body, nodes: new Set() };
+      this._blockTrMap.set(blockEl, entry);
+      blockEl.classList.add('yuxtrans-translated-block');
+      // pair-hover：hover 段落译文块联动高亮原文块（与行内同一思路）
+      this._bindPairHover(div, blockEl);
+      return entry;
+    },
+
+    /**
+     * v2.1：块容器无已译节点且无在途流式节点时移除空 block-tr，避免残留空壳
+     */
+    _pruneBlockTr(blockEl) {
+      const entry = this._blockTrMap.get(blockEl);
+      if (!entry) return;
+      if (entry.nodes.size > 0) return;
+      // 真实 DOM 的 childNodes 是 NodeList（无 .some），统一用 for 循环判定
+      let hasStreaming = false;
+      for (const c of entry.el.childNodes) {
+        if (c.className === 'yuxtrans-streaming-text') { hasStreaming = true; break; }
+      }
+      if (hasStreaming) return;
+      if (entry.el.parentNode) entry.el.remove();
+      this._blockTrMap.delete(blockEl);
+      blockEl.classList.remove('yuxtrans-translated-block');
+    },
+
+    /**
+     * v2.1：按 DOM 顺序聚合块内全部已译文本节点的译文（空格连接）写入 body
+     */
+    _refreshBlockTr(blockEl) {
+      const entry = this._blockTrMap.get(blockEl);
+      if (!entry) return;
+      const parts = [];
+      for (const [n, data] of this.pageTranslationState.originalTexts) {
+        if (data.blockContainer === blockEl && typeof data.translated === 'string' && data.translated) {
+          parts.push({ node: n, text: data.translated });
+        }
+      }
+      parts.sort((a, b) => {
+        if (typeof a.node.compareDocumentPosition !== 'function') return 0;
+        const pos = a.node.compareDocumentPosition(b.node);
+        if (pos & POS_FOLLOWING) return -1;
+        if (pos & POS_PRECEDING) return 1;
+        return 0;
+      });
+      entry.body.textContent = parts.map((p) => p.text).join(' ');
+    },
+
+    /**
+     * v2.1：节点译文纳入所在块的聚合呈现（块容器→节点映射维护于此）
+     */
+    _applyBlockTranslation(node, blockEl, originalData) {
+      originalData.blockContainer = blockEl;
+      const entry = this._ensureBlockTr(blockEl);
+      entry.nodes.add(node);
+      this._refreshBlockTr(blockEl);
+    },
+
+    /**
+     * v2.1：节点从块聚合中摘除（切仅译文/行内双语/恢复原文前置）；空块随之清理
+     */
+    _removeFromBlock(node, data) {
+      const blockEl = data.blockContainer;
+      data.blockContainer = null;
+      if (!blockEl) return;
+      const entry = this._blockTrMap.get(blockEl);
+      if (!entry) return;
+      entry.nodes.delete(node);
+      if (entry.nodes.size === 0) {
+        if (entry.el.parentNode) entry.el.remove();
+        this._blockTrMap.delete(blockEl);
+        blockEl.classList.remove('yuxtrans-translated-block');
+      } else {
+        this._refreshBlockTr(blockEl);
+      }
+    },
+
+    /**
      * 应用翻译结果，保持样式
      */
     applyTranslation(nodeInfo, translatedText) {
@@ -488,14 +627,25 @@
         text: node.textContent,
         translated: translatedText, // 核心：缓存译文，支持动态切换
         styles: this.getElementStyles(parent),
-        bilingualNode: null
+        bilingualNode: null,
+        blockContainer: null // v2.1：段落对照模式下所属的块容器元素
       };
       this.pageTranslationState.originalTexts.set(node, originalData);
 
       const useBilingual = this.config.bilingualMode !== false; // 默认开启
+      // v2.1：双语 + 段落对照时聚合到块级译文容器；找不到块容器回退行内注脚
+      const blockEl = useBilingual && this.config.bilingualStyle === 'block'
+        ? this._findBlockContainer(node)
+        : null;
 
-      if (useBilingual) {
-        // 双语对照模式：新增一个隐藏了部分原样式的 span
+      if (useBilingual && blockEl) {
+        // 段落对照模式：不插行内 span，译文聚合到块容器末尾的 block-tr
+        this._applyBlockTranslation(node, blockEl, originalData);
+        parent.classList.add('yuxtrans-translated-bilingual');
+        // F3：原文呈现样式（弱化/模糊原文）
+        this._applyOriginalStyle(parent);
+      } else if (useBilingual) {
+        // 双语对照模式（行内注脚）：新增一个隐藏了部分原样式的 span
         const bilingualSpan = document.createElement('span');
         bilingualSpan.className = 'yuxtrans-bilingual-text';
         // 两端可以加一个细微的空白或破折号分隔
@@ -509,6 +659,7 @@
 
         originalData.bilingualNode = bilingualSpan;
         parent.classList.add('yuxtrans-translated-bilingual');
+        this._bindPairHover(bilingualSpan, parent);
         // F3：原文呈现样式（弱化/模糊原文）
         this._applyOriginalStyle(parent);
       } else {
@@ -895,7 +1046,11 @@
         </details>
       `;
 
-      document.body.appendChild(control);
+      // Stage F：控制条挂进 shadow host，bottom/right 定位由 host 承载
+      const { host, root } = this.createShadowHost('yuxtrans-host-page-control');
+      control._yxtHost = host;
+      root.appendChild(control);
+      document.body.appendChild(host);
       this.pageControl = control;
       this.pageControlListenersBound = false;
 
@@ -1093,12 +1248,9 @@
           this.config.siteList = res.siteList || [];
           this.restoreOriginalTexts();
           this.hidePageControl();
-          // 简短提示
-          const tip = document.createElement('div');
-          tip.className = 'yuxtrans-page-control';
-          tip.textContent = `已禁用本站（${hostname}）`;
-          document.body.appendChild(tip);
-          setTimeout(() => tip.remove(), 2500);
+          // 简短提示（复用页面级 toast；原借用 yuxtrans-page-control 类的裸 div 在 Stage F
+          // 剥离页面级定位后已无法自定位，故收敛到既有 toast 机制）
+          this._showPageToast(`已禁用本站（${hostname}）`);
         }
       } catch (e) {
         console.warn('[YuxTrans] 禁用本站失败:', e);
@@ -1138,12 +1290,31 @@
      */
     applyBilingualRender(isBilingual) {
       this.config.bilingualMode = isBilingual;
+      // v2.1：双语目标形态——段落对照（有块容器）或行内注脚；仅译文模式恒为 false
+      const wantBlock = isBilingual && this.config.bilingualStyle === 'block';
       for (const [node, data] of this.pageTranslationState.originalTexts) {
         const parent = node.parentElement;
         if (!parent) continue;
 
         if (isBilingual) {
-          if (!data.bilingualNode) {
+          const blockEl = wantBlock ? this._findBlockContainer(node) : null;
+          // 行内 → 块：先移除行内 span，避免双语呈现叠加
+          if (blockEl && data.translated && data.bilingualNode) {
+            if (data.bilingualNode.parentNode === parent) {
+              parent.removeChild(data.bilingualNode);
+            }
+            data.bilingualNode = null;
+          }
+          // 块 → 行内（或块容器已丢失）：从块聚合中摘除
+          if (!blockEl && data.blockContainer) {
+            this._removeFromBlock(node, data);
+          }
+          if (blockEl && data.translated) {
+            // 仅译文 → 段落对照：先恢复原文文本，再聚合译文
+            // （失败节点无 translated，走下方行内分支，与既有行为一致）
+            node.textContent = data.text;
+            this._applyBlockTranslation(node, blockEl, data);
+          } else if (!data.bilingualNode) {
             node.textContent = data.text;
             const span = document.createElement('span');
             span.className = 'yuxtrans-bilingual-text';
@@ -1151,9 +1322,7 @@
             if (node.nextSibling) parent.insertBefore(span, node.nextSibling);
             else parent.appendChild(span);
             data.bilingualNode = span;
-            // hover 译文联动高亮所在原文块（配对：originalTexts node <-> bilingualNode）
-            span.addEventListener('mouseenter', () => parent.classList.add('yuxtrans-pair-hover'));
-            span.addEventListener('mouseleave', () => parent.classList.remove('yuxtrans-pair-hover'));
+            this._bindPairHover(span, parent);
           }
           parent.classList.remove('yuxtrans-translated');
           parent.classList.add('yuxtrans-translated-bilingual');
@@ -1165,6 +1334,10 @@
               parent.removeChild(data.bilingualNode);
             }
             data.bilingualNode = null;
+          }
+          // v2.1：段落对照 → 仅译文：从块聚合摘除（空块随之移除）
+          if (data.blockContainer) {
+            this._removeFromBlock(node, data);
           }
           node.textContent = data.translated;
           parent.classList.remove('yuxtrans-translated-bilingual');
@@ -1249,6 +1422,13 @@
         }
       }
 
+      // v2.1：段落对照模式——移除全部 block-tr 元素，确保恢复原文后无残留空壳
+      for (const [blockEl, entry] of this._blockTrMap) {
+        if (entry.el.parentNode) entry.el.remove();
+        blockEl.classList.remove('yuxtrans-translated-block');
+      }
+      this._blockTrMap.clear();
+
       // 重置状态
       this.pageTranslationState.originalTexts.clear();
       this.pageTranslationState.translatedNodes = [];
@@ -1256,10 +1436,14 @@
       this._stopDynamicObserver();
       // F1：恢复原文时清理所有悬停翻译块，重置 hover-done 标记，并取消进行中的 hover 状态
       this._cancelHover();
-      document.querySelectorAll('.yuxtrans-hover-translation').forEach((b) => b.remove());
+      // Stage F：悬停译文块在 shadow host 内，document 直查类名不可达，改由 _hoverBlocks 引用清理
+      for (const host of this._hoverBlocks) {
+        if (host.parentNode) host.remove();
+      }
+      this._hoverBlocks.clear();
       document.querySelectorAll('[data-yxt-hover-done]').forEach((el) => { delete el.dataset.yxtHoverDone; });
-      // F4：清理所有已 pin 的浮窗
-      this.pinnedPopups.forEach((p) => { if (p.parentNode) p.remove(); });
+      // F4：清理所有已 pin 的浮窗（连同 shadow host）
+      this.pinnedPopups.forEach((p) => this._removeFloatingUI(p));
       this.pinnedPopups = [];
       // #5/#4：对照主浮窗引用与浮窗请求映射同步清理
       this._compareMainPopup = null;
@@ -1494,7 +1678,7 @@
         this._pageCollapseTimer = null;
       }
       if (this.pageControl) {
-        this.pageControl.remove();
+        this._removeFloatingUI(this.pageControl);
         this.pageControl = null;
       }
       this.removeSideTab();
@@ -1510,7 +1694,8 @@
         this._pageCollapseTimer = null;
       }
       if (!this.pageControl) return;
-      this.pageControl.style.display = 'none';
+      // Stage F：收起只隐藏 shadow host（内部 display:none 亦可，但 host 层面更彻底）
+      (this.pageControl._yxtHost || this.pageControl).style.display = 'none';
       this.removeSideTab();
 
       const tab = document.createElement('button');
@@ -1520,7 +1705,11 @@
       tab.setAttribute('aria-label', '展开整页翻译控制条');
       tab.title = '展开整页翻译控制条';
       tab.addEventListener('click', () => this.expandPageControlFromTab());
-      document.body.appendChild(tab);
+      // Stage F：挂耳挂进 shadow host，右缘定位与垂直居中 transform 由 host 承载
+      const { host, root } = this.createShadowHost('yuxtrans-host-side-tab');
+      tab._yxtHost = host;
+      root.appendChild(tab);
+      document.body.appendChild(host);
       this.sideTab = tab;
     },
 
@@ -1530,13 +1719,13 @@
     expandPageControlFromTab() {
       this.removeSideTab();
       if (this.pageControl) {
-        this.pageControl.style.display = '';
+        (this.pageControl._yxtHost || this.pageControl).style.display = '';
       }
     },
 
     removeSideTab() {
       if (this.sideTab) {
-        this.sideTab.remove();
+        this._removeFloatingUI(this.sideTab);
         this.sideTab = null;
       }
     }

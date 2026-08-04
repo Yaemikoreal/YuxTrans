@@ -548,6 +548,7 @@
       'selectionModifier',
       'enableStreaming',
       'originalStyle',
+      'bilingualStyle',
       'hoverTranslate',
       'dictMode',
       'autoCopy',
