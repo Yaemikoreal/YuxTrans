@@ -623,7 +623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       groq: 'https://console.groq.com/keys',
       anthropic: 'https://console.anthropic.com/settings/keys',
       google: '',
-      microsoft: 'https://azure.microsoft.com/free/ai-services/translator/'
+      microsoft: 'https://learn.microsoft.com/zh-cn/azure/ai-services/translator/'
     };
 
     /** 切换供应商时更新 Key 申请链接 */
@@ -944,7 +944,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     siliconflow: 'https://cloud.siliconflow.cn/account/ak',
     groq: 'https://console.groq.com/keys',
     anthropic: 'https://console.anthropic.com/settings/keys',
-    microsoft: 'https://azure.microsoft.com/free/ai-services/translator/',
+    microsoft: 'https://learn.microsoft.com/zh-cn/azure/ai-services/translator/',
     google: '',
     local: '',
     custom: ''
