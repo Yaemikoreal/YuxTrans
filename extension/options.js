@@ -935,6 +935,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (profileTab) profileTab.click();
   });
 
+  // 设置页主表单的供应商 Key 申请链接映射
+  const MAIN_PROVIDER_KEY_URLS = {
+    qwen: 'https://dashscope.console.aliyun.com/apiKey',
+    deepseek: 'https://platform.deepseek.com/api_keys',
+    openai: 'https://platform.openai.com/api-keys',
+    moonshot: 'https://platform.moonshot.cn/console/api-keys',
+    siliconflow: 'https://cloud.siliconflow.cn/account/ak',
+    groq: 'https://console.groq.com/keys',
+    anthropic: 'https://console.anthropic.com/settings/keys',
+    microsoft: 'https://azure.microsoft.com/free/ai-services/translator/',
+    google: '',
+    local: '',
+    custom: ''
+  };
+
   // 初始化 UI
   updateProviderUI();
   startCacheStatsUpdate();
@@ -971,21 +986,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       modelSelect.appendChild(opt);
     });
   }
-
-  // 设置页主表单的供应商 Key 申请链接映射
-  const MAIN_PROVIDER_KEY_URLS = {
-    qwen: 'https://dashscope.console.aliyun.com/apiKey',
-    deepseek: 'https://platform.deepseek.com/api_keys',
-    openai: 'https://platform.openai.com/api-keys',
-    moonshot: 'https://platform.moonshot.cn/console/api-keys',
-    siliconflow: 'https://cloud.siliconflow.cn/account/ak',
-    groq: 'https://console.groq.com/keys',
-    anthropic: 'https://console.anthropic.com/settings/keys',
-    microsoft: 'https://azure.microsoft.com/free/ai-services/translator/',
-    google: '',
-    local: '',
-    custom: ''
-  };
 
   function updateProviderUI() {
     const provider = providerSelect.value;
