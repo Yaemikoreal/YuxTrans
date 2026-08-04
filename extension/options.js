@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const downloadZipBtn = getById('downloadZipBtn');
   const showGuideBtn = getById('showGuideBtn');
   const apiKeyGroup = getById('apiKeyGroup');
+  const apiKeyLink = getById('apiKeyLink');
   const endpointGroup = getById('endpointGroup');
   const modelSelectGroup = getById('modelSelectGroup');
   const localModelGroup = getById('localModelGroup');
@@ -971,6 +972,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // 设置页主表单的供应商 Key 申请链接映射
+  const MAIN_PROVIDER_KEY_URLS = {
+    qwen: 'https://dashscope.console.aliyun.com/apiKey',
+    deepseek: 'https://platform.deepseek.com/api_keys',
+    openai: 'https://platform.openai.com/api-keys',
+    moonshot: 'https://platform.moonshot.cn/console/api-keys',
+    siliconflow: 'https://cloud.siliconflow.cn/account/ak',
+    groq: 'https://console.groq.com/keys',
+    anthropic: 'https://console.anthropic.com/settings/keys',
+    microsoft: 'https://azure.microsoft.com/free/ai-services/translator/',
+    google: '',
+    local: '',
+    custom: ''
+  };
+
   function updateProviderUI() {
     const provider = providerSelect.value;
     const isLocal = provider === 'local';
@@ -989,6 +1005,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const activeProfile = getActiveProfile(config);
     const selectedModel = activeProfile?.model || config?.model || '';
     if (!isLocal && !isCustom && !isGoogle && !isMicrosoft) loadModelOptions(provider, selectedModel);
+
+    // 更新 Key 申请链接（microsoft 等需 Key 供应商显示申请入口）
+    if (apiKeyLink) {
+      const url = MAIN_PROVIDER_KEY_URLS[provider] || '';
+      if (url) {
+        // eslint-disable-next-line no-unsanitized/property -- url 来自常量映射，非用户输入
+        apiKeyLink.innerHTML = `还没有 API Key？<a href="${url}" target="_blank" rel="noopener">前往申请 -></a>`;
+        apiKeyLink.style.display = '';
+      } else {
+        apiKeyLink.innerHTML = '';
+        apiKeyLink.style.display = 'none';
+      }
+    }
   }
 
   providerSelect?.addEventListener('change', updateProviderUI);
