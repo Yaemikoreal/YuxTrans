@@ -3067,7 +3067,36 @@ async function testProviderConnection(testConfig) {
   // 表单不回显明文 Key：未携带 apiKey 时回退到已保存的同供应商档案 Key
   const apiKey = testConfig.apiKey || getStoredApiKeyForProvider(provider);
 
-  if (!apiKey && provider !== 'local') return { success: false, error: '请先填写 API Key' };
+  // 免配置供应商（local/custom/google）无需 API Key
+  if (!apiKey && !isNoConfigProvider(provider)) return { success: false, error: '请先填写 API Key' };
+
+  // F7：谷歌免费接口走 GET + 数组响应，非 OpenAI 格式，单独探测
+  if (provider === 'google') {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS);
+      const url = new URL(endpoint);
+      url.searchParams.set('client', 'gtx');
+      url.searchParams.set('dt', 't');
+      url.searchParams.set('sl', 'auto');
+      url.searchParams.set('tl', 'zh');
+      url.searchParams.set('q', 'Hello');
+      const response = await fetch(url.toString(), { method: 'GET', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        return { success: false, error: formatError(response.status, await response.text()) };
+      }
+      const data = await response.json();
+      // 响应体为数组，第一层第 0 项是翻译结果数组
+      if (!Array.isArray(data) || !Array.isArray(data[0]) || !data[0][0]) {
+        return { success: false, error: '谷歌接口返回格式异常' };
+      }
+      return { success: true };
+    } catch (error) {
+      if (error.name === 'AbortError') return { success: false, error: '连接超时' };
+      return { success: false, error: error.message };
+    }
+  }
 
   const prompt = 'Translate to Chinese. Provide only the translation.\n\nHello';
 
