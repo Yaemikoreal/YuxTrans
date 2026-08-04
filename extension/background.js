@@ -2274,15 +2274,15 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
     const controller = new AbortController();
     // 接入整页取消会话：用户取消整页流式翻译时 abort 在途 SSE（与批量路径对齐，避免继续消耗配额）
     registerSessionController(sessionId, controller);
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2); // 流式给更多时间
+    // 全生命周期超时：覆盖建连 + SSE 流读取全过程。
+    // 之前在 response 到达后 clearTimeout 导致流 stall 时无超时保护，Promise 永久悬挂。
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 2);
 
     try {
       const response = await fetch(endpoint, {
         method: 'POST', headers, body,
         signal: controller.signal
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const isRateLimit = response.status === 429;
@@ -2295,62 +2295,65 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
         );
       }
 
+      // timeoutId 贯穿整个流读取过程（不在 response 到达时清除），
+      // 避免 SSE 流中途 stall 导致 Promise 永久悬挂。
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullText = '';
       let buffer = '';
 
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') continue;
 
-          try {
-            const parsed = JSON.parse(data);
-            let chunk = '';
+            try {
+              const parsed = JSON.parse(data);
+              let chunk = '';
 
-            if (format === 'anthropic') {
-              chunk = parsed.delta?.text || '';
-            } else if (p.provider === 'local') {
-              chunk = parsed.message?.content || '';
-            } else {
-              chunk = parsed.choices?.[0]?.delta?.content || '';
-            }
-
-            if (chunk) {
-              fullText += chunk;
-              // 推送增量文本到页面或 Popup
-              if (tabId) {
-                chrome.tabs.sendMessage(tabId, {
-                  action: 'streamChunk',
-                  requestId,
-                  chunk,
-                  fullText
-                }).catch(() => { /* tab 可能已关闭 */ });
+              if (format === 'anthropic') {
+                chunk = parsed.delta?.text || '';
+              } else if (p.provider === 'local') {
+                chunk = parsed.message?.content || '';
               } else {
-                chrome.runtime.sendMessage({
-                  action: 'streamChunk',
-                  requestId,
-                  chunk,
-                  fullText
-                }).catch(() => { /* popup 可能未打开 */ });
+                chunk = parsed.choices?.[0]?.delta?.content || '';
               }
+
+              if (chunk) {
+                fullText += chunk;
+                // 推送增量文本到页面或 Popup
+                if (tabId) {
+                  chrome.tabs.sendMessage(tabId, {
+                    action: 'streamChunk',
+                    requestId,
+                    chunk,
+                    fullText
+                  }).catch(() => { /* tab 可能已关闭 */ });
+                } else {
+                  chrome.runtime.sendMessage({
+                    action: 'streamChunk',
+                    requestId,
+                    chunk,
+                    fullText
+                  }).catch(() => { /* popup 可能未打开 */ });
+                }
+              }
+            } catch (e) {
+              // 忽略不可解析的行
             }
-          } catch (e) {
-            // 忽略不可解析的行
           }
         }
-      }
 
-      // 流式翻译成功，更新速率限制状态
+      // 流式翻译成功，清除超时并更新速率限制状态
+      clearTimeout(timeoutId);
       updateRateLimitState(true);
 
       return fullText.trim();

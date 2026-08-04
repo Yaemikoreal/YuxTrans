@@ -250,16 +250,26 @@
 
       // #4：登记 requestId -> 浮窗映射，响应与流式 chunk 路由回捕获的浮窗（pin 或快速连划不串台）
       const requestId = this._registerPopupRequest(popup);
-      chrome.runtime.sendMessage(
-        {
-          action,
-          text,
-          sourceLang,
-          targetLang,
-          context,
-          requestId
-        },
-        (response) => {
+      // SW 重启/扩展重载后 chrome.runtime 上下文失效，防御性检查避免抛未捕获异常
+      if (!chrome.runtime?.id) {
+        clearTimeout(this._translateWatchdog);
+        this._translateWatchdog = null;
+        this.isTranslating = false;
+        this._takePopupForRequest(requestId);
+        this.updatePopup('扩展已重新加载，请刷新页面', false, 'error', undefined, popup);
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage(
+          {
+            action,
+            text,
+            sourceLang,
+            targetLang,
+            context,
+            requestId
+          },
+          (response) => {
           clearTimeout(this._translateWatchdog);
           this._translateWatchdog = null;
           this.isTranslating = false;
@@ -296,7 +306,15 @@
             }
           }
         }
-      );
+        );
+      } catch (e) {
+        // Extension context invalidated：SW 已卸载，清理在途状态与浮窗
+        clearTimeout(this._translateWatchdog);
+        this._translateWatchdog = null;
+        this.isTranslating = false;
+        this._takePopupForRequest(requestId);
+        this.updatePopup('扩展已重新加载，请刷新页面', false, 'error', undefined, popup);
+      }
     },
 
     showPopup(x, y, sourceText) {

@@ -168,22 +168,40 @@
       // 段落普遍 >12 字符，缓存正常生效；走非流式 translate（spec：携带 requestId 便于未来流式升级路由）
       this._hoverSeq = (this._hoverSeq || 0) + 1;
       const requestId = 'hover-' + this._hoverSeq;
-      chrome.runtime.sendMessage(
-        { action: 'translate', text, sourceLang, targetLang, context: this.getPageContext(), requestId },
-        (response) => {
-          if (loading.parentNode) loading.remove();
-          const span = document.createElement('span');
-          if (response && response.success) {
-            span.textContent = response.text;
-          } else {
-            // #8C：失败清除 done 标记，允许再次悬停重试
-            delete el.dataset.yxtHoverDone;
-            span.textContent = (response && response.error) || '翻译失败';
-            span.style.color = 'var(--yxt-error)';
+      // SW 重启/扩展重载后 chrome.runtime 上下文失效，防御性检查避免抛未捕获异常
+      if (!chrome.runtime?.id) {
+        loading.remove();
+        const span = document.createElement('span');
+        span.textContent = '扩展已重新加载，请刷新页面';
+        span.style.color = 'var(--yxt-error)';
+        block.insertBefore(span, closeBtn);
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage(
+          { action: 'translate', text, sourceLang, targetLang, context: this.getPageContext(), requestId },
+          (response) => {
+            if (loading.parentNode) loading.remove();
+            const span = document.createElement('span');
+            if (response && response.success) {
+              span.textContent = response.text;
+            } else {
+              // #8C：失败清除 done 标记，允许再次悬停重试
+              delete el.dataset.yxtHoverDone;
+              span.textContent = (response && response.error) || '翻译失败';
+              span.style.color = 'var(--yxt-error)';
+            }
+            block.insertBefore(span, closeBtn);
           }
-          block.insertBefore(span, closeBtn);
-        }
-      );
+        );
+      } catch (e) {
+        // Extension context invalidated 等：SW 已卸载，清理 UI
+        if (loading.parentNode) loading.remove();
+        const span = document.createElement('span');
+        span.textContent = '扩展已重新加载，请刷新页面';
+        span.style.color = 'var(--yxt-error)';
+        block.insertBefore(span, closeBtn);
+      }
     },
 
     /**
