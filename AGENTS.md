@@ -77,10 +77,11 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 
 ### 关键技术设计
 
-- **双缓存策略**：内存热缓存（`Map` LRU，上限 32MB）+ IndexedDB 冷数据持久化（`getFromCache` 异步两级：内存未命中单键回查并提升；缓存键格式 `v3:p1:<modelSlug>:<src>:<tgt>:<style>:<归一化文本>`，详见 CONTEXT.md）。
+- **双缓存策略**：内存热缓存（`Map` LRU，上限 32MB）+ IndexedDB 冷数据持久化（`getFromCache` 异步两级：内存未命中单键回查并提升；缓存键格式 `v3:p3:<modelSlug>:<src>:<tgt>:<style>:<归一化文本>`，详见 CONTEXT.md）。
+- **整页上下文注入**：批量翻译 system prompt 注入页面上下文（domain+title，标注「仅风格参考、禁止翻译/提及」）；滑动窗口（上一批末尾原文+译文）分档 off/short 150/long 400（`config.batchContextWindow`，默认 long，旧布尔 true 迁移为 short）。
 - **自适应速率限制**：根据连续成功/失败次数动态调整并发（1~10）与请求延迟（0~2000ms），429 触发 30s 冷却。
 - **批量翻译降级**：先筛缓存命中，未命中批量请求 JSON 数组；解析失败则单句并发补全，最多 3 次重试。
-- **整页翻译**：DOM 文本节点分批处理，双语 `<span>` 跟在原文后，可视区域优先，动态内容增量翻译，可恢复原文。
+- **整页翻译**：最小单位为**段落**（W1：`collectTextNodes` 过滤后按 `BLOCK_TR_CONTAINER_SELECTOR` 块容器聚合文本节点，记录 `nodeSpans` 偏移映射）；content 层不按条数硬打包，段落/句条目整体一次 `translateBatch` 发给 SW 二次切分（W2，本地 Ollama 仍逐段单发）；超长段落（> `SENTENCE_SPLIT_THRESHOLD_CHARS`=4000，`lib/content/constants.js`）按句末标点二次拆分为句级条目（W4，切句含缩写/小数/省略号白名单，见 `_splitSentences`），句级缓存粒度由 SW 逐条缓存自动生效；回写统一段落级（W5：`originalTexts` 键为段落对象，`_cleanParagraphRender` + `_renderParagraph` 幂等重绘 block/inline/replace 三态）。可视区域优先，动态内容增量翻译，可恢复原文。
 - **悬浮 UI Shadow DOM 隔离（Stage F）**：划词浮窗/浮动操作条/整页控制条/侧缘挂耳/悬停译文块/引导层统一经 `content.js` 的 `createShadowHost(hostClass)` 创建——host 承载页面级定位（`.yuxtrans-host-*`，见 content.css），shadow root 内 `<link>` 共享 design-tokens.css 与 content.css（manifest `web_accessible_resources`）；行内双语 span、段落对照 block-tr、流式 span 等与文本流交织的元素例外，留在全局 DOM。document 级事件监听判断自有 UI 必须走 `_eventClosest`（内部用 `e.composedPath()`，target 会被重定向为 host）；悬浮元素引用保存在实例上（`this.popup`/`this.pageControl`/`this.sideTab`/`_hoverBlocks` 等），移除统一走 `_removeFloatingUI`（连同 host），不要 document 直查类名。
 
 ## 5. 构建、安装与运行命令
@@ -111,7 +112,7 @@ content.js ── chrome.runtime.sendMessage ──► background.js (Service Wo
 node --test extension/tests/      # 运行全部扩展单元测试
 npm test                          # 等价：node --test extension/tests/*.test.js
 npm run lint                      # ESLint 静态检查（no-undef / no-unsanitized 为 error）
-npm run test:e2e                  # Playwright 冒烟：真实 Chromium 加载扩展，模拟划词断言浮窗（headed；Linux 需 xvfb-run）
+npm run test:e2e                  # Playwright：真实 Chromium 加载扩展（headed；Linux 需 xvfb-run）。smoke 划词浮窗 + page-translate 整页全链路（本地 mock Ollama：基本翻译/连点终止/模式切换即时重渲染；需 11434 端口空闲）
 ```
 
 覆盖范围：`product-helpers.test.js`（商品翻译辅助逻辑）、`logo-icons.test.js`（图标资源）、`sw-modules.test.js`（Service Worker 核心模块）等。提交前运行 `npm test` 确保全部通过。修改 `options.js`、`background.js`、`content.js` 后仍建议在真实浏览器中加载扩展手动验证端到端路径。

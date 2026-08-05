@@ -437,7 +437,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (siteListTextarea) siteListTextarea.value = (config.siteList || []).join('\n');
     if (autoDetectLangInput) autoDetectLangInput.checked = config.autoDetectLang !== false;
     if (autoFallbackInput) autoFallbackInput.checked = config.autoFallback !== false;
-    if (batchContextWindowInput) batchContextWindowInput.checked = config.batchContextWindow !== false;
+    // 跨段上下文窗口档位回填：兼容旧布尔值（false→off，true→short），缺省 long
+    if (batchContextWindowInput) {
+      const bcw = config.batchContextWindow;
+      batchContextWindowInput.value = bcw === false ? 'off' : (bcw === true ? 'short' : (bcw || 'long'));
+    }
     if (enableStreamingInput) enableStreamingInput.checked = config.enableStreaming !== false;
     if (offlineModeInput) offlineModeInput.checked = !!config.offlineMode;
     // F1-F6 配置回填
@@ -1660,7 +1664,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       siteList: getVal(siteListTextarea).split('\n').map((s) => s.trim()).filter(Boolean),
       autoDetectLang: autoDetectLangInput ? getChecked(autoDetectLangInput) : true,
       autoFallback: autoFallbackInput ? getChecked(autoFallbackInput) : true,
-      batchContextWindow: batchContextWindowInput ? getChecked(batchContextWindowInput) : true,
+      batchContextWindow: batchContextWindowInput ? (getVal(batchContextWindowInput) || 'long') : 'long',
       enableStreaming: enableStreamingInput ? getChecked(enableStreamingInput) : true,
       offlineMode: offlineModeInput ? getChecked(offlineModeInput) : false,
       hoverTranslate: hoverTranslateInput ? getChecked(hoverTranslateInput) : true,

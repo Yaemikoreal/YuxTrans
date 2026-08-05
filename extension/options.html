@@ -698,9 +698,13 @@
             <div class="setting-row">
               <div class="setting-info">
                 <label class="form-label" for="batchContextWindow">整页跨段上下文</label>
-                <p class="setting-desc">整页翻译时注入上一批末尾上下文，提升跨段指代连贯性；技术文档可关闭以节省 token</p>
+                <p class="setting-desc">整页翻译时注入上一批末尾上下文，提升跨段指代连贯性；技术文档可选短档或关闭以节省 token</p>
               </div>
-              <label class="yxt-switch-label"><input type="checkbox" id="batchContextWindow" checked><span class="yxt-switch" aria-hidden="true"></span></label>
+              <select id="batchContextWindow" class="setting-control">
+                <option value="off">关闭</option>
+                <option value="short">短（150 字）</option>
+                <option value="long" selected>长（400 字，推荐）</option>
+              </select>
             </div>
           </div>
         </details>

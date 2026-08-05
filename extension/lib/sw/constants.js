@@ -78,10 +78,13 @@
   SW.REQUEST_TIMEOUT_MS = 30000;
   SW.MAX_BATCH_CHARS = 4000;
   SW.DEFAULT_BATCH_SIZE = 20;
+  // 整页跨段上下文滑动窗口档位字符数：off 关闭 / short 150 字 / long 400 字（默认 long）
+  SW.BATCH_CONTEXT_WINDOW_CHARS = { off: 0, short: 150, long: 400 };
   // Prompt 规则版本：STRICT OUTPUT RULES / 上下文注入等 prompt 结构变更时 bump，
   // 配合 CACHE_KEY_VERSION 让旧缓存自动失效，避免译文错配。
   // p2: 批量规则移入 system message + 温度按场景分流（划词 0.2 / 批量 0.1 / 词典 0.0 / 流式 0.3）
-  SW.PROMPT_VERSION = 'p2';
+  // p3: 整页批量 system prompt 注入页面上下文（domain+title，风格参考级）+ 滑动窗口分档（150/400）
+  SW.PROMPT_VERSION = 'p3';
   // v3：键内编入 promptVersion + model，术语表/模型/prompt 变更后旧缓存不再误命中。
   SW.CACHE_KEY_VERSION = 'v3';
 

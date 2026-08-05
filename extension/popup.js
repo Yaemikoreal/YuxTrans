@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     connectionText.textContent = text;
   }
 
-  // ===== 整页翻译 / 空档案 CTA =====
+  // ===== 整页翻译 / 终止翻译 / 空档案 CTA =====
   function updatePrimaryAction() {
     if (!translatePageBtn) return;
     if (!modelRecords.length) {
@@ -137,6 +137,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       translatePageBtn.textContent = '翻译整页';
       translatePageBtn.dataset.mode = 'translate';
+    }
+  }
+
+  // 与当前标签页同步按钮状态：任务进行中显示「终止翻译」，否则「翻译整页」
+  async function syncTranslateBtnState() {
+    if (!translatePageBtn || translatePageBtn.dataset.mode === 'configure') return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      const res = await chrome.tabs.sendMessage(tab.id, { action: 'getPageTranslationState' });
+      if (res?.isTranslating) {
+        translatePageBtn.textContent = '终止翻译';
+        translatePageBtn.dataset.mode = 'cancel';
+      } else {
+        translatePageBtn.textContent = '翻译整页';
+        translatePageBtn.dataset.mode = 'translate';
+      }
+    } catch (e) {
+      // content script 未注入（系统页等）：保持「翻译整页」，点击时会给出提示
     }
   }
 
@@ -151,8 +170,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('无法获取当前标签页', true);
         return;
       }
+      // 任务期间按钮为「终止翻译」：停止当前翻译（保留已落地译文），按钮变回「翻译整页」
+      if (translatePageBtn.dataset.mode === 'cancel') {
+        await chrome.tabs.sendMessage(tab.id, { action: 'cancelPageTranslation' });
+        translatePageBtn.textContent = '翻译整页';
+        translatePageBtn.dataset.mode = 'translate';
+        showToast('已终止翻译并恢复原文');
+        return;
+      }
       await chrome.tabs.sendMessage(tab.id, { action: 'translatePage' });
-      window.close();
+      // 不再立即关闭弹窗：任务期间按钮切换为「终止翻译」，状态由轮询归位
+      translatePageBtn.textContent = '终止翻译';
+      translatePageBtn.dataset.mode = 'cancel';
     } catch (e) {
       // 区分 content script 未注入（系统页/PDF/未刷新）与其它错误
       const notInjected = e && /Receiving end does not exist|Could not establish connection/i.test(e.message);
@@ -241,6 +270,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (statsSummaryMeta) {
         statsSummaryMeta.textContent = `命中 ${rate}% · ${formatCompact(stats?.wordCount)} 条`;
       }
+      // 顺带同步整页按钮状态（任务完成/被取消后归位为「翻译整页」）
+      syncTranslateBtnState();
     } catch (e) {
       // 静默失败，避免破坏面板
     }
@@ -259,6 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderModelSelect();
   updatePrimaryAction();
   renderModeToggle();
+  syncTranslateBtnState();
   if (modelRecords.length === 0) {
     setConnectionStatus('error', '未配置');
   } else {

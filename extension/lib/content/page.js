@@ -119,9 +119,11 @@
     // ===== 整页翻译优化 =====
 
     /**
-     * 收集可翻译的文本节点，按可视区域排序。
+     * 收集可翻译的文本节点并按块容器聚合为段落，按可视区域排序（粒度：段落）。
      * Q1：两阶段执行——TreeWalker 先纯收集（不触发布局），再分批读取 getBoundingClientRect，
      * 批间让出主线程，避免大页面数千节点连续同步布局读取造成启动长卡顿。
+     * W1：过滤后的文本节点按所属块容器聚合——同一块内的节点按 DOM 序拼接为段落文本，
+     * 记录 nodeSpans 偏移映射，句子不再被 <a>/<b> 等内联标签切碎。
      */
     async collectTextNodes(root) {
       // F6：正文区域识别--smartContentDetection 开启时只遍历正文根，跳过导航/侧栏/页脚
@@ -230,14 +232,166 @@
         }
       }
 
-      // 排序：可视区域优先
-      nodes.sort((a, b) => {
+      // W1：按块容器聚合为段落（过滤规则不变，粒度由文本节点换成段落）
+      const paragraphs = this._groupNodesIntoParagraphs(nodes);
+
+      // 排序：可视区域优先（段落粒度——段内任一节点可视即段可视）
+      paragraphs.sort((a, b) => {
         if (a.isInViewport && !b.isInViewport) return -1;
         if (!a.isInViewport && b.isInViewport) return 1;
         return a.rect.top - b.rect.top; // 按页面位置排序
       });
 
-      return nodes;
+      return paragraphs;
+    },
+
+    /**
+     * W1：把过滤后的文本节点按所属块容器聚合为段落。
+     * 分组键：_findBlockContainer 命中的块级容器；无块容器时回退父元素。
+     * 组内节点按 DOM 序以单空格拼接为段落文本（避免内联标签切碎句子、
+     * 也避免直接拼接造成的词粘连），并记录 nodeSpans 偏移映射供句级拆分与回写。
+     * @param {Array} nodes - [{ node, text, isInViewport, rect }]（DOM 序）
+     * @returns {Array} 段落数组 [{ text, sentences, nodes, node, nodeSpans, isInViewport, rect, blockEl }]
+     */
+    _groupNodesIntoParagraphs(nodes) {
+      const groups = new Map(); // containerEl -> paragraph
+      const paragraphs = [];
+      for (const info of nodes) {
+        const blockEl = this._findBlockContainer(info.node);
+        const key = blockEl || info.node.parentElement;
+        if (!key) continue;
+        let p = groups.get(key);
+        if (!p) {
+          p = {
+            text: '',
+            sentences: [],
+            nodes: [],
+            node: null, // 段首节点（兼容旧调用方按 node 取父元素）
+            nodeSpans: [],
+            isInViewport: false,
+            rect: null,
+            blockEl: blockEl || null
+          };
+          groups.set(key, p);
+          paragraphs.push(p);
+        }
+        const start = p.text.length + (p.text ? 1 : 0); // 组内拼接的单空格计入偏移
+        p.text += (p.text ? ' ' : '') + info.text;
+        p.nodeSpans.push({ node: info.node, start, end: start + info.text.length });
+        p.nodes.push(info.node);
+        if (!p.node) p.node = info.node;
+        // 段内任一节点可视即段可视
+        if (info.isInViewport) p.isInViewport = true;
+        if (!p.rect) p.rect = info.rect;
+      }
+      for (const p of paragraphs) {
+        // rect 取块容器位置（无块容器时沿用段内首个节点 rect）
+        if (p.blockEl && typeof p.blockEl.getBoundingClientRect === 'function') {
+          const r = p.blockEl.getBoundingClientRect();
+          p.rect = { top: r.top, bottom: r.bottom };
+        }
+        // W4：段内预切句（供超长段落句级拆分与句级译文回写）
+        p.sentences = this._splitSentences(p.text, p.nodeSpans);
+      }
+      return paragraphs;
+    },
+
+    /**
+     * W4：段落预切句——按句末标点（. ! ? 。！？）切分，后续引号/右括号归属前句。
+     * 白名单防护：常见英文缩写（Dr./Mr./e.g./i.e./etc./vs./U.S. 等）、数字小数点（3.14）、
+     * 省略号（.../…）不切。返回 [{ text, start, end, nodeSpans }]，start/end 为段内偏移，
+     * nodeSpans 记录该句覆盖的节点及节点内偏移（供句级译文回写定位）。
+     */
+    _splitSentences(text, nodeSpans) {
+      if (!text) return [];
+      // 常见英文缩写白名单（小写、含内部点写法），其句点不作句末
+      const ABBR = new Set([
+        'dr', 'mr', 'mrs', 'ms', 'prof', 'sr', 'jr', 'st', 'vs', 'etc',
+        'e.g', 'i.e', 'u.s', 'u.k', 'u.n', 'ph.d', 'm.d', 'b.a', 'm.a',
+        'a.m', 'p.m', 'no', 'fig', 'cf', 'ca', 'approx', 'est',
+        'inc', 'ltd', 'co', 'vol', 'pp', 'ed', 'al'
+      ]);
+      // 句末标点后归属前句的引号/右括号
+      const CLOSERS = '\'"”’)]}》〉」』';
+      const len = text.length;
+      const boundaries = []; // 各句的结束偏移（不含尾随空白）
+      let i = 0;
+      while (i < len) {
+        const ch = text[i];
+        const isCjkEnd = ch === '。' || ch === '！' || ch === '？';
+        const isAsciiDot = ch === '.';
+        const isAsciiBang = ch === '!' || ch === '?';
+        if (!isCjkEnd && !isAsciiDot && !isAsciiBang) { i++; continue; }
+
+        if (isAsciiDot) {
+          // 省略号（...）内部不切
+          if ((i + 1 < len && text[i + 1] === '.') || (i > 0 && text[i - 1] === '.')) { i++; continue; }
+          // 数字小数点（3.14）不切
+          if (i > 0 && i + 1 < len && /\d/.test(text[i - 1]) && /\d/.test(text[i + 1])) { i++; continue; }
+          // 英文缩写白名单：取点前的字母词（允许内部带点，如 U.S. / e.g.）
+          let j = i - 1;
+          while (j >= 0 && /[A-Za-z.]/.test(text[j])) j--;
+          const token = text.slice(j + 1, i).replace(/^\.+|\.+$/g, '').toLowerCase();
+          if (token && ABBR.has(token)) { i++; continue; }
+        }
+        // 吸收后续引号/右括号
+        let end = i + 1;
+        while (end < len && CLOSERS.includes(text[end])) end++;
+        // ASCII 句点要求句末紧跟空白或文本结尾（防 mid-word 误切）；
+        // CJK 标点与 !? 后直接成句（CJK 行文句后常无空白）
+        if (isAsciiDot && end < len && !/\s/.test(text[end])) { i++; continue; }
+        boundaries.push(end);
+        i = end;
+      }
+      // 末尾无句末标点的余段归入最后一句
+      if (boundaries.length === 0 || boundaries[boundaries.length - 1] < len) {
+        boundaries.push(len);
+      }
+      // 由边界生成句条目并映射 nodeSpans（节点内偏移）
+      const sentences = [];
+      let prev = 0;
+      for (const rawEnd of boundaries) {
+        let start = prev;
+        let end = rawEnd;
+        prev = rawEnd;
+        while (start < end && /\s/.test(text[start])) start++;
+        while (end > start && /\s/.test(text[end - 1])) end--;
+        if (end <= start) continue;
+        const spans = [];
+        for (const ns of (nodeSpans || [])) {
+          const s = Math.max(start, ns.start);
+          const e = Math.min(end, ns.end);
+          if (e > s) spans.push({ node: ns.node, start: s - ns.start, end: e - ns.start });
+        }
+        sentences.push({ text: text.slice(start, end), start, end, nodeSpans: spans });
+      }
+      return sentences;
+    },
+
+    /**
+     * W4：段落展开为发送条目——段落文本超过句级阈值且可切多句时拆为句条目
+     * （每句一条、带段落归属引用；SW 逐条缓存，句级缓存粒度自动生效），否则整段一条。
+     * @returns {Array} [{ text, nodeInfo }]，句级条目的 nodeInfo 带 isSentence/paragraph/sentence 引用
+     */
+    _expandToEntries(paragraph) {
+      const threshold = YuxContentConsts.SENTENCE_SPLIT_THRESHOLD_CHARS;
+      if (paragraph && paragraph.text && paragraph.text.length > threshold &&
+          paragraph.sentences && paragraph.sentences.length > 1) {
+        return paragraph.sentences
+          .filter((s) => s.nodeSpans && s.nodeSpans.length > 0)
+          .map((s) => ({
+            text: s.text,
+            nodeInfo: {
+              isSentence: true,
+              paragraph,
+              sentence: s,
+              node: s.nodeSpans[0].node,
+              text: s.text,
+              isInViewport: !!paragraph.isInViewport
+            }
+          }));
+      }
+      return [{ text: paragraph.text, nodeInfo: paragraph }];
     },
 
     /**
@@ -332,7 +486,7 @@
       // 流式模式：整页翻译 enableStreaming 开启时逐段走 translateStream（SSE）
       const streaming = !!options.streaming;
 
-      // 动态调整：本地模型强制串行且减小分片，云端模型维持高并发。
+      // 动态调整：本地模型强制串行，云端模型维持高并发。
       // 流式模式每条请求是一个 SSE 长连接（存活时间远长于批量短请求），并发过高会迅速
       // 堆满连接并触发供应商 429；SW 侧自适应速率上限为 10 并发（RATE_LIMIT_CONFIG.MAX_CONCURRENT），
       // 故整页流式云端固定 4 并发（与首屏 viewportConcurrency 持平，并为划词流式等请求留余量），
@@ -342,9 +496,6 @@
         : streaming
           ? (options.concurrency || 4)
           : (options.concurrency || configConcurrency);
-      const BATCH_SIZE = isLocal
-        ? 5
-        : (options.batchSize || this.config.batchSize || 20);
 
       const results = new Array(items.length);
       let completed = 0;
@@ -394,13 +545,16 @@
         return results;
       }
 
-      // 分块打包
+      // W2：装填层收敛——content 层不再按固定条数硬打包。
+      // 云端：段落/句条目数组整体作为一次 translateBatch 发给 SW（SW 侧按字符数二次切分装填）；
+      // 本地 Ollama：逐段单发（并发=1 串行），连续失败降级拆单逻辑保留兜底。
       const batches = [];
-      for (let i = 0; i < items.length; i += BATCH_SIZE) {
-        batches.push({
-          indices: Array.from({ length: Math.min(BATCH_SIZE, items.length - i) }, (_, k) => i + k),
-          nodes: items.slice(i, i + BATCH_SIZE)
-        });
+      if (isLocal) {
+        for (let i = 0; i < items.length; i++) {
+          batches.push({ indices: [i], nodes: [items[i]] });
+        }
+      } else if (items.length > 0) {
+        batches.push({ indices: items.map((_, i) => i), nodes: items.slice() });
       }
 
       const queue = [...batches.keys()];
@@ -414,7 +568,7 @@
           const batchIndex = queue.shift();
           const batch = batches[batchIndex];
 
-          // 如果进入了降级模式，且当前 batch 包含多项，则将其重新拆分为单个任务送回队列
+          // 如果进入了降级模式，且当前 batch 包含多项，则将其重新拆分为单个段落（或句级条目）送回队列
           if (fallbackMode && batch.indices.length > 1) {
             batch.indices.forEach((idx, i) => {
               batches.push({
@@ -437,8 +591,9 @@
                   texts: texts,
                   sourceLang: this.config.sourceLang || 'auto',
                   targetLang: this.config.targetLang || 'zh',
-                  // 整页批量翻译不携带页面标题，避免模型把所有片段译成同一个标题。
-                  context: null,
+                  // 页面上下文仅以「风格参考」身份注入 SW 的 system prompt（buildBatchSystemPrompt），
+                  // 不进入 user 输入，避免早期版本把片段偏向页面标题的污染问题。
+                  context: { pageTitle: document.title, domain: location.hostname },
                   sessionId: this._pageSessionId
                 },
                 (res) => {
@@ -558,16 +713,32 @@
     },
 
     /**
-     * v2.1：按 DOM 顺序聚合块内全部已译文本节点的译文（空格连接）写入 body
+     * W5：段落的展示译文——句级条目时按句序拼接已译句（未完成的句跳过），否则整段译文
+     */
+    _paragraphDisplayText(data) {
+      if (data.sentenceTranslated && data.sentenceTranslated.size > 0) {
+        const parts = [];
+        for (const s of (data.paragraph.sentences || [])) {
+          const t = data.sentenceTranslated.get(s);
+          if (t) parts.push(t);
+        }
+        if (parts.length > 0) return parts.join(' ');
+      }
+      return typeof data.translated === 'string' ? data.translated : '';
+    },
+
+    /**
+     * v2.1：按 DOM 顺序聚合块内全部已译段落的译文（空格连接）写入 body
+     * W5：聚合粒度由文本节点换成段落（originalTexts 键为段落对象）
      */
     _refreshBlockTr(blockEl) {
       const entry = this._blockTrMap.get(blockEl);
       if (!entry) return;
       const parts = [];
-      for (const [n, data] of this.pageTranslationState.originalTexts) {
-        if (data.blockContainer === blockEl && typeof data.translated === 'string' && data.translated) {
-          parts.push({ node: n, text: data.translated });
-        }
+      for (const [paragraph, data] of this.pageTranslationState.originalTexts) {
+        if (data.blockContainer !== blockEl) continue;
+        const text = this._paragraphDisplayText(data);
+        if (text) parts.push({ node: paragraph.nodes[0], text });
       }
       parts.sort((a, b) => {
         if (typeof a.node.compareDocumentPosition !== 'function') return 0;
@@ -580,25 +751,25 @@
     },
 
     /**
-     * v2.1：节点译文纳入所在块的聚合呈现（块容器→节点映射维护于此）
+     * v2.1：段落译文纳入所在块的聚合呈现（块容器→段落映射维护于此）
      */
-    _applyBlockTranslation(node, blockEl, originalData) {
+    _applyBlockTranslation(paragraph, blockEl, originalData) {
       originalData.blockContainer = blockEl;
       const entry = this._ensureBlockTr(blockEl);
-      entry.nodes.add(node);
+      entry.nodes.add(paragraph);
       this._refreshBlockTr(blockEl);
     },
 
     /**
-     * v2.1：节点从块聚合中摘除（切仅译文/行内双语/恢复原文前置）；空块随之清理
+     * v2.1：段落从块聚合中摘除（切仅译文/行内双语/恢复原文前置）；空块随之清理
      */
-    _removeFromBlock(node, data) {
+    _removeFromBlock(paragraph, data) {
       const blockEl = data.blockContainer;
       data.blockContainer = null;
       if (!blockEl) return;
       const entry = this._blockTrMap.get(blockEl);
       if (!entry) return;
-      entry.nodes.delete(node);
+      entry.nodes.delete(paragraph);
       if (entry.nodes.size === 0) {
         if (entry.el.parentNode) entry.el.remove();
         this._blockTrMap.delete(blockEl);
@@ -609,69 +780,194 @@
     },
 
     /**
-     * 应用翻译结果，保持样式
+     * W5：清理段落的已渲染呈现，恢复为原文态（幂等）。
+     * 供 applyTranslation 重绘、applyBilingualRender 模式切换、restoreOriginalTexts 共用。
+     */
+    _cleanParagraphRender(paragraph, data) {
+      // 移除行内双语 span（段落级 + 句级）
+      if (data.bilingualNode) {
+        if (data.bilingualNode.parentNode) data.bilingualNode.remove();
+        data.bilingualNode = null;
+      }
+      if (data.sentenceSpans) {
+        for (const span of data.sentenceSpans.values()) {
+          if (span.parentNode) span.remove();
+        }
+        data.sentenceSpans = null;
+      }
+      // 从块聚合摘除（空块随之清理）
+      if (data.blockContainer) this._removeFromBlock(paragraph, data);
+      // 恢复段内节点原文
+      if (data.nodeTexts) {
+        paragraph.nodes.forEach((n, idx) => {
+          if (idx < data.nodeTexts.length) n.textContent = data.nodeTexts[idx];
+        });
+      }
+      // 清理标记类与原文样式类
+      const markEl = data.markEl || paragraph.blockEl ||
+        (paragraph.nodes[0] && paragraph.nodes[0].parentElement);
+      if (markEl && markEl.classList) {
+        markEl.classList.remove(
+          'yuxtrans-translated', 'yuxtrans-translated-bilingual',
+          'yuxtrans-original-fade', 'yuxtrans-original-blur', 'yuxtrans-failed'
+        );
+      }
+      data.markEl = null;
+    },
+
+    /**
+     * W5：按目标模式渲染段落译文（假定 DOM 已为原文态，配合 _cleanParagraphRender 使用）。
+     * 三种呈现：block 聚合块尾 block-tr；inline 段落级/句级 span 插到段末/句末节点后；
+     * replace 译文写入段首节点（句级写句首节点）、同段（句）其余节点置空。
+     * @param {object} paragraph - 段落对象
+     * @param {object} data - originalTexts 中的段落数据
+     * @param {boolean} isBilingual - 双语（true）或仅译文（false）
+     */
+    _renderParagraph(paragraph, data, isBilingual) {
+      const firstNode = paragraph.nodes[0];
+      const parent = firstNode && firstNode.parentElement;
+      if (!parent) return;
+      const wantBlock = isBilingual && this.config.bilingualStyle === 'block';
+      const blockEl = wantBlock ? (paragraph.blockEl || this._findBlockContainer(firstNode)) : null;
+      // 标记类挂在块容器上（无块容器时挂段首节点父元素）
+      const markEl = blockEl || paragraph.blockEl || parent;
+      data.markEl = markEl;
+      const hasSentences = !!(data.sentenceTranslated && data.sentenceTranslated.size > 0);
+
+      if (isBilingual && blockEl) {
+        // 段落对照模式：不插行内 span，译文聚合到块容器末尾的 block-tr
+        if (this._paragraphDisplayText(data)) {
+          this._applyBlockTranslation(paragraph, blockEl, data);
+        }
+        markEl.classList.add('yuxtrans-translated-bilingual');
+        // F3：原文呈现样式（弱化/模糊原文）
+        this._applyOriginalStyle(markEl);
+        return;
+      }
+
+      if (isBilingual) {
+        // 双语对照模式（行内注脚）：句级条目逐句插 span 到句末节点后，否则整段插到段末节点后
+        const insertSpanAfter = (anchorNode, text) => {
+          const anchorParent = anchorNode && anchorNode.parentElement;
+          if (!anchorParent) return null;
+          const span = document.createElement('span');
+          span.className = 'yuxtrans-bilingual-text';
+          span.textContent = text;
+          if (anchorNode.nextSibling) anchorParent.insertBefore(span, anchorNode.nextSibling);
+          else anchorParent.appendChild(span);
+          // pair-hover：hover 译文联动高亮句/段原文所在块（无块容器时高亮锚点父元素）
+          this._bindPairHover(span, paragraph.blockEl || anchorParent);
+          return span;
+        };
+        if (hasSentences) {
+          data.sentenceSpans = new Map();
+          for (const s of paragraph.sentences) {
+            const text = data.sentenceTranslated.get(s);
+            if (!text) continue;
+            const anchor = s.nodeSpans[s.nodeSpans.length - 1].node;
+            const span = insertSpanAfter(anchor, text);
+            if (span) data.sentenceSpans.set(s, span);
+          }
+        } else if (data.translated) {
+          const anchor = paragraph.nodes[paragraph.nodes.length - 1];
+          data.bilingualNode = insertSpanAfter(anchor, data.translated);
+        }
+        markEl.classList.add('yuxtrans-translated-bilingual');
+        // F3：原文呈现样式（弱化/模糊原文）
+        this._applyOriginalStyle(markEl);
+        return;
+      }
+
+      // 仅译文模式：译文写入段首节点（句级写句首节点）、同段（句）其余节点置空。
+      // 段内 <a> 的 href 不动，锚文本随译文替换（已确认的取舍）。
+      // 按句序处理，避免共享节点（句末/句首跨节点）被后到的句覆盖。
+      if (hasSentences) {
+        for (const s of paragraph.sentences) {
+          const text = data.sentenceTranslated.get(s);
+          if (!text) continue;
+          s.nodeSpans[0].node.textContent = text;
+          for (let k = 1; k < s.nodeSpans.length; k++) {
+            s.nodeSpans[k].node.textContent = '';
+          }
+        }
+      } else if (data.translated) {
+        paragraph.nodes[0].textContent = data.translated;
+        for (let k = 1; k < paragraph.nodes.length; k++) {
+          paragraph.nodes[k].textContent = '';
+        }
+      }
+      markEl.classList.add('yuxtrans-translated');
+    },
+
+    /**
+     * 应用翻译结果，保持样式。
+     * W5：最小单位为段落（nodeInfo 为段落对象）或句级条目
+     * （nodeInfo.isSentence，带 paragraph/sentence 引用）；originalTexts 键为段落对象。
      */
     applyTranslation(nodeInfo, translatedText) {
-      const { node } = nodeInfo;
+      const isSentence = !!nodeInfo.isSentence;
+      const paragraph = isSentence ? nodeInfo.paragraph : nodeInfo;
+      // 兼容旧节点粒度输入（动态路径/测试遗留的 { text, node } 形状）：补全段落结构
+      if (!paragraph.nodes) {
+        paragraph.nodes = paragraph.node ? [paragraph.node] : [];
+        paragraph.nodeSpans = paragraph.nodeSpans ||
+          (paragraph.node ? [{ node: paragraph.node, start: 0, end: (paragraph.text || '').length }] : []);
+        paragraph.sentences = paragraph.sentences || [];
+        if (typeof paragraph.blockEl === 'undefined') paragraph.blockEl = null;
+      }
 
-      // 防止对同一节点重复应用（例如批量回调与最终循环重叠）
-      if (this.pageTranslationState.originalTexts.has(node)) {
+      // 防止对同一段落（或同一句）重复应用（例如批量回调与最终循环重叠）
+      let originalData = this.pageTranslationState.originalTexts.get(paragraph);
+      if (originalData && originalData.error) {
+        // 失败重试成功：清除失败标记条目，按新翻译落地
+        if (originalData.markEl && originalData.markEl.classList) {
+          originalData.markEl.classList.remove('yuxtrans-failed');
+        }
+        this.pageTranslationState.originalTexts.delete(paragraph);
+        originalData = null;
+      }
+      if (!isSentence && originalData) return false;
+      if (isSentence && originalData && originalData.sentenceTranslated &&
+          originalData.sentenceTranslated.has(nodeInfo.sentence)) {
         return false;
       }
 
-      const parent = node.parentElement;
+      const firstNode = paragraph.nodes[0];
+      const parent = firstNode && firstNode.parentElement;
       if (!parent) return false;
 
-      // 保存原文、样式和双语节点引用
-      const originalData = {
-        text: node.textContent,
-        translated: translatedText, // 核心：缓存译文，支持动态切换
-        styles: this.getElementStyles(parent),
-        bilingualNode: null,
-        blockContainer: null // v2.1：段落对照模式下所属的块容器元素
-      };
-      this.pageTranslationState.originalTexts.set(node, originalData);
-
-      const useBilingual = this.config.bilingualMode !== false; // 默认开启
-      // v2.1：双语 + 段落对照时聚合到块级译文容器；找不到块容器回退行内注脚
-      const blockEl = useBilingual && this.config.bilingualStyle === 'block'
-        ? this._findBlockContainer(node)
-        : null;
-
-      if (useBilingual && blockEl) {
-        // 段落对照模式：不插行内 span，译文聚合到块容器末尾的 block-tr
-        this._applyBlockTranslation(node, blockEl, originalData);
-        parent.classList.add('yuxtrans-translated-bilingual');
-        // F3：原文呈现样式（弱化/模糊原文）
-        this._applyOriginalStyle(parent);
-      } else if (useBilingual) {
-        // 双语对照模式（行内注脚）：新增一个隐藏了部分原样式的 span
-        const bilingualSpan = document.createElement('span');
-        bilingualSpan.className = 'yuxtrans-bilingual-text';
-        // 两端可以加一个细微的空白或破折号分隔
-        bilingualSpan.textContent = translatedText;
-
-        if (node.nextSibling) {
-          parent.insertBefore(bilingualSpan, node.nextSibling);
-        } else {
-          parent.appendChild(bilingualSpan);
-        }
-
-        originalData.bilingualNode = bilingualSpan;
-        parent.classList.add('yuxtrans-translated-bilingual');
-        this._bindPairHover(bilingualSpan, parent);
-        // F3：原文呈现样式（弱化/模糊原文）
-        this._applyOriginalStyle(parent);
-      } else {
-        // 仅译文模式：直接替换并加类名
-        node.textContent = translatedText;
-        parent.classList.add('yuxtrans-translated');
+      // 首次落地：保存原文、样式和呈现引用（W5：键为段落对象）
+      if (!originalData) {
+        originalData = {
+          paragraph,
+          text: paragraph.text,
+          nodeTexts: paragraph.nodes.map((n) => n.textContent), // 段内各节点原文（恢复用）
+          translated: null, // 段落级译文（支持动态切换）
+          sentenceTranslated: null, // Map<sentence, text>：句级译文（W4 超长段拆分）
+          styles: this.getElementStyles(parent),
+          bilingualNode: null, // 段落级行内注脚 span
+          sentenceSpans: null, // Map<sentence, span>：句级行内注脚 span
+          blockContainer: null, // v2.1：段落对照模式下所属的块容器元素
+          markEl: null // 承载 yuxtrans-translated* 标记类的元素
+        };
+        this.pageTranslationState.originalTexts.set(paragraph, originalData);
+        this.pageTranslationState.translatedNodes.push(...paragraph.nodes);
       }
 
-      // 保持样式（如果需要）
-      if (originalData.styles) {
-        const styles = originalData.styles;
+      if (isSentence) {
+        if (!originalData.sentenceTranslated) originalData.sentenceTranslated = new Map();
+        originalData.sentenceTranslated.set(nodeInfo.sentence, translatedText);
+      } else {
+        originalData.translated = translatedText;
+      }
 
+      // 清理旧呈现后按当前模式重渲染（句级条目增量到达时幂等重绘）
+      this._cleanParagraphRender(paragraph, originalData);
+      this._renderParagraph(paragraph, originalData, this.config.bilingualMode !== false);
+
+      // 保持样式（W5：适配到段首节点 parent）
+      const styles = originalData.styles;
+      if (styles) {
         // 保持粗体
         if (styles.isBold) {
           parent.style.fontWeight = 'bold';
@@ -693,7 +989,6 @@
         }
       }
 
-      this.pageTranslationState.translatedNodes.push(node);
       return true;
     },
 
@@ -712,28 +1007,37 @@
      * F3：批量重应用原文样式（originalStyle 配置变更后调用，仅双语模式生效）
      */
     applyOriginalStyleToAll() {
-      for (const [node] of this.pageTranslationState.originalTexts) {
-        const parent = node && node.parentElement;
-        if (parent && parent.classList.contains('yuxtrans-translated-bilingual')) {
-          this._applyOriginalStyle(parent);
+      // W5：标记类挂在 data.markEl 上（块容器或段首节点父元素）
+      for (const [, data] of this.pageTranslationState.originalTexts) {
+        const el = data && data.markEl;
+        if (el && el.classList.contains('yuxtrans-translated-bilingual')) {
+          this._applyOriginalStyle(el);
         }
       }
     },
 
     /**
-     * 标记翻译失败的节点
+     * 标记翻译失败的段落（W5：originalTexts 键为段落对象）
      */
     markFailedNode(nodeInfo, error) {
-      const { node } = nodeInfo;
-      const parent = node.parentElement;
+      const paragraph = nodeInfo.isSentence ? nodeInfo.paragraph : nodeInfo;
+      if (!paragraph.nodes) {
+        paragraph.nodes = paragraph.node ? [paragraph.node] : [];
+      }
+      const firstNode = paragraph.nodes[0];
+      const parent = firstNode && firstNode.parentElement;
       if (!parent) return;
 
       // 仅当未被标记过才保存原文，防止覆盖已有错误记录
-      if (!this.pageTranslationState.originalTexts.has(node)) {
-        parent.classList.add('yuxtrans-failed');
-        this.pageTranslationState.originalTexts.set(node, {
-          text: node.textContent,
+      if (!this.pageTranslationState.originalTexts.has(paragraph)) {
+        const markEl = paragraph.blockEl || parent;
+        markEl.classList.add('yuxtrans-failed');
+        this.pageTranslationState.originalTexts.set(paragraph, {
+          paragraph,
+          text: paragraph.text,
+          nodeTexts: paragraph.nodes.map((n) => n.textContent),
           styles: this.getElementStyles(parent),
+          markEl,
           error: error
         });
       }
@@ -743,8 +1047,17 @@
      * 整页翻译主函数
      */
     async translatePage() {
-      // 同步锁：防止快速重复触发（如双击、消息重入）导致套娃翻译
-      if (this._pageTranslateLocked) return;
+      // 同步锁：防止快速重复触发（如双击、消息重入）导致套娃翻译。
+      // 任务进行中再次触发：取消在途翻译并恢复原文（快捷键/右键/控制条的切换语义），
+      // 不再静默忽略——此前持锁直接 return，连点表现为"无响应"。
+      if (this._pageTranslateLocked) {
+        if (this.pageTranslationState.isTranslating || this._dynamicTranslating) {
+          this.restoreOriginalTexts();
+          this.setPageControlRestoredState();
+          this._showPageToast('已终止翻译并恢复原文');
+        }
+        return;
+      }
       this._pageTranslateLocked = true;
 
       try {
@@ -756,13 +1069,6 @@
           this._showPageToast('本站已禁用 YuxTrans 翻译');
           return;
         }
-
-      // 防止重入：翻译进行中再次触发则取消在途批次并恢复已译原文
-      if (this.pageTranslationState.isTranslating) {
-        this.restoreOriginalTexts();
-        this.setPageControlRestoredState();
-        return;
-      }
 
       // 如果已翻译，恢复原文
       if (this.pageTranslationState.isTranslated) {
@@ -780,6 +1086,9 @@
         return;
       }
 
+      // 收集期间收到终止请求（popup 终止翻译 / 重入取消）：直接退出，不启动本轮任务
+      if (this.pageTranslationState.cancelRequested) return;
+
       // 初始化状态
       this.pageTranslationState.translatedNodes = [];
       this.pageTranslationState.isTranslating = true;
@@ -789,19 +1098,29 @@
       this.pageTranslationState.failedItems = [];
       this.pageTranslationState.cacheHits = 0;
       this.pageTranslationState.apiCount = 0;
-      // 分配本轮会话 id，供 SW 侧取消链路使用
-      this._pageSessionId = 'yxt-page-' + (++this._pageSessionCounter);
+      // 分配本轮会话 id，供 SW 侧取消链路使用。
+      // 必须全局唯一：实例级计数器在多标签页/页面重载后会撞号，
+      // 撞上 SW 侧已取消会话（cancelTranslationSession 记录保留在 Map 中）会导致新任务被静默取消。
+      this._pageSessionId = 'yxt-page-' + Date.now().toString(36) + '-' +
+        Math.random().toString(36).slice(2, 8) + '-' + (++this._pageSessionCounter);
 
       // 禁用控制条上的翻译/重新翻译按钮，防止任务进行中重复点击
       this.setPageControlTranslateDisabled(true);
 
       // ===== 文本去重优化 =====
+      // W4：超长段落（> SENTENCE_SPLIT_THRESHOLD_CHARS）先拆为句级条目再参与去重与发送，
+      // 实现句级缓存粒度（SW 逐条缓存，自动生效）；普通段落整段一条
+      const entries = [];
+      for (const paragraph of nodesInfo) {
+        entries.push(...this._expandToEntries(paragraph));
+      }
+
       const uniqueTexts = new Map(); // text -> { indices: [], translation: null, error: null }
       const dedupedItems = [];
       let duplicateCount = 0;
 
-      nodesInfo.forEach((nodeInfo, index) => {
-        const text = nodeInfo.text;
+      entries.forEach((entry, index) => {
+        const text = entry.text;
         if (uniqueTexts.has(text)) {
           // 记录重复文本的索引
           uniqueTexts.get(text).indices.push(index);
@@ -809,11 +1128,11 @@
         } else {
           // 新文本
           uniqueTexts.set(text, { indices: [index], translation: null, error: null });
-          dedupedItems.push({ text, originalIndex: index, nodeInfo });
+          dedupedItems.push({ text, originalIndex: index, nodeInfo: entry.nodeInfo });
         }
       });
 
-      // 区分首屏与后续节点
+      // 区分首屏与后续段落
       const viewportItems = dedupedItems.filter(item => item.nodeInfo.isInViewport);
       const belowFoldItems = dedupedItems.filter(item => !item.nodeInfo.isInViewport);
 
@@ -824,15 +1143,15 @@
 
       const reportProgress = (delta) => {
         completedUnits += delta;
-        const ratio = dedupedItems.length > 0 ? nodesInfo.length / dedupedItems.length : 1;
-        const actualCompleted = Math.min(Math.round(completedUnits * ratio), nodesInfo.length);
+        // W4：去重以句/段条目计，展示以段落计；比率换算后封顶到段落总数
+        const ratio = dedupedItems.length > 0 ? entries.length / dedupedItems.length : 1;
+        const actualCompleted = Math.min(Math.round(completedUnits * ratio), displayTotal);
         this.updatePageControl(actualCompleted, displayTotal, startTime);
       };
 
       try {
-        // A: 首屏 mini-batch 翻译（用 0.5-0.9s 首字延迟换取总吞吐大幅提升）
+        // A: 首屏段落优先翻译（W2：云端整批一次 translateBatch，SW 按字符数二次切分）
         const isLocal = this.config.provider === 'local';
-        const viewportBatchSize = isLocal ? 3 : 10;
         const viewportConcurrency = isLocal ? 2 : 4;
         // enableStreaming 开启时整页走流式路径（逐段 SSE 渲染）；关闭时批量路径保持不变
         const useStreaming = this.config.enableStreaming !== false;
@@ -846,7 +1165,7 @@
               lastViewportCompleted = completed;
             },
             (indices, nodes, results) => {
-              // 每个 mini-batch 完成立即渲染，保证首屏感知
+              // 批次完成立即渲染，保证首屏感知
               results.forEach((res, localIdx) => {
                 const item = nodes[localIdx];
                 if (res && res.success) {
@@ -859,7 +1178,7 @@
             },
             useStreaming
               ? { streaming: true }
-              : { batchSize: viewportBatchSize, concurrency: viewportConcurrency }
+              : { concurrency: viewportConcurrency }
           );
           // 记录失败项
           viewportItems.forEach((item) => {
@@ -904,23 +1223,25 @@
         // 3. 应用翻译结果（包括重复文本；applyTranslation 内部已做去重）
         let successCount = 0;
         let failCount = 0;
-        for (let i = 0; i < nodesInfo.length; i++) {
-          const nodeInfo = nodesInfo[i];
-          const item = uniqueTexts.get(nodeInfo.text);
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const nodeInfo = entry.nodeInfo;
+          const paragraph = nodeInfo.isSentence ? nodeInfo.paragraph : nodeInfo;
+          const item = uniqueTexts.get(entry.text);
           if (item.translation) {
-            // 每个节点都尝试应用译文，确保重复文本节点也纳入 originalTexts，
+            // 每个段落/句条目都尝试应用译文，确保重复文本的每个出现位置也纳入 originalTexts，
             // 从而支持双语/仅译文切换时同步更新所有出现位置
             const applied = this.applyTranslation(nodeInfo, item.translation);
-            if (applied || this.pageTranslationState.originalTexts.has(nodeInfo.node)) {
-              if (!appliedTexts.has(nodeInfo.text)) {
+            if (applied || this.pageTranslationState.originalTexts.has(paragraph)) {
+              if (!appliedTexts.has(entry.text)) {
                 successCount++;
-                appliedTexts.add(nodeInfo.text);
+                appliedTexts.add(entry.text);
               }
             }
           } else if (item.error) {
             // 失败项可视化标记
             this.markFailedNode(nodeInfo, item.error);
-            this.pageTranslationState.failedItems.push({ nodeInfo, text: nodeInfo.text, error: item.error });
+            this.pageTranslationState.failedItems.push({ nodeInfo, text: entry.text, error: item.error });
             failCount++;
           }
         }
@@ -1290,61 +1611,11 @@
      */
     applyBilingualRender(isBilingual) {
       this.config.bilingualMode = isBilingual;
-      // v2.1：双语目标形态——段落对照（有块容器）或行内注脚；仅译文模式恒为 false
-      const wantBlock = isBilingual && this.config.bilingualStyle === 'block';
-      for (const [node, data] of this.pageTranslationState.originalTexts) {
-        const parent = node.parentElement;
-        if (!parent) continue;
-
-        if (isBilingual) {
-          const blockEl = wantBlock ? this._findBlockContainer(node) : null;
-          // 行内 → 块：先移除行内 span，避免双语呈现叠加
-          if (blockEl && data.translated && data.bilingualNode) {
-            if (data.bilingualNode.parentNode === parent) {
-              parent.removeChild(data.bilingualNode);
-            }
-            data.bilingualNode = null;
-          }
-          // 块 → 行内（或块容器已丢失）：从块聚合中摘除
-          if (!blockEl && data.blockContainer) {
-            this._removeFromBlock(node, data);
-          }
-          if (blockEl && data.translated) {
-            // 仅译文 → 段落对照：先恢复原文文本，再聚合译文
-            // （失败节点无 translated，走下方行内分支，与既有行为一致）
-            node.textContent = data.text;
-            this._applyBlockTranslation(node, blockEl, data);
-          } else if (!data.bilingualNode) {
-            node.textContent = data.text;
-            const span = document.createElement('span');
-            span.className = 'yuxtrans-bilingual-text';
-            span.textContent = data.translated;
-            if (node.nextSibling) parent.insertBefore(span, node.nextSibling);
-            else parent.appendChild(span);
-            data.bilingualNode = span;
-            this._bindPairHover(span, parent);
-          }
-          parent.classList.remove('yuxtrans-translated');
-          parent.classList.add('yuxtrans-translated-bilingual');
-          // F3：切回双语时应用原文呈现样式
-          this._applyOriginalStyle(parent);
-        } else {
-          if (data.bilingualNode) {
-            if (data.bilingualNode.parentNode === parent) {
-              parent.removeChild(data.bilingualNode);
-            }
-            data.bilingualNode = null;
-          }
-          // v2.1：段落对照 → 仅译文：从块聚合摘除（空块随之移除）
-          if (data.blockContainer) {
-            this._removeFromBlock(node, data);
-          }
-          node.textContent = data.translated;
-          parent.classList.remove('yuxtrans-translated-bilingual');
-          parent.classList.add('yuxtrans-translated');
-          // F3：仅译文模式无原文，移除原文样式类
-          parent.classList.remove('yuxtrans-original-fade', 'yuxtrans-original-blur');
-        }
+      // W5：段落粒度重渲染——每段先清理回原文态，再按目标模式重绘（幂等）
+      for (const [paragraph, data] of this.pageTranslationState.originalTexts) {
+        if (data.error) continue; // 失败标记条目不参与重渲染
+        this._cleanParagraphRender(paragraph, data);
+        this._renderParagraph(paragraph, data, isBilingual);
       }
     },
 
@@ -1399,26 +1670,17 @@
         this.pageTranslationState.streamingNodes.clear();
       }
 
-      // 恢复所有原文和样式
-      for (const [node, originalData] of this.pageTranslationState.originalTexts) {
-        const parent = node.parentElement;
-        if (parent) {
-          if (originalData.bilingualNode && originalData.bilingualNode.parentNode === parent) {
-            // 清理双语节点
-            parent.removeChild(originalData.bilingualNode);
-          }
-          // 无论是否双语，都恢复原文文本并清除翻译标记
-          node.textContent = originalData.text;
-          parent.classList.remove('yuxtrans-translated', 'yuxtrans-translated-bilingual', 'yuxtrans-original-fade', 'yuxtrans-original-blur');
+      // 恢复所有原文和样式（W5：originalTexts 键为段落对象，逐段清理呈现并恢复节点原文）
+      for (const [paragraph, originalData] of this.pageTranslationState.originalTexts) {
+        this._cleanParagraphRender(paragraph, originalData);
 
-          // 清除添加的内联样式
-          if (originalData.styles) {
+        // 清除添加的内联样式（段首节点父元素）
+        if (originalData.styles) {
+          const parent = paragraph.nodes[0] && paragraph.nodes[0].parentElement;
+          if (parent) {
             parent.style.removeProperty('font-weight');
             parent.style.removeProperty('font-style');
           }
-
-          // 清理翻译失败标记样式
-          parent.classList.remove('yuxtrans-failed');
         }
       }
 
@@ -1637,11 +1899,16 @@
         const seen = new Set();
         const items = [];
         for (const ni of nodesInfo) {
-          // 跳过已翻译或已失败的节点，避免重复请求
-          if (this.pageTranslationState.originalTexts.has(ni.node)) continue;
-          if (seen.has(ni.text)) continue;
-          seen.add(ni.text);
-          items.push({ text: ni.text, nodeInfo: ni });
+          // 跳过已翻译或已失败的段落，避免重复请求（W5：originalTexts 键为段落对象）
+          if (this.pageTranslationState.originalTexts.has(ni)) continue;
+          const pNodes = ni.nodes || (ni.node ? [ni.node] : []);
+          if (pNodes.some((n) => this.pageTranslationState.translatedNodes.includes(n))) continue;
+          // W4：超长段落拆为句级条目（与整页主路径同规则）
+          for (const entry of this._expandToEntries(ni)) {
+            if (seen.has(entry.text)) continue;
+            seen.add(entry.text);
+            items.push({ text: entry.text, nodeInfo: entry.nodeInfo });
+          }
         }
         if (items.length === 0) return;
         // 动态增量翻译与整页主路径同一开关：enableStreaming 开启时逐段流式渲染

@@ -30,7 +30,9 @@
     // belowFold 超时回退：6s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
     VIEWPORT_FALLBACK_MS: 6000,
     // belowFold 入视口段落的批次提交防抖（合并连续入视口事件）
-    VIEWPORT_SUBMIT_DEBOUNCE_MS: 100
+    VIEWPORT_SUBMIT_DEBOUNCE_MS: 100,
+    // W4：超长段落句级二次拆分阈值——段落文本超过此长度时拆为句级条目发送（句级缓存粒度）
+    SENTENCE_SPLIT_THRESHOLD_CHARS: 4000
   };
 
   root.YuxContentConsts = Consts;

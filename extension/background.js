@@ -2650,8 +2650,13 @@ function splitIntoCharBatches(items, maxChars = MAX_BATCH_CHARS) {
 
 /**
  * 构建批量翻译 System Prompt（规则与风格指令，方案 1：移入 system message）
+ * @param {string[]} groupTexts
+ * @param {string} groupSourceLang
+ * @param {string} groupTargetLang
+ * @param {object|null} pageContext - 可选 { domain, pageTitle }，仅作风格/领域参考注入，
+ *   明确禁止翻译或提及，避免早期版本"全部片段译成标题"的污染问题
  */
-function buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang) {
+function buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang, pageContext = null) {
   const targetName = LANG_NAMES[groupTargetLang] || groupTargetLang;
   const sourceName = groupSourceLang === 'auto' ? null : (LANG_NAMES[groupSourceLang] || groupSourceLang);
   const styleHint = SW.resolveStylePrompt
@@ -2662,6 +2667,11 @@ function buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang) {
   if (sourceName) system += ` from ${sourceName}`;
   system += ` to ${targetName}.`;
   if (styleHint) system += `\nStyle: ${styleHint}`;
+  if (pageContext && (pageContext.domain || pageContext.pageTitle)) {
+    system += `\nPage context (style and domain reference ONLY — never translate it, never mention it in the output):`;
+    if (pageContext.domain) system += `\nSite: ${String(pageContext.domain).slice(0, 100)}`;
+    if (pageContext.pageTitle) system += `\nTitle: ${String(pageContext.pageTitle).slice(0, 120)}`;
+  }
   system += `\nSTRICT OUTPUT RULES:
 1. Return ONLY a valid JSON array of strings. The array length MUST be exactly ${groupTexts.length} and the order MUST match the input exactly.
 2. Translate each item independently. Do not summarize, infer, or reuse text from one item for another.
@@ -2674,17 +2684,31 @@ function buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang) {
 }
 
 /**
+ * 解析整页跨段上下文滑动窗口字符数（config.batchContextWindow）
+ * 档位：false/'off' 关闭；'short' 150 字；'long'/缺省 400 字。
+ * 旧版布尔值 true 迁移为 'short'，保持既有用户行为不变。
+ */
+function resolveBatchContextWindowChars(v = config.batchContextWindow) {
+  const tiers = SW.BATCH_CONTEXT_WINDOW_CHARS || { short: 150, long: 400 };
+  if (v === false || v === 'off') return 0;
+  if (v === true || v === 'short') return tiers.short;
+  return tiers.long;
+}
+
+/**
  * 构建批量翻译 User Prompt（仅输入数据与滑动窗口上下文）
  */
 function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context = null) {
   let prompt = '';
-  // 批量翻译不注入页面级上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述。
+  // 批量翻译不注入页面级上下文（pageTitle / domain），避免整页文本被模型偏向为标题/描述；
+  // 页面上下文以「风格参考」身份注入 system prompt（见 buildBatchSystemPrompt）。
   // 但注入上一批末尾的「原文+译文」作为滑动窗口，提升跨段指代与连贯性（明确标记勿重译）。
-  // 方案 5：窗口缩短至 150 字符；用户可在设置中关闭（config.batchContextWindow === false）
-  if (context && context.prevContext && context.prevContext.source && config.batchContextWindow !== false) {
+  // 窗口长度分档：off 关闭 / short 150 字 / long 400 字（默认 long），见 resolveBatchContextWindowChars。
+  const windowChars = resolveBatchContextWindowChars();
+  if (context && context.prevContext && context.prevContext.source && windowChars > 0) {
     prompt += `Previous segment (for reference ONLY, do NOT re-translate or include in output):`;
-    prompt += `\nSource: ${String(context.prevContext.source).slice(0, 150)}`;
-    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, 150)}\n\n`;
+    prompt += `\nSource: ${String(context.prevContext.source).slice(0, windowChars)}`;
+    prompt += `\nTranslation: ${String(context.prevContext.translation || '').slice(0, windowChars)}\n\n`;
   }
   prompt += `Input:\n${JSON.stringify(groupTexts)}`;
   return prompt;
@@ -2785,7 +2809,8 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
       const groupTexts = uniqueItems.map((item) => item.text);
       const prompt = buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, { prevContext: windowContext });
       // 方案 1：批量规则移入 system message，user message 只带输入数据
-      const batchSystemPrompt = buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang);
+      // 页面上下文（domain/title）以风格参考身份注入 system prompt，不进入 user 输入，避免标题污染
+      const batchSystemPrompt = buildBatchSystemPrompt(groupTexts, groupSourceLang, groupTargetLang, context);
 
       // 发送请求并解析（先应用速率延迟）
       let jsonParsed = false;
@@ -4014,6 +4039,7 @@ if (typeof module !== 'undefined' && module.exports) {
     RATE_LIMIT_CONFIG,
     buildBatchPrompt,
     buildBatchSystemPrompt,
+    resolveBatchContextWindowChars,
     buildTranslationPrompt,
     buildDictionaryPrompt,
     lookupWord,

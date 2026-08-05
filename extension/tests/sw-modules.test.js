@@ -41,7 +41,7 @@ test('constants：端点与默认模型', () => {
   assert.ok(SW.API_ENDPOINTS.qwen.includes('dashscope'));
   assert.ok(SW.API_ENDPOINTS.local.includes('11434'));
   assert.strictEqual(SW.CACHE_KEY_VERSION, 'v3');
-  assert.strictEqual(SW.PROMPT_VERSION, 'p2');
+  assert.strictEqual(SW.PROMPT_VERSION, 'p3');
   assert.ok(SW.DEFAULT_MODELS.openai.length > 0);
 });
 
@@ -49,9 +49,9 @@ test('cache-keys：归一化与生成', () => {
   assert.strictEqual(SW.normalizeCacheKeyText('  a   b  '), 'a b');
   // 不传 model -> model 段为 '_'
   const key = SW.generateCacheKey('Hello world', 'en', 'zh', 'normal');
-  assert.ok(key.startsWith('v3:p2:_:en:zh:normal:'));
+  assert.ok(key.startsWith('v3:p3:_:en:zh:normal:'));
   const parsed = SW.parseCacheKey(key);
-  assert.strictEqual(parsed.promptVersion, 'p2');
+  assert.strictEqual(parsed.promptVersion, 'p3');
   assert.strictEqual(parsed.model, '_');
   assert.strictEqual(parsed.sourceLang, 'en');
   assert.strictEqual(parsed.targetLang, 'zh');

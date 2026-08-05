@@ -11,7 +11,7 @@ const bg = require('../background.js');
 
 test('generateCacheKey 拼接规则', () => {
   const k = bg.generateCacheKey('Hello', 'auto', 'zh');
-  assert.ok(k.startsWith('v3:p2:'), '含 version + promptVersion');
+  assert.ok(k.startsWith('v3:p3:'), '含 version + promptVersion');
   assert.ok(k.endsWith(':auto:zh:normal:Hello'), 'lang/style/text 后缀');
   // model 段非空（包装函数注入了当前模型）
   assert.ok(k.split(':')[2].length > 0, 'model 段非空');
@@ -203,15 +203,41 @@ test('getBatchConfig 按 provider/model 返回动态 batch 参数', () => {
   );
 });
 
-test('buildBatchSystemPrompt 包含必要格式要求但不注入页面上下文', () => {
+test('buildBatchSystemPrompt 包含格式要求；页面上下文仅以风格参考注入', () => {
   const system = bg.buildBatchSystemPrompt(['Hello', 'World'], 'en', 'zh');
   assert.ok(system.includes('JSON array of strings'));
   assert.ok(system.includes('Simplified Chinese'));
   assert.ok(system.includes('exactly 2'));
   assert.ok(system.includes('HTML tags'));
-  // 批量翻译不注入页面上下文，避免模型把任意片段偏向页面标题
+  // 不传上下文时不含任何页面信息
   assert.ok(!system.includes('Test Page'));
   assert.ok(!system.includes('example.com'));
+  // 传入上下文时以「风格参考、禁止翻译/提及」身份注入 system prompt（不进 user 输入，避免标题污染）
+  const withCtx = bg.buildBatchSystemPrompt(['Hello'], 'en', 'zh', { domain: 'example.com', pageTitle: 'Test Page' });
+  assert.ok(withCtx.includes('example.com'));
+  assert.ok(withCtx.includes('Test Page'));
+  assert.ok(withCtx.includes('style and domain reference ONLY'));
+  assert.ok(withCtx.includes('never translate it'));
+});
+
+test('resolveBatchContextWindowChars 窗口档位解析（含旧布尔值迁移）', () => {
+  assert.strictEqual(bg.resolveBatchContextWindowChars(false), 0);
+  assert.strictEqual(bg.resolveBatchContextWindowChars('off'), 0);
+  assert.strictEqual(bg.resolveBatchContextWindowChars('short'), 150);
+  assert.strictEqual(bg.resolveBatchContextWindowChars(true), 150); // 旧布尔 true 迁移为短档
+  assert.strictEqual(bg.resolveBatchContextWindowChars('long'), 400);
+  assert.strictEqual(bg.resolveBatchContextWindowChars(undefined), 400); // 缺省长档
+});
+
+test('buildBatchPrompt 按档位截断滑动窗口', () => {
+  const longSource = 'x'.repeat(500);
+  const prompt = bg.buildBatchPrompt(['Next'], 'en', 'zh', {
+    prevContext: { source: longSource, translation: '上一段译文' }
+  });
+  // 当前缺省档位 long=400：窗口内 source 被截断至 400 字符
+  assert.ok(prompt.includes('Previous segment'));
+  assert.ok(!prompt.includes(longSource), '窗口按档位数截断，不含完整 500 字');
+  assert.ok(prompt.includes('x'.repeat(400)));
 });
 
 test('buildBatchPrompt 只包含输入数据与滑动窗口上下文', () => {

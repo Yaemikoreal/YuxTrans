@@ -27,7 +27,7 @@ class YuxTransContent {
       isTranslated: false,
       isTranslating: false,
       cancelRequested: false, // 用户取消整页/动态翻译：阻止 worker 发起新批次
-      originalTexts: new Map(), // node -> { text, styles }
+      originalTexts: new Map(), // paragraph -> { text, nodeTexts, translated, ... }（W5：键为段落对象）
       translatedNodes: [],
       streamingNodes: new Map(), // requestId -> { nodeInfo, tempSpan }
       failedItems: [], // 失败节点，供重试
@@ -44,7 +44,7 @@ class YuxTransContent {
     this._streamReqSeq = 0; // 整页流式段落 requestId 自增序号（streamChunk 按此路由到对应 tempSpan）
     this._viewportObserver = null; // belowFold 视口感知：入视口才提交翻译
     this._viewportCleanup = null; // belowFold 取消回调（放弃未提交项）
-    // v2.1 段落对照（bilingualStyle=block）：块容器元素 -> { el: div.yuxtrans-block-tr, nodes: Set<node> }
+    // v2.1 段落对照（bilingualStyle=block）：块容器元素 -> { el: div.yuxtrans-block-tr, nodes: Set<paragraph> }
     this._blockTrMap = new Map();
     // F1 悬停段落翻译状态
     this._hoverTarget = null; // 当前悬停描边的段落元素
@@ -253,6 +253,21 @@ class YuxTransContent {
       } else if (request.action === 'applyBilingualMode') {
         // popup 翻译模式切换：立即重渲染已翻译内容（不写站点偏好）
         this.applyBilingualRender(request.bilingualMode !== false);
+        sendResponse({ success: true });
+      } else if (request.action === 'getPageTranslationState') {
+        // popup 整页按钮状态机：查询当前页翻译状态
+        sendResponse({
+          success: true,
+          isTranslating: !!(this.pageTranslationState.isTranslating || this._dynamicTranslating || this._pageTranslateLocked),
+          isTranslated: !!this.pageTranslationState.isTranslated
+        });
+      } else if (request.action === 'cancelPageTranslation') {
+        // popup「终止翻译」：停止在途任务并恢复原文
+        //（restoreOriginalTexts 内部已含在途任务取消链路 cancelPageTranslation）
+        this.restoreOriginalTexts();
+        if (typeof this.setPageControlRestoredState === 'function') {
+          this.setPageControlRestoredState();
+        }
         sendResponse({ success: true });
       }
       return true;
