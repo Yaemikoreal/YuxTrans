@@ -31,14 +31,14 @@ It is not built for feature density. It answers a single question: in long-form 
 - **Steady by design.** When the local model is unavailable or the cloud throttles, it falls back to a spare provider; a 200 MB IndexedDB cache returns hits in milliseconds.
 - **Profile-based management.** Save multiple provider profiles (provider, credentials, model) in Settings, and switch them in the popup.
 
-Current stable release: **v0.6.0**.
+Current stable release: **v0.7.0**.
 
 ## Design intent (UI v2.1)
 
-In one sentence: **the skin of study paper, the bones of Apple.**
+In one sentence: **the skin of study paper, the bones of order.**
 
 - **The skin is paper and ink.** Ink as the bone, warm paper as the ground, dusk as a faint glow. No pure black or white, no high-saturation tech colors, no bouncing animations; the loading state is an unfinished ellipsis, not a spinning ring.
-- **The bones are order.** A component skeleton borrowed from the Apple HIG—grouped cards as information hierarchy, a "label left / value right" scanning path, 0.5px separators, and exactly one solid primary action per screen. The popup and settings page gain a clear anchor instead of a uniform gray.
+- **The bones are order.** A component skeleton built on system-level visual order—grouped cards as information hierarchy, a "label left / value right" scanning path, 0.5px separators, and exactly one solid primary action per screen. The popup and settings page gain a clear anchor instead of a uniform gray.
 - **A three-tier type ramp, calibrated for the eyes.** Primary text in ink (13:1), translations in `#4A453F` (8.6:1, AAA), labels in `#6B655C` (5.1:1, AA); the annotation gray is retired to placeholders and decoration. Long reads stay comfortable; hierarchy survives.
 - **Lives in the page without touching it.** Every floating UI element (selection popup, action tag, page control bar) runs inside a Shadow DOM, strictly isolated from the host page's styles.
 
@@ -60,7 +60,7 @@ Screenshots follow a real usage path (assets in `logo/`).
 
 ### 1. Settings · Profiles
 
-A macOS System Settings skeleton: five sidebar modules (Profiles, Preferences, Interaction & Display, Data & Storage, Diagnostics), each with a zone-colored line icon; settings live inside grouped cards, labels on the left, controls on the right. Credentials never leave the local browser.
+A system settings skeleton: five sidebar modules (Profiles, Preferences, Interaction & Display, Data & Storage, Diagnostics), each with a zone-colored line icon; settings live inside grouped cards, labels on the left, controls on the right. Credentials never leave the local browser.
 
 ![Settings — Profiles](logo/使用样例-设置.png)
 

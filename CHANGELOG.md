@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-08-10
 
 > 批量并行与进度感知（2026-08-07）：子批次并发池、增量进度下发、空译文守卫、滑动窗口共享、取消/会话竞速防护。
 
@@ -23,21 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **整页翻译异常恢复控制条**：主流程异常时停止进度心跳并显示可重试状态，避免「翻译中」永久假死。
 - **子批次通道异常不拖垮整批**：`Promise.allSettled` 收口，单通道异常保留其余通道结果，异常子批次按失败补齐。
 
-> UI v2.1（2026-08-04）：视觉系统整体转骨——「书房衬纸的皮，Apple 的骨」。新增段落对照双语模式，全部悬浮 UI 迁入 Shadow DOM，文字层级按 WCAG 重新校准。单测 **173 项全绿**，e2e 冒烟通过。
+> UI v2.1（2026-08-04）：视觉系统整体转骨——「书房衬纸的皮，秩序的骨」。新增段落对照双语模式，全部悬浮 UI 迁入 Shadow DOM，文字层级按 WCAG 重新校准。单测 **173 项全绿**，e2e 冒烟通过。
 
 ### Added（UI v2.1）
 
 - **段落对照双语模式** — 新增 `bilingualStyle` 配置（行内注脚 / 段落对照）：段落对照下译文以块级元素整段跟随原文段落，原文排版零改动，hover 译文段出暮瞳微光；`page.js` 段落聚合渲染 + 三态（仅译文/行内/段落）纯 DOM 重渲染互切，恢复原文无残留。
 - **悬浮 UI Shadow DOM 隔离** — 划词浮窗、操作条、整页控制条、侧缘挂耳、悬停翻译、引导层全部经统一 `createShadowHost` 辅助迁入 Shadow DOM；`composedPath` 修复事件重定向；design-tokens `:root, :host` 双挂载；兑现设计文档 §9.3。
 - **三级文字层级令牌** — 新增 `--yxt-translation: #4A453F`（译文 8.6:1 AAA）与 `--yxt-label: #6B655C`（标签 5.1:1 AA）；批注灰 `#9E968A` 降级为纯装饰色（占位/分隔/禁用），深色模式对应提亮。
-- **iOS 胶囊开关组件** — `.yxt-switch`（纸墨调温：墨韵轨道 + 纸色滑点），popup / options 全面替换铅字拨杆；禁忌清单修订：胶囊形态仅允许开关。
-- **v2.1 圆角尺度** — `--yxt-radius-card(8px) / --yxt-radius-window(10px) / --yxt-radius-btn(6px)`；Apple 式双层柔和阴影令牌。
+- **胶囊开关组件** — `.yxt-switch`（纸墨调温：墨韵轨道 + 纸色滑点），popup / options 全面替换铅字拨杆；禁忌清单修订：胶囊形态仅允许开关。
+- **v2.1 圆角尺度** — `--yxt-radius-card(8px) / --yxt-radius-window(10px) / --yxt-radius-btn(6px)`；双层柔和阴影令牌。
 
 ### Changed（UI v2.1）
 
-- **Popup 重构** — Apple 分组卡片骨架（底深卡浅 + 0.5px 分隔线）、唯一实心墨主动作、分段控件、圆形设置图标钮、用量行 chevron 折叠；**锁定浅色方案**。
-- **Options 重构** — macOS 系统设置式骨架：分区色线性 SVG 导航图标、设置项「标签左 / 控件右」分组卡片、说明文字升级 label 色；保留五分区色、氛围层与深色模式。
-- **划词浮窗精修** — footer 改 Apple 底部工具条（灰底分区），pin/insert/copy/bad 四图标 fill 换 1.5px 线性，译文 500 字重，原文斜体 label 色，bad 反馈视觉弱化。
+- **Popup 重构** — 分组卡片骨架（底深卡浅 + 0.5px 分隔线）、唯一实心墨主动作、分段控件、圆形设置图标钮、用量行 chevron 折叠；**锁定浅色方案**。
+- **Options 重构** — 系统设置式骨架：分区色线性 SVG 导航图标、设置项「标签左 / 控件右」分组卡片、说明文字升级 label 色；保留五分区色、氛围层与深色模式。
+- **划词浮窗精修** — footer 改底部工具条（灰底分区），pin/insert/copy/bad 四图标 fill 换 1.5px 线性，译文 500 字重，原文斜体 label 色，bad 反馈视觉弱化。
 - **主按钮形态追认** — 实心墨为规范（设计文档 §6.1 同步修订），hover 仅加深阴影不浮起。
 
 ### Fixed（UI v2.1）
@@ -427,7 +427,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Yaemikoreal/YuxTrans/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Yaemikoreal/YuxTrans/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.7.0
 [0.5.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Yaemikoreal/YuxTrans/releases/tag/v0.4.0
