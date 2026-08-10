@@ -808,6 +808,27 @@
         </div>
 
         <div class="section" data-zone="diagnostics">
+          <h2 class="section-title">整页翻译性能（近 7 天）</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsPageElapsed">--</div>
+              <div class="stat-card-label">整页完成 p50</div>
+              <div class="stat-card-range" id="metricsPageElapsedRange"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsViewportDone">--</div>
+              <div class="stat-card-label">首屏可读 p50</div>
+              <div class="stat-card-range" id="metricsViewportDoneRange"></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-card-value" id="metricsTtft">--</div>
+              <div class="stat-card-label">流式首字 p50</div>
+              <div class="stat-card-range" id="metricsTtftRange"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" data-zone="diagnostics">
           <h2 class="section-title">最近失败</h2>
           <div class="yxt-group">
             <div id="metricsRecentErrors" class="metrics-error-list">

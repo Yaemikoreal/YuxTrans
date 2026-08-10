@@ -41,6 +41,8 @@ class YuxTransContent {
     this._pendingAddedRoots = new Set();
     this._pageSessionId = null; // 当前整页/动态翻译会话 id，用于 SW 侧取消
     this._pageSessionCounter = 0;
+    // translateBatchProgress 增量下发登记槽（page.js translateBatchParallel 发出请求前注册、finally 清理）
+    this._batchProgressHandlers = [];
     this._streamReqSeq = 0; // 整页流式段落 requestId 自增序号（streamChunk 按此路由到对应 tempSpan）
     this._viewportObserver = null; // belowFold 视口感知：入视口才提交翻译
     this._viewportCleanup = null; // belowFold 取消回调（放弃未提交项）
@@ -250,6 +252,11 @@ class YuxTransContent {
       } else if (request.action === 'streamChunk') {
         // 流式输出：逐字更新弹窗或整页段落
         this.handleStreamChunk(request.chunk, request.fullText, request.requestId);
+      } else if (request.action === 'translateBatchProgress') {
+        // 整页批量增量下发：SW 子批次完成即推送，路由到 page.js 按 index 落地
+        if (typeof this.handleBatchProgress === 'function') {
+          this.handleBatchProgress(request.sessionId, request.results);
+        }
       } else if (request.action === 'applyBilingualMode') {
         // popup 翻译模式切换：立即重渲染已翻译内容（不写站点偏好）
         this.applyBilingualRender(request.bilingualMode !== false);

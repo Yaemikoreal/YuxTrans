@@ -25,8 +25,9 @@
     HOVER_THROTTLE_MS: 120,
     // Q2：动态增量翻译的新增节点 MutationObserver 防抖窗口
     ADDED_NODES_DEBOUNCE_MS: 500,
-    // belowFold 视口感知的预加载边距：节点入视口前 200px 即提交翻译
-    VIEWPORT_ROOT_MARGIN: '200px',
+    // belowFold 视口感知的预加载边距：节点入视口前约一屏（800px）即提交翻译，
+    // 用户滚动到该处时通常已译好/在译，避免「原地干等译文」
+    VIEWPORT_ROOT_MARGIN: '800px',
     // belowFold 超时回退：6s 后把视口外剩余项一次性提交，避免用户不滚动导致 await 卡死
     VIEWPORT_FALLBACK_MS: 6000,
     // belowFold 入视口段落的批次提交防抖（合并连续入视口事件）

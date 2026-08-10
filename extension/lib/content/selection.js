@@ -373,6 +373,29 @@
       this.popup = popup;
       this.popup.dataset.sourceText = sourceText;
 
+      // 长原文折叠：超过 4 行时默认收起为 3 行 + 展开/收起开关，
+      // 避免长段落划词时浮窗超出屏幕（译文区另有 max-height 内部滚动兜底）。
+      // rAF 回调在下一帧绘制前执行，折叠 class 于首帧前生效，无全文闪跳
+      const sourceEl = popup.querySelector('.yuxtrans-source');
+      if (sourceEl) {
+        requestAnimationFrame(() => {
+          if (!popup.isConnected) return;
+          const lineH = parseFloat(getComputedStyle(sourceEl).lineHeight) || 21;
+          if (sourceEl.scrollHeight > lineH * 4) {
+            sourceEl.classList.add('is-collapsed');
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'yuxtrans-source-toggle';
+            toggle.textContent = '展开原文';
+            toggle.addEventListener('click', () => {
+              const collapsed = sourceEl.classList.toggle('is-collapsed');
+              toggle.textContent = collapsed ? '展开原文' : '收起原文';
+            });
+            sourceEl.after(toggle);
+          }
+        });
+      }
+
       // header 换真实信息：语言对 + 供应商（替换品牌噪音 YuxTrans）
       this._updatePopupTitle();
 

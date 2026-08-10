@@ -165,6 +165,29 @@
 
 .yuxtrans-popup-content {
   padding: var(--yxt-space-4);
+  /* 长段落限高：内容区内部滚动（header/footer 固定，复制等操作始终可达），
+     滚动条按书房衬纸风格做细线低饱和处理 */
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--yxt-ink-25) transparent;
+}
+
+.yuxtrans-popup-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.yuxtrans-popup-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.yuxtrans-popup-content::-webkit-scrollbar-thumb {
+  background: var(--yxt-ink-25);
+  border-radius: var(--yxt-radius-sm);
+}
+
+.yuxtrans-popup-content::-webkit-scrollbar-thumb:hover {
+  background: var(--yxt-ink-40);
 }
 
 .yuxtrans-source {
@@ -175,6 +198,31 @@
   margin-bottom: var(--yxt-space-3);
   padding-bottom: var(--yxt-space-3);
   border-bottom: 1px solid var(--yxt-divider);
+}
+
+/* 长原文折叠：默认收起为 3 行，开关展开（showPopup 按实际行高判定后挂 class） */
+.yuxtrans-source.is-collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.yuxtrans-source-toggle {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: calc(-1 * var(--yxt-space-2)) 0 var(--yxt-space-3);
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-xs);
+  color: var(--yxt-text-tertiary);
+  cursor: pointer;
+  transition: color var(--yxt-transition-fast);
+}
+
+.yuxtrans-source-toggle:hover {
+  color: var(--yxt-text);
 }
 
 .yuxtrans-target {
@@ -455,8 +503,8 @@
 }
 
 .yuxtrans-page-control-progress {
-  width: 96px;
-  height: 4px;
+  width: 120px;
+  height: 5px;
   background: var(--yxt-ink-08);
   border-radius: var(--yxt-radius-sm);
   overflow: hidden;
@@ -725,10 +773,11 @@
   background: var(--yxt-paper-98);
   border-left: 2px solid var(--yxt-dusk-40);
   border-radius: var(--yxt-radius-sm);
-  font-family: var(--yxt-font-serif);
-  font-size: var(--yxt-text-sm);
-  line-height: 1.7;
-  color: var(--yxt-text-secondary);
+  /* 字体与划词浮窗（.yuxtrans-popup / .yuxtrans-target）保持一致：同款字族、字号、行高与墨色 */
+  font-family: var(--yxt-font);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--yxt-text);
   box-shadow: var(--yxt-shadow-sm);
   position: relative;
   animation: yuxtrans-slideIn 200ms var(--yxt-ease-paper);

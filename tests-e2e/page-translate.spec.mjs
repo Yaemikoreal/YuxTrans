@@ -51,28 +51,45 @@ test.beforeAll(async () => {
   await new Promise((resolve) => pageServer.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${pageServer.address().port}`;
 
-  // mock Ollama：解析请求体中的 Input JSON 数组，按原文映射返回译文数组
+  // mock Ollama：批量请求解析 user message 中的 Input JSON 数组，按原文映射返回译文数组；
+  // 单条/流式请求按 fixture 原文匹配单条译文；stream:true 时以 SSE（data: 前缀）应答，
+  // 与 SW 流式解析（仅认 data: 行）对齐
   mockApi = http.createServer((req, res) => {
     mockHits++;
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      let translated = [];
-      try {
-        const payload = JSON.parse(body);
-        const userMsg = (payload.messages || []).find((m) => m.role === 'user');
-        const m = userMsg && userMsg.content.match(/Input:\n(\[[\s\S]*)$/);
-        const inputs = m ? JSON.parse(m[1]) : [];
-        translated = inputs.map((t) => MOCK_TRANSLATIONS[t] || `[译]${t}`);
-      } catch { /* 保持空数组兜底 */ }
-      const content = JSON.stringify(translated);
+      let payload = {};
+      try { payload = JSON.parse(body); } catch { /* 保持空对象兜底 */ }
+      const userMsg = (payload.messages || []).find((m) => m.role === 'user');
+      const userContent = userMsg ? userMsg.content : '';
+      let translated;
+      const m = userContent.match(/Input:\n(\[[\s\S]*)$/);
+      if (m) {
+        let inputs = [];
+        try { inputs = JSON.parse(m[1]); } catch { /* 保持空数组兜底 */ }
+        translated = JSON.stringify(inputs.map((t) => MOCK_TRANSLATIONS[t] || `[译]${t}`));
+      } else {
+        // 单条翻译（流式/故障转移/重试）：prompt 无 Input 数组，按 fixture 原文匹配
+        const src = Object.keys(MOCK_TRANSLATIONS).find((k) => userContent.includes(k));
+        translated = src ? MOCK_TRANSLATIONS[src] : `[译]${userContent.slice(-40)}`;
+      }
       const respond = () => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          message: { role: 'assistant', content },
-          choices: [{ message: { role: 'assistant', content } }],
-          done: true
-        }));
+        if (payload.stream) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          res.end(
+            `data: ${JSON.stringify({ message: { role: 'assistant', content: translated }, done: false })}\n\n` +
+            `data: ${JSON.stringify({ message: { role: 'assistant', content: '' }, done: true })}\n\n` +
+            'data: [DONE]\n\n'
+          );
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            message: { role: 'assistant', content: translated },
+            choices: [{ message: { role: 'assistant', content: translated } }],
+            done: true
+          }));
+        }
       };
       const delay = mockDelayQueue.length > 0 ? mockDelayQueue.shift() : mockDelayMs;
       if (delay > 0) setTimeout(respond, delay);
@@ -123,6 +140,19 @@ async function sendConfig(cfg) {
       return r && r.success;
     }, cfg);
     return res;
+  } finally {
+    await optPage.close();
+  }
+}
+
+// 经扩展页（options）向 SW 发送任意消息并返回响应（用于 setSiteBilingualMode 等非 setConfig 动作）
+async function sendToSW(msg) {
+  const sw = await getSw();
+  const extId = new URL(sw.url()).host;
+  const optPage = await context.newPage();
+  try {
+    await optPage.goto(`chrome-extension://${extId}/options.html`);
+    return await optPage.evaluate(async (m) => chrome.runtime.sendMessage(m), msg);
   } finally {
     await optPage.close();
   }
@@ -252,6 +282,68 @@ test('连点/终止：任务进行中重触发取消并恢复原文，终止翻�
     mockDelayMs = 0;
     mockDelayQueue = [];
   }
+});
+
+test('仅译文模式：首次整页翻译直接以仅译文渲染（批量/流式两路径）', async () => {
+  test.skip(!context, 'mock API 未启动（端口被占用）');
+
+  for (const enableStreaming of [false, true]) {
+    const page = await openFixturePage();
+    // cacheEnabled:false 避免上一路径的缓存影响断言
+    expect(await sendConfig(baseProfileConfig({
+      bilingualMode: false, enableStreaming, cacheEnabled: false
+    }))).toBe(true);
+    await page.bringToFront();
+
+    const dispatched = await dispatchToActiveTab({ action: 'translatePage' });
+    expect(dispatched && dispatched.success).toBe(true);
+
+    // 首翻即仅译文：段首节点直接呈现译文，且不出现行内注脚 span
+    try {
+      await expect(page.locator('#para')).toHaveText(PARA1_TGT, { timeout: 15000 });
+      await expect(page.locator('#para2')).not.toContainText('A good translation tool', { timeout: 5000 });
+      expect(await page.locator('.yuxtrans-bilingual-text').count()).toBe(0);
+    } catch (e) {
+      console.log(`[e2e 诊断] enableStreaming=${enableStreaming} 首翻模式错误`);
+      throw e;
+    }
+    await page.close();
+  }
+});
+
+test('站点偏好覆盖：popup 全局切换清除当前站点覆盖后，首翻按全局模式渲染', async () => {
+  test.skip(!context, 'mock API 未启动（端口被占用）');
+  const page = await openFixturePage();
+
+  // 复现前置：全局仅译文，但该站点曾用控制条页面内切换过双语（站点级偏好优先于全局）
+  expect(await sendConfig(baseProfileConfig({
+    bilingualMode: false,
+    cacheEnabled: false,
+    siteModePrefs: { '127.0.0.1': { bilingualMode: true } }
+  }))).toBe(true);
+  await page.bringToFront();
+
+  // 站点覆盖存在时：首翻按站点偏好输出双语（这就是用户看到的 bug 表现）
+  await dispatchToActiveTab({ action: 'translatePage' });
+  const bilingual = page.locator('.yuxtrans-bilingual-text');
+  await expect(bilingual.first()).toBeVisible({ timeout: 15000 });
+
+  // 模拟 popup 切「仅译文」完整流：setConfig → 清当前站点覆盖（bilingualMode:null）→ applyBilingualMode
+  expect(await sendConfig(baseProfileConfig({ bilingualMode: false, cacheEnabled: false }))).toBe(true);
+  const clearRes = await sendToSW({ action: 'setSiteBilingualMode', hostname: '127.0.0.1', bilingualMode: null });
+  expect(clearRes && clearRes.success).toBe(true);
+  await page.bringToFront();
+  await dispatchToActiveTab({ action: 'applyBilingualMode', bilingualMode: false });
+  await expect(bilingual).toHaveCount(0, { timeout: 5000 });
+  await expect(page.locator('#para')).toHaveText(PARA1_TGT);
+
+  // 关键回归：恢复原文后再次首翻，站点覆盖已清除，按全局仅译文渲染
+  await dispatchToActiveTab({ action: 'translatePage' }); // 已翻译态 → 恢复原文
+  await expect(page.locator('#para')).toHaveText(PARA1_SRC, { timeout: 5000 });
+  await dispatchToActiveTab({ action: 'translatePage' }); // 重新翻译
+  await expect(page.locator('#para')).toHaveText(PARA1_TGT, { timeout: 15000 });
+  expect(await page.locator('.yuxtrans-bilingual-text').count()).toBe(0);
+  await page.close();
 });
 
 test('模式切换：popup 流（setConfig + applyBilingualMode）即时重渲染 仅译文 ⟷ 双语', async () => {

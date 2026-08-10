@@ -2224,6 +2224,28 @@ async function googleTranslate(text, sourceLang, targetLang, providerOverride = 
 async function translateWithStream(text, sourceLang, targetLang, tabId, options = {}) {
   const { context = null, providerOverride = null, requestId = null, sessionId = null, priority = SW.SCHEDULER_PRIORITY.NORMAL } = options;
   const p = resolveProviderConfig(providerOverride);
+  // ADR 0006 埋点：首个 streamChunk 推送时间与请求开始时间之差（不含消息传输延迟）
+  const streamStart = performance.now();
+  let firstChunkSent = false;
+  const pushChunk = (chunk, fullText) => {
+    if (!firstChunkSent && chunk) {
+      firstChunkSent = true;
+      recordMetric({
+        action: 'streamTtft',
+        provider: p.provider,
+        ttftMs: Math.round(performance.now() - streamStart),
+        textLength: text?.length || 0,
+        success: true,
+        errorType: ''
+      });
+    }
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk, fullText }).catch(() => { /* tab 可能已关闭 */ });
+    } else {
+      chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk, fullText }).catch(() => { /* popup 可能未打开 */ });
+    }
+  };
+
   // 本地 Ollama 不依赖公网；浏览器 offline 时仍应允许 localhost
   const blockOffline = ProductHelpers.shouldBlockWhenBrowserOffline
     ? ProductHelpers.shouldBlockWhenBrowserOffline(navigator.onLine, p.provider)
@@ -2249,22 +2271,14 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
   try {
     // 同语言跳过：文本已是目标语言则推送原文并返回，不调 API（避免把中文翻成英文等互译混用）
     if (isSameAsTargetLanguage(text, targetLang)) {
-      if (tabId) {
-        chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* tab 可能已关闭 */ });
-      } else {
-        chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: text, fullText: text }).catch(() => { /* popup 可能未打开 */ });
-      }
+      pushChunk(text, text);
       return text;
     }
 
     // F7：google 免费接口无 SSE，降级为一次性翻译并以单 chunk 推送（保持流式调用契约）
     if (p.provider === 'google') {
       const translated = await googleTranslate(text, sourceLang, targetLang, p);
-      if (tabId) {
-        chrome.tabs.sendMessage(tabId, { action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* tab 可能已关闭 */ });
-      } else {
-        chrome.runtime.sendMessage({ action: 'streamChunk', requestId, chunk: translated, fullText: translated }).catch(() => { /* popup 可能未打开 */ });
-      }
+      pushChunk(translated, translated);
       return translated;
     }
 
@@ -2332,21 +2346,7 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
               if (chunk) {
                 fullText += chunk;
                 // 推送增量文本到页面或 Popup
-                if (tabId) {
-                  chrome.tabs.sendMessage(tabId, {
-                    action: 'streamChunk',
-                    requestId,
-                    chunk,
-                    fullText
-                  }).catch(() => { /* tab 可能已关闭 */ });
-                } else {
-                  chrome.runtime.sendMessage({
-                    action: 'streamChunk',
-                    requestId,
-                    chunk,
-                    fullText
-                  }).catch(() => { /* popup 可能未打开 */ });
-                }
+                pushChunk(chunk, fullText);
               }
             } catch (e) {
               // 忽略不可解析的行
@@ -2358,7 +2358,12 @@ async function translateWithStream(text, sourceLang, targetLang, tabId, options 
       clearTimeout(timeoutId);
       updateRateLimitState(true);
 
-      return fullText.trim();
+      const trimmed = fullText.trim();
+      // 空流（代理/网关以非 SSE 应答、或零 chunk）不能视为成功：
+      // 此前会以 {success:true, text:''} 上抛，仅译文模式下段落被标记已翻译却仍是原文。
+      // 抛错后由调用方 autoFallback 走非流式兜底
+      if (!trimmed) throw new Error('流式响应为空');
+      return trimmed;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -2717,8 +2722,9 @@ function buildBatchPrompt(groupTexts, groupSourceLang, groupTargetLang, context 
 /**
  * 批量翻译逻辑 (JSON 数组) + 降级处理
  * 额外在 batch 内做文本去重：相同原文只请求一次，结果映射回所有出现位置
+ * tabId 非空时，每个子批次完成（含部分失败）即向发起标签页增量推送 translateBatchProgress
  */
-async function translateBatchInternal(texts, sourceLang, targetLang, context = null, sessionId = null) {
+async function translateBatchInternal(texts, sourceLang, targetLang, context = null, sessionId = null, tabId = null) {
   const batchStart = performance.now();
   const finalResults = new Array(texts.length);
   const missItems = [];
@@ -2781,14 +2787,34 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
   // B: 按当前 provider/model 动态获取 batch 上限
   const { maxBatchChars } = getBatchConfig();
 
-  // 4. 为每个语言组按字符数切分子批次，再分别调用批处理
+  // 4. 为每个语言组按字符数切分子批次，再以 worker 池并行处理
   for (const [groupKey, groupItems] of langGroups) {
     const [groupSourceLang, groupTargetLang] = groupKey.split(':');
     const subBatches = splitIntoCharBatches(groupItems, maxBatchChars);
-    let windowContext = null; // 该语言组的滑动窗口：上一批末尾原文+译文
+    // 子批次共享队列：worker 乱序完成不影响正确性，结果仍按 originalIndex 写回 finalResults
+    const subQueue = [...subBatches.keys()];
 
-    for (const batchItems of subBatches) {
-      if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
+    // 子批次完成（含部分失败）即增量下发：向发起标签页推送进度，
+    // index 为结果在 content 发来的 texts 数组中的位置（originalIndex）；
+    // 字段与最终响应 results 条目一致，最终 sendResponse 仍为权威结果
+    const pushBatchProgress = (uniqueToOriginals) => {
+      if (!tabId || !sessionId) return;
+      const results = [];
+      uniqueToOriginals.forEach((originalIndices) => {
+        originalIndices.forEach((originalIndex) => {
+          results.push({
+            index: originalIndex,
+            ...(finalResults[originalIndex] || { success: false, error: '翻译未完成' })
+          });
+        });
+      });
+      chrome.tabs.sendMessage(tabId, {
+        action: 'translateBatchProgress', sessionId, results
+      }).catch(() => { /* tab 可能已关闭 */ });
+    };
+
+    // 单个子批次的处理（原串行循环体）：windowContext 由调用方（worker）按通道持有并回传
+    const processSubBatch = async (batchItems, windowContext) => {
       // 4.1 同一批次内去重：相同原文只发送一次
       const uniqueItems = [];
       const textToUniqueIndex = new Map();
@@ -2971,8 +2997,7 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
 
         updateRateLimitState(true);
 
-        if (invalidUniqueIndices.length > 0) {
-          if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
+        if (invalidUniqueIndices.length > 0 && !isSessionCancelled(sessionId)) {
           console.warn(`[YuxTrans] 批处理有 ${invalidUniqueIndices.length} 项无效结果，正在补全...`);
           const invalidItems = invalidUniqueIndices.map((i) => uniqueItems[i]);
           await fallbackBatchItems(invalidItems, sourceLang, context, finalResults, sessionId);
@@ -3003,13 +3028,47 @@ async function translateBatchInternal(texts, sourceLang, targetLang, context = n
         }
 
         const needFallbackItems = uniqueItems.filter((_, i) => !usedUniqueIndices.has(i));
-        if (needFallbackItems.length === 0) continue;
-
-        if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
-        console.log(`[YuxTrans] 需要补全 ${needFallbackItems.length} 项...`);
-        await fallbackBatchItems(needFallbackItems, sourceLang, context, finalResults, sessionId);
+        if (needFallbackItems.length > 0 && !isSessionCancelled(sessionId)) {
+          console.log(`[YuxTrans] 需要补全 ${needFallbackItems.length} 项...`);
+          await fallbackBatchItems(needFallbackItems, sourceLang, context, finalResults, sessionId);
+        }
       }
+
+      // 子批次完成（含部分失败）立即增量下发本批结果；会话取消时不推送（content 侧已丢弃会话）
+      if (!isSessionCancelled(sessionId)) {
+        pushBatchProgress(uniqueToOriginals);
+      }
+      return windowContext;
+    };
+
+    // worker 池：最多 BATCH_PARALLEL_LANES 个通道并行从共享队列取子批次；
+    // 滑动窗口按语言组共享最近一次完成的子批次（乱序完成时取最新快照），
+    // 避免通道独立窗口让多数并行批次完全丢失跨段上下文。
+    // 429 时由自适应限速（apiConcurrencyGate / updateRateLimitState / 批次级退避）收敛，通道数不变。
+    let laneWindowContext = null; // 语言组共享的最近完成窗口（所有 worker 闭包引用同一绑定）
+    const worker = async () => {
+      while (subQueue.length > 0 && !isSessionCancelled(sessionId)) {
+        const subIndex = subQueue.shift();
+        laneWindowContext = await processSubBatch(subBatches[subIndex], laneWindowContext);
+      }
+    };
+
+    const laneCount = Math.min(SW.BATCH_PARALLEL_LANES || 5, subBatches.length);
+    const laneWorkers = [];
+    for (let lane = 0; lane < laneCount; lane++) {
+      laneWorkers.push(worker());
     }
+    // 单个通道异常不拖垮整批：其余通道已写回的结果保留，异常子批次按未完成条目
+    // 由 content 侧补齐为失败（增量进度已推送的条目不受影响）
+    const settled = await Promise.allSettled(laneWorkers);
+    settled.forEach((r) => {
+      if (r.status === 'rejected') {
+        console.warn('[YuxTrans] 子批次通道异常:', r.reason);
+      }
+    });
+
+    // 会话取消：保留原串行版本的提前返回语义（指标落盘后直接交还控制权）
+    if (isSessionCancelled(sessionId)) { recordBatchMetric(batchStart, texts, finalResults); return finalResults; }
   }
 
   recordBatchMetric(batchStart, texts, finalResults);
@@ -3551,14 +3610,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       },
 
-      translateBatch({ request, sendResponse }) {
+      translateBatch({ request, sendResponse, tabId }) {
         const sourceLang = request.sourceLang || config.sourceLang || 'auto';
         // 目标语言由 translateBatchInternal 内部为每个文本单独 resolveTargetLanguage
         // 确保缓存键与 translate() 函数一致
         const targetLang = request.targetLang || config.targetLang || 'zh';
         const context = request.context || null;
 
-        translateBatchInternal(request.texts, sourceLang, targetLang, context, request.sessionId || null)
+        // tabId 用于子批次完成即增量推送 translateBatchProgress；无 tabId（如 popup）时跳过推送
+        translateBatchInternal(request.texts, sourceLang, targetLang, context, request.sessionId || null, tabId || null)
           .then(results => sendResponse({ success: true, results }))
           .catch(error => sendResponse(failResponse(error)));
         return;
@@ -3656,10 +3716,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
         const prefs = { ...(config.siteModePrefs || {}) };
-        prefs[host] = {
-          ...(prefs[host] || {}),
-          bilingualMode: request.bilingualMode !== false
-        };
+        if (request.bilingualMode === null) {
+          // 清除站点覆盖（popup 全局模式切换时调用）：删除后回退到全局 bilingualMode；
+          // 连同无 www 变体一起清（resolveSiteBilingualMode 会回退匹配无 www 域名）
+          delete prefs[host];
+          delete prefs[host.replace(/^www\./, '')];
+        } else {
+          prefs[host] = {
+            ...(prefs[host] || {}),
+            bilingualMode: request.bilingualMode !== false
+          };
+        }
         saveConfig({ siteModePrefs: prefs })
           .then(() => sendResponse({ success: true, siteModePrefs: prefs }))
           .catch((error) => sendResponse(failResponse(error)));
@@ -3791,16 +3858,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const days = request.days || METRICS_RETENTION_DAYS;
         getMetrics(limit, days)
           .then(metrics => {
-            // 聚合摘要
-            const total = metrics.length;
-            const success = metrics.filter(m => m.success).length;
+            // 仅统计翻译类指标：swInit / pageTranslate / streamTtft 等诊断埋点
+            // 不混入成功率、缓存命中与平均延迟，避免污染既有诊断摘要
+            const translateMetrics = metrics.filter((m) =>
+              ['translate', 'translateStream', 'translateBatch', 'lookupWord'].includes(m.action)
+            );
+            const total = translateMetrics.length;
+            const success = translateMetrics.filter(m => m.success).length;
             const failure = total - success;
-            const cacheHits = metrics.filter(m => m.cached).length;
+            const cacheHits = translateMetrics.filter(m => m.cached).length;
             const avgLatency = total > 0
-              ? Math.round(metrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / total)
+              ? Math.round(translateMetrics.reduce((sum, m) => sum + (m.latencyMs || 0), 0) / total)
               : 0;
             const byProvider = {};
-            metrics.forEach(m => {
+            translateMetrics.forEach(m => {
               const p = m.provider || 'unknown';
               if (!byProvider[p]) byProvider[p] = { count: 0, success: 0, failure: 0, totalLatency: 0, cacheHits: 0 };
               byProvider[p].count++;
@@ -3829,6 +3900,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           success: true,
           logs: getRequestLogs(request.limit)
         });
+        return;
+      },
+
+      recordPageMetrics({ request, sendResponse }) {
+        const metric = request.metric;
+        if (!metric || typeof metric !== 'object') {
+          sendResponse({ success: false, error: '缺少指标数据' });
+          return;
+        }
+        // 整页翻译性能指标落盘（ADR 0006 验证埋点；recordMetric 内部吞错，不影响主流程）
+        recordMetric({ action: 'pageTranslate', ...metric });
+        sendResponse({ success: true });
         return;
       },
 

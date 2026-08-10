@@ -32,7 +32,7 @@ E:/Pythonproject/YuxTrans
 ├── logo/                        # 品牌资源与使用样例
 ├── scripts/                     # 工具脚本（如 generate_extension_icons.py）
 ├── package.json                 # Node 测试脚本（node --test）
-└── README.md / CHANGELOG.md / CLAUDE.md / CONTEXT.md
+└── README.md / CHANGELOG.md / CONTEXT.md
 ```
 
 ### 结构注意事项

@@ -130,6 +130,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const metricsProviderTableEl = getById('metricsProviderTable');
   const metricsSwInitCountEl = getById('metricsSwInitCount');
   const metricsSwInitAvgEl = getById('metricsSwInitAvg');
+  const metricsPageElapsedEl = getById('metricsPageElapsed');
+  const metricsPageElapsedRangeEl = getById('metricsPageElapsedRange');
+  const metricsViewportDoneEl = getById('metricsViewportDone');
+  const metricsViewportDoneRangeEl = getById('metricsViewportDoneRange');
+  const metricsTtftEl = getById('metricsTtft');
+  const metricsTtftRangeEl = getById('metricsTtftRange');
   const metricsRecentErrorsEl = getById('metricsRecentErrors');
   const refreshMetricsBtn = getById('refreshMetricsBtn');
 
@@ -1881,6 +1887,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         : 0;
       metricsSwInitAvgEl.textContent = `${avg}ms`;
     }
+
+    // ADR 0006 整页翻译性能：p50 + min~max（近 7 天，复用 getMetrics 明细）
+    const percentile = (arr, key) => {
+      const values = arr
+        .map((m) => m[key])
+        .filter((v) => typeof v === 'number' && v > 0)
+        .sort((a, b) => a - b);
+      return values.length ? values[Math.floor(values.length / 2)] : null;
+    };
+    const valueRange = (arr, key) => {
+      const values = arr.map((m) => m[key]).filter((v) => typeof v === 'number' && v > 0);
+      return values.length ? `${Math.min(...values)} ~ ${Math.max(...values)}ms` : '';
+    };
+    const pageMetrics = (metrics || []).filter((m) => m.action === 'pageTranslate');
+    const ttftMetrics = (metrics || []).filter((m) => m.action === 'streamTtft');
+    const pageElapsedP50 = percentile(pageMetrics, 'elapsedMs');
+    const viewportDoneP50 = percentile(pageMetrics, 'viewportDoneMs');
+    const ttftP50 = percentile(ttftMetrics, 'ttftMs');
+    if (metricsPageElapsedEl) metricsPageElapsedEl.textContent = pageElapsedP50 === null ? '--' : `${pageElapsedP50}ms`;
+    if (metricsPageElapsedRangeEl) metricsPageElapsedRangeEl.textContent = valueRange(pageMetrics, 'elapsedMs');
+    if (metricsViewportDoneEl) metricsViewportDoneEl.textContent = viewportDoneP50 === null ? '--' : `${viewportDoneP50}ms`;
+    if (metricsViewportDoneRangeEl) metricsViewportDoneRangeEl.textContent = valueRange(pageMetrics, 'viewportDoneMs');
+    if (metricsTtftEl) metricsTtftEl.textContent = ttftP50 === null ? '--' : `${ttftP50}ms`;
+    if (metricsTtftRangeEl) metricsTtftRangeEl.textContent = valueRange(ttftMetrics, 'ttftMs');
 
     // 供应商分布表
     if (metricsProviderTableEl) {

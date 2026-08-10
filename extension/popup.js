@@ -228,6 +228,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id) {
+          // 全局切换应「选什么模式就以什么模式输出」：清除当前站点可能存在的覆盖偏好
+          //（控制条页面内切换会写站点级偏好并优先于全局，见 loadConfig 的 resolveSiteBilingualMode），
+          // 否则本页下一次整页翻译仍按旧的站点偏好渲染，表现为模式切换不生效
+          const hostname = new URL(tab.url || '').hostname;
+          if (hostname) {
+            await chrome.runtime.sendMessage({
+              action: 'setSiteBilingualMode',
+              hostname,
+              bilingualMode: null
+            });
+          }
           await chrome.tabs.sendMessage(tab.id, { action: 'applyBilingualMode', bilingualMode: isBilingual });
         }
       } catch (e) {

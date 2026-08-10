@@ -292,3 +292,8 @@ test('message-actions：translateWithProfile 归入 translate 类', () => {
   assert.strictEqual(SW.isKnownMessageAction('translateWithProfile'), true);
   assert.strictEqual(SW.classifyMessageAction('translateWithProfile'), 'translate');
 });
+
+test('message-actions：recordPageMetrics 归入 diagnostics 类', () => {
+  assert.strictEqual(SW.isKnownMessageAction('recordPageMetrics'), true);
+  assert.strictEqual(SW.classifyMessageAction('recordPageMetrics'), 'diagnostics');
+});

@@ -907,6 +907,14 @@ label.btn-secondary {
   letter-spacing: 0.02em;
 }
 
+.stat-card-range {
+  font-family: var(--yxt-font-sans);
+  font-size: var(--yxt-text-2xs);
+  color: var(--yxt-label);
+  margin-top: var(--yxt-space-1);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== 浮动状态提示（与 popup/content toast 收敛：统一底部居中） ===== */
 .status {
   position: fixed;

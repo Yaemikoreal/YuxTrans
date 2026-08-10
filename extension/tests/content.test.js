@@ -276,6 +276,125 @@ test('整页翻译：enableStreaming 关闭保持 translateBatch 批量路径', 
   assert.strictEqual(instance.pageTranslationState.isTranslated, true);
 });
 
+test('ADR 0006：云端 belowFold 改走批量（首屏仍流式）', async () => {
+  const { instance, mock } = setup({ provider: 'qwen', enableStreaming: true });
+  const viewport = makeNodeInfo('Viewport paragraph.');
+  const below = makeNodeInfo('Below fold paragraph.');
+  below.isInViewport = false;
+  instance.collectTextNodes = () => [viewport, below];
+  mock.handlers.translateStream = (msg) => ({
+    success: true, text: '流式:' + msg.text, cached: false
+  });
+  mock.handlers.translateBatch = (msg) => ({
+    success: true,
+    results: msg.texts.map((t) => ({ success: true, text: '批量:' + t, cached: false }))
+  });
+
+  let belowOptions = 'NOT_CALLED';
+  instance._translateBelowFoldViaViewport = async (items, onBatchResult, batchOptions) => {
+    belowOptions = batchOptions;
+    onBatchResult(
+      items.map((_, i) => i),
+      items,
+      items.map((it) => ({ success: true, text: '批量:' + it.text, cached: false }))
+    );
+  };
+
+  await instance.translatePage();
+
+  assert.strictEqual(belowOptions, null, '云端 belowFold 应走批量（不传 streaming）');
+  const streamMsgs = mock.sent.filter((s) => s.msg.action === 'translateStream');
+  assert.strictEqual(streamMsgs.length, 1, '首屏视口内仍走流式');
+});
+
+test('ADR 0006：本地 Ollama belowFold 保留流式', async () => {
+  const { instance, mock } = setup({ provider: 'local', enableStreaming: true });
+  const viewport = makeNodeInfo('Local viewport paragraph.');
+  const below = makeNodeInfo('Local below fold paragraph.');
+  below.isInViewport = false;
+  instance.collectTextNodes = () => [viewport, below];
+  mock.handlers.translateStream = (msg) => ({
+    success: true, text: '流式:' + msg.text, cached: false
+  });
+
+  let belowOptions = null;
+  instance._translateBelowFoldViaViewport = async (items, onBatchResult, batchOptions) => {
+    belowOptions = batchOptions;
+  };
+
+  await instance.translatePage();
+
+  assert.deepStrictEqual(belowOptions, { streaming: true }, '本地 Ollama 保留流式');
+});
+
+test('ADR 0006：动态增量云端走批量、本地保留流式', async () => {
+  // 云端：动态增量不带 streaming
+  const cloud = setup({ provider: 'qwen', enableStreaming: true });
+  cloud.instance.pageTranslationState.isTranslated = true;
+  const cloudRoot = new FakeElement('div');
+  cloudRoot.isConnected = true;
+  cloud.instance._pendingAddedRoots.add(cloudRoot);
+  const cloudNodes = [makeNodeInfo('Dynamic cloud paragraph.')];
+  cloud.instance.collectTextNodes = (r) => (r === cloudRoot ? cloudNodes : []);
+  const cloudOptions = [];
+  cloud.instance.translateBatchParallel = async (items, onProgress, onBatchResult, options) => {
+    cloudOptions.push(options);
+  };
+
+  await cloud.instance._processAddedNodes();
+
+  assert.deepStrictEqual(cloudOptions[0], {}, '云端动态增量走批量（不带 streaming）');
+
+  // 本地：enableStreaming 开启时保留流式
+  const local = setup({ provider: 'local', enableStreaming: true });
+  local.instance.pageTranslationState.isTranslated = true;
+  const localRoot = new FakeElement('div');
+  localRoot.isConnected = true;
+  local.instance._pendingAddedRoots.add(localRoot);
+  const localNodes = [makeNodeInfo('Dynamic local paragraph.')];
+  local.instance.collectTextNodes = (r) => (r === localRoot ? localNodes : []);
+  const localOptions = [];
+  local.instance.translateBatchParallel = async (items, onProgress, onBatchResult, options) => {
+    localOptions.push(options);
+  };
+
+  await local.instance._processAddedNodes();
+
+  assert.deepStrictEqual(localOptions[0], { streaming: true }, '本地动态增量保留流式');
+});
+
+test('ADR 0006：logPageMetrics 落盘为 recordPageMetrics 指标', () => {
+  const { instance, mock } = setup({ provider: 'qwen', model: 'qwen-turbo' });
+  // setup 默认打桩了 logPageMetrics，此用例直接验证真实落盘路径
+  instance.logPageMetrics = YuxTransContent.prototype.logPageMetrics;
+  instance.config = { provider: 'qwen', model: 'qwen-turbo' };
+  instance.logPageMetrics({
+    totalNodes: 10,
+    viewportNodes: 3,
+    belowFoldNodes: 7,
+    duplicateTexts: 1,
+    successCount: 9,
+    failCount: 1,
+    cacheHits: 2,
+    apiCount: 7,
+    elapsedSeconds: 3.5,
+    viewportDoneMs: 1200
+  });
+
+  const msgs = mock.sent.filter((s) => s.msg.action === 'recordPageMetrics');
+  assert.strictEqual(msgs.length, 1, '应发送一次 recordPageMetrics');
+  const metric = msgs[0].msg.metric;
+  assert.strictEqual(metric.provider, 'qwen');
+  assert.strictEqual(metric.model, 'qwen-turbo');
+  assert.strictEqual(metric.success, false, '存在失败项时 success=false');
+  assert.strictEqual(metric.elapsedMs, 3500, '秒转毫秒落盘');
+  assert.strictEqual(metric.viewportDoneMs, 1200);
+  assert.strictEqual(metric.totalNodes, 10);
+  assert.strictEqual(metric.belowFoldNodes, 7);
+  assert.strictEqual(metric.cacheHits, 2);
+  assert.strictEqual(metric.failCount, 1);
+});
+
 test('整页翻译：流式失败段落标记为失败且整体完成', async () => {
   const { instance, mock } = setup({ enableStreaming: true });
   const nodes = [makeNodeInfo('Broken paragraph text.')];

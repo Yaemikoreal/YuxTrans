@@ -88,7 +88,10 @@
             this.pageTranslationState.streamingNodes.delete(requestId);
             if (tempSpan.parentNode) tempSpan.remove();
 
-            if (response && response.success) {
+            // 空译文视为失败（SW 空流理论上已被 autoFallback 拦截，这里做最后防线）
+            const hasText = response && response.success &&
+              response.text && String(response.text).trim();
+            if (hasText) {
               // 已取消/已恢复原文时不再落地译文，避免覆盖用户恢复后的页面状态
               const cancelled = this.pageTranslationState.cancelRequested ||
                 (!this.pageTranslationState.isTranslating && !this._dynamicTranslating);
@@ -102,7 +105,9 @@
             } else {
               // v2.1：流式失败未落地译文时，清理可能残留的空 block-tr
               if (streamBlockEl) this._pruneBlockTr(streamBlockEl);
-              resolve({ success: false, error: response?.error || '流式翻译失败' });
+              const err = response?.error ||
+                (response && response.success ? '流式响应为空' : '流式翻译失败');
+              resolve({ success: false, error: err });
             }
           }
         );
@@ -474,6 +479,21 @@
     },
 
     /**
+     * SW 整页批量增量下发入口（translateBatchProgress）：子批次完成即推送。
+     * 仅处理当前整页会话的消息；sessionId 不符的整条丢弃，
+     * 索引越界/已落地的单条由登记的 apply 函数内部去重丢弃。
+     */
+    handleBatchProgress(sessionId, progressResults) {
+      if (!sessionId || sessionId !== this._pageSessionId) return;
+      if (!Array.isArray(progressResults) || progressResults.length === 0) return;
+      (this._batchProgressHandlers || []).forEach((handler) => {
+        if (handler && handler.sessionId === sessionId && typeof handler.apply === 'function') {
+          handler.apply(progressResults);
+        }
+      });
+    },
+
+    /**
      * 并行翻译多个文本
      * @param {Array} items - 待翻译项
      * @param {Function|null} onProgress - 进度回调 (completed, total)
@@ -499,6 +519,9 @@
 
       const results = new Array(items.length);
       let completed = 0;
+      // 在途（已发出未落地）条目数：随 onProgress 第三参上报，控制条展示「在途 N」，
+      // 让长时间无新完成时用户仍能感知任务在活动
+      let inflight = 0;
 
       // 流式路径：不打包，每个段落一个 worker 任务，逐段 SSE 渲染
       if (streaming) {
@@ -508,6 +531,7 @@
           // #13：整页主流程（isTranslating）或动态增量（_dynamicTranslating）任一活跃即继续
           while (queue.length > 0 && (this.pageTranslationState.isTranslating || this._dynamicTranslating) && !this.pageTranslationState.cancelRequested) {
             const globalIdx = queue.shift();
+            inflight++;
             const item = items[globalIdx];
             const requestId = 'yxt-page-stream-' + (++this._streamReqSeq);
             let mapped;
@@ -530,8 +554,9 @@
               results[globalIdx] = { success: false, error: error.message };
             } finally {
               completed++;
+              inflight--;
               if (onProgress) {
-                onProgress(completed, items.length);
+                onProgress(completed, items.length, inflight);
               }
             }
           }
@@ -559,28 +584,70 @@
 
       const queue = [...batches.keys()];
 
-      let failsInARow = 0;
-      let fallbackMode = false; // 是否已进入单句翻译降级模式
-
       const worker = async () => {
         // #13：整页主流程（isTranslating）或动态增量（_dynamicTranslating）任一活跃即继续
         while (queue.length > 0 && (this.pageTranslationState.isTranslating || this._dynamicTranslating) && !this.pageTranslationState.cancelRequested) {
           const batchIndex = queue.shift();
           const batch = batches[batchIndex];
 
-          // 如果进入了降级模式，且当前 batch 包含多项，则将其重新拆分为单个段落（或句级条目）送回队列
-          if (fallbackMode && batch.indices.length > 1) {
-            batch.indices.forEach((idx, i) => {
-              batches.push({
-                indices: [idx],
-                nodes: [batch.nodes[i]]
-              });
-              queue.push(batches.length - 1);
-            });
-            continue;
-          }
-
           const texts = batch.nodes.map(item => item.text);
+
+          // 请求发起时的会话 id：最终响应落地前校验，防止动态翻译在途时
+          // 用户启动新整页会话（_pageSessionId 已轮换）导致旧结果污染新状态
+          const reqSessionId = this._pageSessionId;
+
+          // 已落地条目集合（key 为 batch 内 localIdx）：增量推送与最终响应共用，
+          // 防止同一条目完成计数/统计重复 +1（applyTranslation 本身幂等，计数不幂等）
+          const batchApplied = new Set();
+          // 本次失败后拆单重试的 localIdx：不在这轮 finally 计完成，由单条批次各自计数
+          const retried = new Set();
+
+          // 落地单条结果：写 results、逐项上报统计回调、累计完成数（增量推送与最终响应同一路径）
+          const applyBatchEntry = (localIdx, res) => {
+            if (batchApplied.has(localIdx)) return;
+            // 会话已轮换或任务已取消/恢复原文时，不落地译文也不计数：
+            // 响应与取消存在竞速窗口（响应先成功返回、取消后到达），
+            // 跳过后由 finally 按未落地条目补齐完成数，避免旧译文写回恢复后的页面
+            const staleSession = reqSessionId && reqSessionId !== this._pageSessionId;
+            const cancelled = this.pageTranslationState.cancelRequested ||
+              (!this.pageTranslationState.isTranslating && !this._dynamicTranslating);
+            if (staleSession || cancelled) return;
+            batchApplied.add(localIdx);
+            const globalIdx = batch.indices[localIdx];
+            const hasText = !!(res && res.success && res.text && String(res.text).trim());
+            if (hasText) {
+              results[globalIdx] = { success: true, translated: res.text, cached: res.cached };
+            } else {
+              results[globalIdx] = { success: false, error: (res && res.error) || '译文为空' };
+            }
+            // 与流式路径对齐：逐项回调即时统计/渲染（applyTranslation 幂等，重复调用无副作用）
+            if (onBatchResult) {
+              // 空译文按失败归一化后回传，调用方不会再按 success 渲染
+              const entryRes = hasText ? res : { ...(res || {}), success: false, error: (res && res.error) || '译文为空' };
+              onBatchResult([globalIdx], [batch.nodes[localIdx]], [entryRes]);
+            }
+            completed++;
+            inflight--;
+            if (onProgress) {
+              onProgress(completed, items.length, inflight);
+            }
+          };
+
+          // 云端批量：发出请求前登记增量进度处理器，SW 每个子批次完成即推送 translateBatchProgress
+          const progressReg = (!isLocal && this._pageSessionId) ? {
+            sessionId: this._pageSessionId,
+            apply: (progressResults) => {
+              if (!Array.isArray(progressResults)) return;
+              progressResults.forEach((res) => {
+                const localIdx = res?.index;
+                if (typeof localIdx !== 'number' || localIdx < 0 || localIdx >= batch.indices.length) return;
+                applyBatchEntry(localIdx, res);
+              });
+            }
+          } : null;
+          if (progressReg) this._batchProgressHandlers.push(progressReg);
+          // 整批发出即计入在途，条目落地时逐一递减（applyBatchEntry / finally 补齐共用）
+          inflight += batch.indices.length;
 
           try {
             const response = await new Promise((resolve) => {
@@ -604,35 +671,45 @@
             });
 
             if (response && response.success && response.results) {
-              failsInARow = 0;
-              response.results.forEach((res, localIdx) => {
-                const globalIdx = batch.indices[localIdx];
-                if (res && res.success) {
-                  results[globalIdx] = { success: true, translated: res.text, cached: res.cached };
-                } else {
-                  results[globalIdx] = { success: false, error: res?.error };
-                }
-              });
-              if (onBatchResult) {
-                onBatchResult(batch.indices, batch.nodes, response.results);
-              }
+              // 最终响应为权威结果：增量已落地的条目跳过（计数不翻倍），其余照常落地
+              response.results.forEach((res, localIdx) => applyBatchEntry(localIdx, res));
             } else {
               throw new Error(response?.error || 'Batch response failed');
             }
           } catch (error) {
-            failsInARow++;
-            // 如果连续 2 次 Batch 失败，开启降级模式
-            if (isLocal && failsInARow >= 2) {
-              fallbackMode = true;
+            // 多条目批次失败时拆为单条送回队列补全（云端整批失败的最后兜底）；
+            // 已由增量进度落地的条目跳过，避免重复请求；单条失败直接标失败不再重拆
+            if (batch.indices.length > 1 && !this.pageTranslationState.cancelRequested) {
+              batch.indices.forEach((globalIdx, localIdx) => {
+                if (batchApplied.has(localIdx)) return;
+                retried.add(localIdx);
+                batches.push({
+                  indices: [globalIdx],
+                  nodes: [batch.nodes[localIdx]]
+                });
+                queue.push(batches.length - 1);
+              });
             }
 
-            batch.indices.forEach(globalIdx => {
+            batch.indices.forEach((globalIdx, localIdx) => {
+               // 增量已落地或已拆单重试的条目不在此标记失败
+               if (batchApplied.has(localIdx) || retried.has(localIdx)) return;
                results[globalIdx] = { success: false, error: error.message };
             });
           } finally {
-            completed += batch.nodes.length;
-            if (onProgress) {
-              onProgress(completed, items.length);
+            // 清理增量登记；未落地条目（失败/未返回）在此补齐完成数，已落地的由 applyBatchEntry 计过，
+            // 合计每条目的完成计数只 +1
+            if (progressReg) {
+              const regIdx = this._batchProgressHandlers.indexOf(progressReg);
+              if (regIdx >= 0) this._batchProgressHandlers.splice(regIdx, 1);
+            }
+            const unapplied = batch.indices.length - batchApplied.size - retried.size;
+            if (unapplied > 0) {
+              completed += unapplied;
+              inflight -= unapplied;
+              if (onProgress) {
+                onProgress(completed, items.length, inflight);
+              }
             }
           }
         }
@@ -905,6 +982,9 @@
      * （nodeInfo.isSentence，带 paragraph/sentence 引用）；originalTexts 键为段落对象。
      */
     applyTranslation(nodeInfo, translatedText) {
+      // 空译文守卫：不落地、不标记（SW 空流/异常响应等场景），
+      // 由调用方按失败走重试/失败标记链路，避免「标记已翻译但仍显示原文」
+      if (!translatedText || !String(translatedText).trim()) return false;
       const isSentence = !!nodeInfo.isSentence;
       const paragraph = isSentence ? nodeInfo.paragraph : nodeInfo;
       // 兼容旧节点粒度输入（动态路径/测试遗留的 { text, node } 形状）：补全段落结构
@@ -1140,13 +1220,16 @@
       this.showPageControl(displayTotal);
       const startTime = Date.now();
       let completedUnits = 0;
+      let inflightUnits = 0;
+      let viewportDoneMs = 0; // ADR 0006：首屏可读时间（首屏批次完成耗时），随整页指标落盘
 
-      const reportProgress = (delta) => {
+      const reportProgress = (delta, inflight = null) => {
         completedUnits += delta;
+        if (typeof inflight === 'number') inflightUnits = inflight;
         // W4：去重以句/段条目计，展示以段落计；比率换算后封顶到段落总数
         const ratio = dedupedItems.length > 0 ? entries.length / dedupedItems.length : 1;
         const actualCompleted = Math.min(Math.round(completedUnits * ratio), displayTotal);
-        this.updatePageControl(actualCompleted, displayTotal, startTime);
+        this.updatePageControl(actualCompleted, displayTotal, startTime, inflightUnits);
       };
 
       try {
@@ -1160,8 +1243,8 @@
           let lastViewportCompleted = 0;
           await this.translateBatchParallel(
             viewportItems,
-            (completed, total) => {
-              reportProgress(completed - lastViewportCompleted);
+            (completed, total, inflight) => {
+              reportProgress(completed - lastViewportCompleted, inflight);
               lastViewportCompleted = completed;
             },
             (indices, nodes, results) => {
@@ -1180,6 +1263,7 @@
               ? { streaming: true }
               : { concurrency: viewportConcurrency }
           );
+          viewportDoneMs = Date.now() - startTime;
           // 记录失败项
           viewportItems.forEach((item) => {
             const resultItem = uniqueTexts.get(item.text);
@@ -1189,8 +1273,8 @@
           });
         }
 
-        // 2. belowFold 视口感知翻译：入视口（200px 预加载区）才提交批次，
-        //    取代一次性全提交以节省配额；2s 超时回退避免用户不滚动时 await 卡死。
+        // 2. belowFold 视口感知翻译：入视口（800px 预加载区，约一屏，滚动到之前即提前开译）
+        //    才提交批次，取代一次性全提交以节省配额；超时回退避免用户不滚动时 await 卡死。
         const appliedTexts = new Set();
         const belowFoldOnBatchResult = (indices, nodes, results) => {
           if (this.pageTranslationState.cancelRequested) return;
@@ -1210,10 +1294,17 @@
           });
         };
         if (belowFoldItems.length > 0 && this.pageTranslationState.isTranslating) {
+          // belowFold 阶段同样上报进度（包装器已转为 delta + inflight，直接复用 reportProgress）：
+          // 此前 onProgress 为 null，进度条在首屏完成后长期停在一个比例不动，
+          // 是「进度感知不明显」的主要来源之一
+          // ADR 0006：非首屏云端改走批量（整段完成后显示，吞吐高）；
+          // 本地 Ollama 无批量并发收益，enableStreaming 开启时保留流式首字
+          const belowFoldOptions = (isLocal && useStreaming) ? { streaming: true } : null;
           await this._translateBelowFoldViaViewport(
             belowFoldItems,
             belowFoldOnBatchResult,
-            useStreaming ? { streaming: true } : null
+            belowFoldOptions,
+            reportProgress
           );
         }
 
@@ -1262,7 +1353,8 @@
           failCount,
           cacheHits: this.pageTranslationState.cacheHits,
           apiCount: this.pageTranslationState.apiCount,
-          elapsedSeconds: parseFloat(elapsed)
+          elapsedSeconds: parseFloat(elapsed),
+          viewportDoneMs
         });
         this.showPageControlComplete(
           successCount, nodesInfo.length, elapsed, duplicateCount, failCount
@@ -1271,6 +1363,12 @@
         this._startDynamicObserver();
       } catch (error) {
         console.error('[YuxTrans] 整页翻译异常:', error);
+        // 异常路径同样停止心跳并让控制条回到可重试状态，避免「翻译中」永久假死
+        this._clearProgressTicker();
+        const textEl = this.pageControlElement('yuxtrans-progress-text');
+        if (textEl) textEl.textContent = '翻译异常，请重试';
+        const bar = this.pageControlElement('yuxtrans-progress-bar');
+        if (bar) bar.style.width = '0%';
       } finally {
         this.pageTranslationState.isTranslating = false;
         this.pageTranslationState.streamingNodes.clear();
@@ -1375,6 +1473,10 @@
       this.pageControl = control;
       this.pageControlListenersBound = false;
 
+      // 心跳进度：快照 + 1s ticker，长批次在途时秒数持续跳动，进度不再「假死」
+      this._progressSnapshot = { current: 0, total, startTime: Date.now(), inflight: 0 };
+      this._startProgressTicker();
+
       // 取消按钮
       control.querySelector('#yuxtrans-cancel-btn').addEventListener('click', () => {
         this.pageTranslationState.isTranslating = false;
@@ -1383,21 +1485,51 @@
       });
     },
 
-    updatePageControl(current, total, startTime) {
+    updatePageControl(current, total, startTime, inflight = 0) {
       if (!this.pageControl) return;
 
-      const percent = Math.round((current / total) * 100);
+      // 进度快照：心跳 ticker 每秒据此重绘（已用秒数跳动 = 任务存活可见），
+      // 条目落地时 updatePageControl 刷新快照
+      this._progressSnapshot = {
+        current, total,
+        startTime: startTime || (this._progressSnapshot && this._progressSnapshot.startTime) || Date.now(),
+        inflight
+      };
+      this._renderPageControlProgress();
+    },
+
+    _renderPageControlProgress() {
+      if (!this.pageControl || !this._progressSnapshot) return;
+      const { current, total, startTime, inflight } = this._progressSnapshot;
+      const percent = total > 0 ? Math.round((current / total) * 100) : 0;
       const bar = this.pageControlElement('yuxtrans-progress-bar');
       const text = this.pageControlElement('yuxtrans-progress-text');
 
       if (bar) bar.style.width = `${percent}%`;
-      if (text) text.textContent = `${current} / ${total} · ${percent}%`;
+      if (text) {
+        const secs = Math.max(0, Math.round((Date.now() - startTime) / 1000));
+        const inflightText = inflight > 0 ? ` · 在途 ${inflight}` : '';
+        text.textContent = `${current} / ${total} · ${percent}%${inflightText} · ${secs}s`;
+      }
+    },
+
+    _startProgressTicker() {
+      this._clearProgressTicker();
+      this._progressTicker = setInterval(() => this._renderPageControlProgress(), 1000);
+    },
+
+    _clearProgressTicker() {
+      if (this._progressTicker) {
+        clearInterval(this._progressTicker);
+        this._progressTicker = null;
+      }
     },
 
     showPageControlComplete(
       successCount, totalCount, elapsed, duplicateCount = 0, failCount = 0
     ) {
       if (!this.pageControl) return;
+      this._clearProgressTicker();
 
       const hasFailures = failCount > 0;
       const isBilingual = this.config.bilingualMode !== false;
@@ -1583,6 +1715,7 @@
      */
     setPageControlRestoredState() {
       if (!this.pageControl) return;
+      this._clearProgressTicker();
 
       const textEl = this.pageControlElement('yuxtrans-progress-text');
       const bar = this.pageControlElement('yuxtrans-progress-bar');
@@ -1746,14 +1879,15 @@
     },
 
     /**
-     * belowFold 视口感知翻译：节点进入视口（200px 预加载区）才提交批次，
-     * 取代一次性全提交以节省配额；2s 超时后剩余项回退一次性提交避免 await 卡死。
+     * belowFold 视口感知翻译：节点进入视口（800px 预加载区，约一屏）才提交批次，
+     * 取代一次性全提交以节省配额；超时回退后剩余项一次性提交避免 await 卡死。
      * @param {Array} items belowFold 去重后的待译项
      * @param {Function} onBatchResult 每个 batch 完成回调
      * @param {object|null} batchOptions 透传给 translateBatchParallel 的选项（如 { streaming: true }）
+     * @param {Function|null} onProgress 进度回调 (completed, total, inflight)
      * @returns {Promise<void>}
      */
-    _translateBelowFoldViaViewport(items, onBatchResult, batchOptions = null) {
+    _translateBelowFoldViaViewport(items, onBatchResult, batchOptions = null, onProgress = null) {
       return new Promise((resolve) => {
         if (!items || items.length === 0) { resolve(); return; }
 
@@ -1804,7 +1938,16 @@
           activeBatches++;
           try {
             if (!this.pageTranslationState.cancelRequested && this.pageTranslationState.isTranslating) {
-              await this.translateBatchParallel(batch, null, onBatchResult, batchOptions || {});
+              // translateBatchParallel 的 completed 按单次调用独立计数，逐批次建增量包装器，
+              // 对外统一上报 delta（completed, inflight），由调用方累加
+              const progressWrapper = onProgress ? (() => {
+                let last = 0;
+                return (completed, total, inflight) => {
+                  onProgress(completed - last, inflight);
+                  last = completed;
+                };
+              })() : null;
+              await this.translateBatchParallel(batch, progressWrapper, onBatchResult, batchOptions || {});
             }
           } catch (e) { /* 单批异常不中断整体 */ }
           activeBatches--;
@@ -1911,13 +2054,15 @@
           }
         }
         if (items.length === 0) return;
-        // 动态增量翻译与整页主路径同一开关：enableStreaming 开启时逐段流式渲染
+        // ADR 0006：动态增量云端改走批量；本地 Ollama 保留流式（无批量并发收益）
+        const isLocal = this.config.provider === 'local';
         const useStreaming = this.config.enableStreaming !== false;
+        const dynamicOptions = (isLocal && useStreaming) ? { streaming: true } : {};
         await this.translateBatchParallel(items, null, (_idx, nodes, results) => {
           results.forEach((res, i) => {
             if (res && res.success) this.applyTranslation(nodes[i].nodeInfo, res.text);
           });
-        }, useStreaming ? { streaming: true } : {});
+        }, dynamicOptions);
       } catch (e) {
         console.error('[YuxTrans] 动态内容翻译异常:', e);
       } finally {
@@ -1937,9 +2082,32 @@
         ...metrics
       };
       console.log('[YuxTrans] 整页翻译完成:', report);
+      // ADR 0006：整页性能指标落盘（复用 SW METRICS_STORE），console 日志保留便于复制分析
+      try {
+        chrome.runtime.sendMessage({
+          action: 'recordPageMetrics',
+          metric: {
+            provider: this.config.provider || '',
+            model: this.config.model || '',
+            success: (metrics.failCount || 0) === 0,
+            elapsedMs: Math.round(parseFloat(metrics.elapsedSeconds || 0) * 1000),
+            totalNodes: metrics.totalNodes || 0,
+            viewportNodes: metrics.viewportNodes || 0,
+            belowFoldNodes: metrics.belowFoldNodes || 0,
+            duplicateCount: metrics.duplicateTexts || 0,
+            cacheHits: metrics.cacheHits || 0,
+            apiCount: metrics.apiCount || 0,
+            failCount: metrics.failCount || 0,
+            viewportDoneMs: metrics.viewportDoneMs || 0,
+            textLength: 0,
+            tokens: 0
+          }
+        }).catch(() => { /* 埋点失败不影响主流程 */ });
+      } catch { /* chrome.runtime 未就绪忽略 */ }
     },
 
     hidePageControl() {
+      this._clearProgressTicker();
       if (this._pageCollapseTimer) {
         clearTimeout(this._pageCollapseTimer);
         this._pageCollapseTimer = null;

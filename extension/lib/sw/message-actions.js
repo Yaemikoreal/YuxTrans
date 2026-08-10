@@ -27,6 +27,7 @@
     'clearCache',
     'getUsageStats',
     'getMetrics',
+    'recordPageMetrics',
     'getRequestLogs',
     'fetchModels',
     'testProvider',
@@ -67,7 +68,7 @@
     if (['disableSite', 'setSiteBilingualMode'].includes(action)) {
       return 'site';
     }
-    if (['getUsageStats', 'getMetrics', 'getRequestLogs'].includes(action)) {
+    if (['getUsageStats', 'getMetrics', 'recordPageMetrics', 'getRequestLogs'].includes(action)) {
       return 'diagnostics';
     }
     return 'unknown';
